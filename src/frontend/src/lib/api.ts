@@ -226,6 +226,119 @@ export const portfolioApi = {
   delete: (id: number) => api.delete(`/portfolio/${id}`),
 };
 
+// Company Financials Types
+export interface CompanyFinancial {
+  id: number;
+  symbol: string;
+  fiscal_year: string;
+  quarter: string;
+  total_revenue: number | null;
+  interest_income: number | null;
+  non_compliant_income: number | null;
+  net_profit: number | null;
+  earnings_per_share: number | null;
+  total_assets: number | null;
+  total_liabilities: number | null;
+  shareholders_equity: number | null;
+  interest_bearing_debt: number | null;
+  interest_bearing_deposits: number | null;
+  receivables: number | null;
+  prepayments: number | null;
+  cash_and_equivalents: number | null;
+  pe_ratio: number | null;
+  pb_ratio: number | null;
+  debt_to_equity: number | null;
+  return_on_equity: number | null;
+  dividend_yield: number | null;
+  source: string;
+  report_date: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface FinancialsCoverage {
+  total_stocks: number;
+  stocks_with_financials: number;
+  coverage_percent: number;
+  symbols_with_data: string[];
+}
+
+export const financialsApi = {
+  getBySymbol: (symbol: string) =>
+    api.get<CompanyFinancial[]>(`/financials/${symbol}`),
+  getLatest: (symbol: string) =>
+    api.get<CompanyFinancial>(`/financials/${symbol}/latest`),
+  create: (data: {
+    symbol: string;
+    fiscal_year: string;
+    quarter: string;
+    total_revenue?: number | null;
+    interest_income?: number | null;
+    non_compliant_income?: number | null;
+    net_profit?: number | null;
+    earnings_per_share?: number | null;
+    total_assets?: number | null;
+    total_liabilities?: number | null;
+    shareholders_equity?: number | null;
+    interest_bearing_debt?: number | null;
+    interest_bearing_deposits?: number | null;
+    receivables?: number | null;
+    prepayments?: number | null;
+    cash_and_equivalents?: number | null;
+    pe_ratio?: number | null;
+    pb_ratio?: number | null;
+    debt_to_equity?: number | null;
+    return_on_equity?: number | null;
+    dividend_yield?: number | null;
+    source?: string;
+    report_date?: string | null;
+  }) => api.post<CompanyFinancial>('/financials', data),
+  update: (
+    id: number,
+    data: {
+      fiscal_year?: string;
+      quarter?: string;
+      total_revenue?: number | null;
+      interest_income?: number | null;
+      non_compliant_income?: number | null;
+      net_profit?: number | null;
+      earnings_per_share?: number | null;
+      total_assets?: number | null;
+      total_liabilities?: number | null;
+      shareholders_equity?: number | null;
+      interest_bearing_debt?: number | null;
+      interest_bearing_deposits?: number | null;
+      receivables?: number | null;
+      prepayments?: number | null;
+      cash_and_equivalents?: number | null;
+      pe_ratio?: number | null;
+      pb_ratio?: number | null;
+      debt_to_equity?: number | null;
+      return_on_equity?: number | null;
+      dividend_yield?: number | null;
+      source?: string;
+      report_date?: string | null;
+    },
+  ) => api.put<CompanyFinancial>(`/financials/${id}`, data),
+  getCoverage: () => api.get<FinancialsCoverage>('/financials/summary/coverage'),
+};
+
+// Macro / CBSL Indicators Types
+export interface MacroIndicator {
+  indicator: string;
+  label: string;
+  value: number;
+  data_date: string;
+  source: string | null;
+}
+
+export const macroApi = {
+  getIndicators: () => api.get<MacroIndicator[]>('/macro/indicators'),
+  refresh: () => api.post<{ message: string; errors: string[] }>('/macro/refresh'),
+  getHistory: (indicator: string) =>
+    api.get<MacroIndicator[]>(`/macro/history/${indicator}`),
+};
+
 // AI Engine Types
 export interface AiStatus {
   mode: 'live' | 'mock';

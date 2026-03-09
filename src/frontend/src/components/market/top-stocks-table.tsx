@@ -40,7 +40,7 @@ export function TopStocksTable({ stocks, loading, type }: TopStocksTableProps) {
     <Table>
       <TableHeader>
         <TableRow>
-          <TableHead>Symbol</TableHead>
+          <TableHead>Stock</TableHead>
           <TableHead className="text-right">Price</TableHead>
           <TableHead className="text-right">Change</TableHead>
           <TableHead className="text-right">
@@ -50,10 +50,15 @@ export function TopStocksTable({ stocks, loading, type }: TopStocksTableProps) {
       </TableHeader>
       <TableBody>
         {stocks.slice(0, 10).map((stock) => (
-          <TableRow key={stock.symbol}>
+          <TableRow key={stock.symbol} className="cursor-pointer hover:bg-muted/50 transition-colors">
             <TableCell>
-              <Link href={`/stocks/${stock.symbol}`} className="font-medium hover:underline">
-                {stock.symbol}
+              <Link href={`/stocks/${stock.symbol}`} className="block">
+                <span className="font-medium hover:underline">{stock.symbol}</span>
+                {stock.name && (
+                  <span className="block text-xs text-muted-foreground truncate max-w-[200px]">
+                    {stock.name}
+                  </span>
+                )}
               </Link>
             </TableCell>
             <TableCell className="text-right">
@@ -61,7 +66,7 @@ export function TopStocksTable({ stocks, loading, type }: TopStocksTableProps) {
             </TableCell>
             <TableCell className={cn(
               'text-right',
-              stock.change > 0 ? 'text-green-600' : stock.change < 0 ? 'text-red-600' : ''
+              stock.change > 0 ? 'text-green-500' : stock.change < 0 ? 'text-red-500' : ''
             )}>
               {stock.change > 0 ? '+' : ''}{stock.change.toFixed(2)}
             </TableCell>

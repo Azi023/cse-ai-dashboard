@@ -51,3 +51,4 @@ tmp/
 # Data files (large)
 data/cbsl-macro/*.xlsx
 data/cse-historical/*.csv
+data/ai-generated/

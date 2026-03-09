@@ -318,6 +318,28 @@ export class CseDataService implements OnModuleInit {
   }
 
   /**
+   * Mid-day price snapshot at 12:00 PM SLT Mon-Fri.
+   * Captures intraday prices so we have a second data point each day.
+   * Cron uses UTC: 12:00 PM SLT = 6:30 AM UTC
+   * Safe to run: saveDailyPrices() upserts by (stock_id, trade_date).
+   */
+  @Cron('30 6 * * 1-5')
+  async saveMidDayPrices(): Promise<void> {
+    this.logger.log('Saving mid-day price snapshot (12:00 SLT)...');
+
+    try {
+      // Refresh trade summary cache first so saveDailyPrices has fresh data
+      await this.fetchAndCacheTradeSummary();
+      await this.saveDailyPrices();
+      this.logger.log('Mid-day price snapshot saved successfully');
+    } catch (error) {
+      this.logger.error(
+        `Error saving mid-day prices: ${String(error)}`,
+      );
+    }
+  }
+
+  /**
    * Save daily market summary at 3:00 PM SLT Mon-Fri.
    * Cron uses UTC: 3:00 PM SLT = 9:30 AM UTC
    */

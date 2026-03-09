@@ -8,6 +8,7 @@ import { IndexCard } from '@/components/market/index-card';
 import { MarketStatsCard } from '@/components/market/market-stats-card';
 import { TopStocksTable } from '@/components/market/top-stocks-table';
 import { DailyBriefCard } from '@/components/market/daily-brief';
+import { MacroIndicatorsCard } from '@/components/market/macro-indicators';
 import {
   marketApi,
   shariahApi,
@@ -202,6 +203,9 @@ export default function DashboardPage() {
 
       {/* AI Daily Brief */}
       <DailyBriefCard />
+
+      {/* Macro Economic Indicators */}
+      <MacroIndicatorsCard />
 
       {/* Watchlist */}
       {(watchlist.length > 0 || showWatchSearch) && (
@@ -398,17 +402,20 @@ export default function DashboardPage() {
           <CardContent>
             <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-4">
               {sortedSectors.map((sector) => {
-                const isPos = sector.percentage > 0;
-                const isNeg = sector.percentage < 0;
+                const pct = sector.percentage;
+                const sectorBg =
+                  pct > 2
+                    ? 'border-green-500/30 bg-green-500/15'
+                    : pct > 0
+                      ? 'border-green-500/20 bg-green-500/5'
+                      : pct > -2
+                        ? 'border-red-500/20 bg-red-500/5'
+                        : 'border-red-500/30 bg-red-500/15';
                 return (
                   <div
                     key={sector.name}
                     className={`flex items-center justify-between rounded-lg border p-3 transition-colors ${
-                      isPos
-                        ? 'border-green-500/20 bg-green-500/5'
-                        : isNeg
-                          ? 'border-red-500/20 bg-red-500/5'
-                          : ''
+                      pct === 0 ? '' : sectorBg
                     }`}
                   >
                     <span className="text-sm font-medium truncate mr-2">
@@ -420,14 +427,14 @@ export default function DashboardPage() {
                       </div>
                       <div
                         className={`text-xs ${
-                          isPos
+                          pct > 0
                             ? 'text-green-500'
-                            : isNeg
+                            : pct < 0
                               ? 'text-red-500'
                               : 'text-muted-foreground'
                         }`}
                       >
-                        {isPos ? '+' : ''}
+                        {pct > 0 ? '+' : ''}
                         {sector.percentage?.toFixed(2)}%
                       </div>
                     </div>

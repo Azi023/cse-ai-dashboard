@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { format } from 'date-fns';
-import { Activity, TrendingUp, BarChart3, ShieldCheck, Wallet, Menu, X, Zap, Sparkles } from 'lucide-react';
+import { Activity, TrendingUp, BarChart3, ShieldCheck, Wallet, Menu, X, Zap, Sparkles, FileSpreadsheet } from 'lucide-react';
 import { marketApi } from '@/lib/api';
 
 function checkMarketHours(): boolean {
@@ -30,6 +30,7 @@ const navLinks = [
   { href: '/portfolio', label: 'Portfolio', icon: Wallet },
   { href: '/signals', label: 'Signals', icon: Zap },
   { href: '/chat', label: 'Strategy', icon: Sparkles },
+  { href: '/admin/financials', label: 'Financials', icon: FileSpreadsheet },
 ];
 
 export function Header() {

@@ -10,6 +10,8 @@ import { CseDataModule } from './modules/cse-data/cse-data.module';
 import { StocksModule } from './modules/stocks/stocks.module';
 import { ShariahScreeningModule } from './modules/shariah-screening/shariah-screening.module';
 import { PortfolioModule } from './modules/portfolio/portfolio.module';
+import { CompanyFinancialsModule } from './modules/company-financials/company-financials.module';
+import { CbslDataModule } from './modules/cbsl-data/cbsl-data.module';
 import { AiEngineModule } from './modules/ai-engine/ai-engine.module';
 
 @Module({
@@ -67,6 +69,8 @@ import { AiEngineModule } from './modules/ai-engine/ai-engine.module';
     StocksModule,
     ShariahScreeningModule,
     PortfolioModule,
+    CompanyFinancialsModule,
+    CbslDataModule,
     AiEngineModule,
   ],
   controllers: [AppController],
