@@ -2,6 +2,8 @@ import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { MockGenerator } from './mock-generator';
 import { SYSTEM_PROMPTS } from './prompts';
+import * as fs from 'fs';
+import * as path from 'path';
 
 export interface StockAnalysis {
   symbol: string;
@@ -54,7 +56,32 @@ export class AiEngineService {
   ) {
     const apiKey = this.configService.get<string>('ANTHROPIC_API_KEY');
     this.isLive = !!apiKey && apiKey.length > 0;
+    // Look for pre-generated AI content in project data directory
+    // Works from both src/ (dev) and dist/ (prod) since we go up to backend root then to project root
+    this.aiContentDir = path.resolve(process.cwd(), '..', '..', 'data', 'ai-generated');
     this.logger.log(`AI Engine initialized in ${this.isLive ? 'LIVE' : 'MOCK'} mode`);
+    this.logger.log(`AI content directory: ${this.aiContentDir}`);
+  }
+
+  private readonly aiContentDir: string;
+
+  private getTodayDateStr(): string {
+    const now = new Date();
+    return now.toISOString().split('T')[0]; // YYYY-MM-DD
+  }
+
+  private loadSavedContent<T>(filename: string): T | null {
+    try {
+      const filePath = path.join(this.aiContentDir, filename);
+      if (fs.existsSync(filePath)) {
+        const raw = fs.readFileSync(filePath, 'utf-8');
+        this.logger.log(`Loaded saved AI content from ${filename}`);
+        return JSON.parse(raw) as T;
+      }
+    } catch (error) {
+      this.logger.warn(`Failed to load saved AI content ${filename}: ${error}`);
+    }
+    return null;
   }
 
   getStatus(): { mode: 'live' | 'mock'; model: string | null } {
@@ -65,6 +92,13 @@ export class AiEngineService {
   }
 
   async getDailyBrief(): Promise<DailyBrief> {
+    // Check for pre-generated content first
+    const dateStr = this.getTodayDateStr();
+    const saved = this.loadSavedContent<DailyBrief>(
+      `daily-brief-${dateStr}.json`,
+    );
+    if (saved) return saved;
+
     if (this.isLive) {
       return this.getLiveDailyBrief();
     }
@@ -72,6 +106,18 @@ export class AiEngineService {
   }
 
   async analyzeStock(symbol: string): Promise<StockAnalysis> {
+    // Check for pre-generated content first
+    const dateStr = this.getTodayDateStr();
+    const saved = this.loadSavedContent<StockAnalysis[]>(
+      `stock-analyses-${dateStr}.json`,
+    );
+    if (saved) {
+      const match = saved.find(
+        (a) => a.symbol.toUpperCase() === symbol.toUpperCase(),
+      );
+      if (match) return match;
+    }
+
     if (this.isLive) {
       return this.getLiveStockAnalysis(symbol);
     }

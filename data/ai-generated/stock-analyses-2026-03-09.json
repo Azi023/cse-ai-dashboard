@@ -1,0 +1,87 @@
+[
+  {
+    "symbol": "HVA.N0000",
+    "name": "HVA FOODS PLC",
+    "currentPrice": 7.2,
+    "fundamentalScore": 4,
+    "technicalSignal": "BULLISH",
+    "shariahStatus": "unknown",
+    "analysis": "**HVA Foods PLC (HVA.N0000)**\n\nHVA Foods was today's standout performer and the most actively traded stock on the CSE, with a remarkable +12.5% gain to LKR 7.20 on massive volume of 17.6 million shares — generating turnover of LKR 116.4 million.\n\n**Price Action:** The stock opened at LKR 6.40, tested a low of LKR 5.90 before rallying strongly to a high of LKR 7.40. The wide intraday range (LKR 5.90 to 7.40) and close near the high suggests genuine buying interest rather than a pump-and-dump pattern. Closing at LKR 7.30 — near the session high — is a technically bullish signal.\n\n**Volume Context:** 17.6 million shares is extraordinary for HVA. This type of volume spike in a micro-cap (market cap LKR 1.76B) typically indicates either: a pending corporate action, insider accumulation ahead of news, or speculative retail frenzy. The sheer volume makes this more likely to be institutionally influenced.\n\n**Risk Assessment:** At LKR 7.20, HVA is still a low-priced stock with all the associated liquidity and volatility risks. The company operates in the food processing space which provides some fundamental backing, but a 12.5% single-day move invites profit-taking. If tomorrow opens with selling pressure below LKR 5.90, the entire move could unwind.\n\n**Contrarian Note:** HVA surging on a day where 266 stocks fell is extremely unusual. This level of divergence from the broader market warrants attention — either HVA has a genuine catalyst the market hasn't priced in, or this is short-lived speculative activity.\n\n*This analysis is for educational purposes only and does not constitute investment advice.*",
+    "riskFactors": [
+      "Micro-cap with LKR 1.8B market cap — extreme liquidity risk and potential for volatile reversals",
+      "Single-day 12.5% gain invites aggressive profit-taking in the next session",
+      "Moving against a severely bearish market raises sustainability questions",
+      "No confirmed corporate catalyst — the surge could be speculative"
+    ],
+    "confidence": "LOW",
+    "generatedAt": "2026-03-09T11:19:42.254Z"
+  },
+  {
+    "symbol": "HNBF.N0000",
+    "name": "HNB FINANCE PLC",
+    "currentPrice": 9.4,
+    "fundamentalScore": 5,
+    "technicalSignal": "BEARISH",
+    "shariahStatus": "unknown",
+    "analysis": "**HNB Finance PLC (HNBF.N0000)**\n\nHNB Finance, the non-banking financial subsidiary of Hatton National Bank, was today's second most active stock with 11.9 million shares traded, declining 6.93% to LKR 9.40.\n\n**Price Action:** HNBF opened at LKR 10.00 and immediately faced selling pressure, testing a low of LKR 9.30 before closing at LKR 9.50. The failure to hold the opening price and the close near the session low is a classically bearish pattern. With a turnover of LKR 113.9 million, this was a high-conviction sell-off.\n\n**Fundamental Context:** HNBF operates in the NBFI (Non-Bank Financial Institutions) space, which has faced regulatory headwinds and asset quality concerns in recent years. The parent HNB released its 2025 annual report today — if the results disappointed, it may have dragged HNBF lower in sympathy. At a market cap of LKR 16.1B, it is a mid-cap name with decent institutional coverage.\n\n**Sector Pressure:** The entire financial sector was under severe pressure today. As a finance company, HNBF is directly exposed to interest rate risk, credit quality concerns, and the broader NBFI sentiment. The -6.9% decline is worse than the banking sector average, suggesting HNBF-specific concerns beyond market beta.\n\n**Outlook:** The stock is in a clear downtrend today with no signs of buying support. The high volume on a down day confirms distribution. Expect continued weakness unless the broader market stabilizes.\n\n*This analysis is for educational purposes only and does not constitute investment advice.*",
+    "riskFactors": [
+      "NBFI sector faces ongoing regulatory scrutiny and asset quality headwinds",
+      "High-volume selling suggests institutional distribution — further downside possible",
+      "Parent HNB annual report may contain sector-wide implications",
+      "Finance companies are directly impacted by any CBSL rate changes"
+    ],
+    "confidence": "MEDIUM",
+    "generatedAt": "2026-03-09T11:19:42.254Z"
+  },
+  {
+    "symbol": "JKH.N0000",
+    "name": "JOHN KEELLS HOLDINGS PLC",
+    "currentPrice": 20.1,
+    "fundamentalScore": 7,
+    "technicalSignal": "BEARISH",
+    "shariahStatus": "unknown",
+    "analysis": "**John Keells Holdings PLC (JKH.N0000)**\n\nSri Lanka's largest listed conglomerate and the market's bellwether stock fell 4.29% to LKR 20.10 on volume of 11.0 million shares — the third most active counter today.\n\n**Price Action:** JKH opened at LKR 20.50 and sold off throughout the session, hitting a low of LKR 19.90 before a minor recovery to close at LKR 20.20. The stock traded in a tight but decisively bearish range. At a turnover of LKR 221 million, this represents significant institutional participation — JKH is the go-to proxy for foreign funds entering or exiting the CSE.\n\n**Bellwether Signal:** JKH's price action is arguably the single most important signal on the CSE. With a market cap of LKR 355.7B — the largest on the exchange — its movements reflect broad institutional sentiment. A 4.3% decline on 11M shares strongly suggests that today's sell-off was driven by institutional or foreign fund selling, not retail panic.\n\n**Fundamental Anchor:** JKH is a diversified conglomerate with interests across consumer goods, leisure, transportation, property, and financial services. This diversification provides a fundamental floor that pure-play stocks lack. At LKR 20.10, if the stock was trading at reasonable valuations before today, a 4%+ discount on no company-specific news represents a potential opportunity for patient investors.\n\n**Key Consideration:** JKH at LKR 20 is a psychologically significant level. If this support holds over the next 2-3 sessions, it would suggest the sell-off is a temporary dislocation. A break below LKR 19.50 would be technically concerning and could trigger further stop-loss selling.\n\n*This analysis is for educational purposes only and does not constitute investment advice.*",
+    "riskFactors": [
+      "Foreign fund selling may continue for multiple sessions as positions are unwound",
+      "LKR 20 is a key psychological support — a breach could accelerate losses",
+      "Conglomerate discount may widen in risk-off environments",
+      "Property and leisure segments are cyclically sensitive to macro headwinds"
+    ],
+    "confidence": "HIGH",
+    "generatedAt": "2026-03-09T11:19:42.254Z"
+  },
+  {
+    "symbol": "BIL.N0000",
+    "name": "BROWNS INVESTMENTS PLC",
+    "currentPrice": 5.9,
+    "fundamentalScore": 5,
+    "technicalSignal": "BEARISH",
+    "shariahStatus": "unknown",
+    "analysis": "**Browns Investments PLC (BIL.N0000)**\n\nBrowns Investments, the investment arm of the Browns group, was the fourth most actively traded stock today with 10.8 million shares changing hands. The stock fell 3.28% to LKR 5.90.\n\n**Price Action:** BIL opened at LKR 6.00, briefly touched LKR 6.10, but could not sustain any upside and drifted to a low of LKR 5.80 before closing at LKR 6.00. The inability to hold even a modest opening gain on heavy volume is bearish. At a market cap of LKR 84.8B, BIL is a substantial mid-to-large cap company.\n\n**Investment Holding Dynamics:** As an investment holding company, BIL's value is derived from its portfolio of subsidiaries and associates. In a broad market sell-off, holding companies typically trade at wider discounts to their net asset value (NAV). The 3.3% decline likely reflects both the drop in underlying portfolio values and a sentiment-driven widening of the holding company discount.\n\n**Volume Signal:** 10.8 million shares at an average price around LKR 6 means approximately LKR 63 million in turnover. This is meaningful institutional flow. The selling appears orderly rather than panic-driven, suggesting a planned position reduction rather than forced liquidation.\n\n**Outlook:** BIL at LKR 5.90 in the context of an LKR 84.8B market cap is trading at a level that requires recovery in the broader market to generate upside. This is a market-beta play — it will recover when the market recovers, not before.\n\n*This analysis is for educational purposes only and does not constitute investment advice.*",
+    "riskFactors": [
+      "Holding company discount may widen further in prolonged market weakness",
+      "Portfolio value directly tied to CSE market levels — no independent catalyst",
+      "Low per-share price can attract speculative retail trading, increasing volatility",
+      "Investment holding companies are less transparent than operating companies"
+    ],
+    "confidence": "MEDIUM",
+    "generatedAt": "2026-03-09T11:19:42.254Z"
+  },
+  {
+    "symbol": "LCBF.N0000",
+    "name": "LANKA CREDIT AND BUSINESS FINANCE PLC",
+    "currentPrice": 8.5,
+    "fundamentalScore": 4,
+    "technicalSignal": "BEARISH",
+    "shariahStatus": "unknown",
+    "analysis": "**Lanka Credit and Business Finance PLC (LCBF.N0000)**\n\nLanka Credit and Business Finance rounded out the top 5 most active stocks, with 9.0 million shares traded. The stock declined 5.56% to LKR 8.50.\n\n**Price Action:** LCBF opened at LKR 8.60, reached a session high of LKR 8.90 early in trading before selling pressure drove it to a low of LKR 8.20. The close at LKR 8.70 — in the upper half of the range — shows some buying emerged at lower levels, but the overall trend remains down. Turnover of LKR 76 million is substantial for a company with an LKR 6.7B market cap.\n\n**NBFI Sector Context:** LCBF operates in the same non-bank financial space as HNBF, and faces similar headwinds: tightening regulatory requirements from the CBSL, concerns about asset quality in the personal and SME lending books, and rising cost of funds. The 5.6% decline is consistent with broad NBFI sector weakness.\n\n**Valuation Consideration:** At LKR 8.50 with an LKR 6.7B market cap, LCBF is a mid-cap NBFI. The stock's valuation relative to its book value will be key — if it is trading below book, the current price may embed an overly pessimistic scenario. However, NBFI book values can deteriorate quickly if loan books sour.\n\n**Risk/Reward:** The high volume and -5.6% decline put LCBF in the \"falling knife\" category. While the price level may eventually prove attractive, catching the bottom in an NBFI during a market-wide sell-off is inherently risky. Patient investors should wait for stabilization signals.\n\n*This analysis is for educational purposes only and does not constitute investment advice.*",
+    "riskFactors": [
+      "NBFI sector regulatory risk — CBSL has been tightening oversight of finance companies",
+      "Asset quality risk — personal and SME lending books are vulnerable in economic slowdowns",
+      "High volume selling suggests institutional exits — supply overhang may persist",
+      "Finance companies face margin compression when rates are volatile"
+    ],
+    "confidence": "LOW",
+    "generatedAt": "2026-03-09T11:19:42.254Z"
+  }
+]
