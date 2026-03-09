@@ -1,0 +1,39 @@
+import { Controller, Get, Param } from '@nestjs/common';
+import { ShariahScreeningService } from './shariah-screening.service';
+
+@Controller('shariah')
+export class ShariahScreeningController {
+  constructor(
+    private readonly shariahScreeningService: ShariahScreeningService,
+  ) {}
+
+  /** GET /api/shariah/stats — Summary counts. */
+  @Get('stats')
+  async getStats() {
+    return this.shariahScreeningService.getStats();
+  }
+
+  /** GET /api/shariah/compliant — List all compliant stocks. */
+  @Get('compliant')
+  async getCompliantStocks() {
+    return this.shariahScreeningService.getCompliantStocks();
+  }
+
+  /** GET /api/shariah/non-compliant — List all non-compliant with reasons. */
+  @Get('non-compliant')
+  async getNonCompliantStocks() {
+    return this.shariahScreeningService.getNonCompliantStocks();
+  }
+
+  /** GET /api/shariah/pending — List stocks pending review. */
+  @Get('pending')
+  async getPendingStocks() {
+    return this.shariahScreeningService.getPendingStocks();
+  }
+
+  /** GET /api/shariah/status/:symbol — Shariah status for a specific stock. */
+  @Get('status/:symbol')
+  async getStockStatus(@Param('symbol') symbol: string) {
+    return this.shariahScreeningService.getStockShariahStatus(symbol);
+  }
+}
