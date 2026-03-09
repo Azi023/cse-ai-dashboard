@@ -145,6 +145,8 @@ export interface PortfolioHolding {
   daily_change: number | null;
   allocation_percent: number | null;
   shariah_status: string;
+  dividends_received: number;
+  purification_rate: number;
   notes: string | null;
 }
 
@@ -183,16 +185,32 @@ export interface PortfolioShariahSummary {
   }>;
 }
 
+export interface PurificationSummary {
+  holdings: Array<{
+    symbol: string;
+    name: string;
+    shariah_status: string;
+    dividends_received: number;
+    purification_rate: number;
+    purification_amount: number;
+  }>;
+  total_purification: number;
+  total_dividends: number;
+}
+
 export const portfolioApi = {
   getAll: () => api.get<PortfolioHolding[]>('/portfolio'),
   getSummary: () => api.get<PortfolioSummary>('/portfolio/summary'),
   getShariah: () => api.get<PortfolioShariahSummary>('/portfolio/shariah'),
+  getPurification: () => api.get<PurificationSummary>('/portfolio/purification'),
   add: (data: {
     symbol: string;
     quantity: number;
     buy_price: number;
     buy_date: string;
     notes?: string;
+    dividends_received?: number;
+    purification_rate?: number;
   }) => api.post('/portfolio', data),
   update: (
     id: number,
@@ -201,6 +219,8 @@ export const portfolioApi = {
       buy_price?: number;
       buy_date?: string;
       notes?: string;
+      dividends_received?: number;
+      purification_rate?: number;
     },
   ) => api.put(`/portfolio/${id}`, data),
   delete: (id: number) => api.delete(`/portfolio/${id}`),

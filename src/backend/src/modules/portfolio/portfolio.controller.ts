@@ -32,6 +32,12 @@ export class PortfolioController {
     return this.portfolioService.getShariahSummary();
   }
 
+  /** GET /api/portfolio/purification — Purification calculator. */
+  @Get('purification')
+  async getPurification() {
+    return this.portfolioService.getPurification();
+  }
+
   /** POST /api/portfolio — Add a new holding. */
   @Post()
   async addHolding(
@@ -42,6 +48,8 @@ export class PortfolioController {
       buy_price: number;
       buy_date: string;
       notes?: string;
+      dividends_received?: number;
+      purification_rate?: number;
     },
   ) {
     return this.portfolioService.addHolding(body);
@@ -57,6 +65,8 @@ export class PortfolioController {
       buy_price?: number;
       buy_date?: string;
       notes?: string;
+      dividends_received?: number;
+      purification_rate?: number;
     },
   ) {
     return this.portfolioService.updateHolding(id, body);

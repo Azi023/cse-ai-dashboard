@@ -15,6 +15,8 @@ interface CreateHoldingDto {
   buy_price: number;
   buy_date: string;
   notes?: string;
+  dividends_received?: number;
+  purification_rate?: number;
 }
 
 interface UpdateHoldingDto {
@@ -22,6 +24,8 @@ interface UpdateHoldingDto {
   buy_price?: number;
   buy_date?: string;
   notes?: string;
+  dividends_received?: number;
+  purification_rate?: number;
 }
 
 export interface HoldingWithPnL {
@@ -40,6 +44,8 @@ export interface HoldingWithPnL {
   daily_change: number | null;
   allocation_percent: number | null;
   shariah_status: string;
+  dividends_received: number;
+  purification_rate: number;
   notes: string | null;
 }
 
@@ -128,6 +134,8 @@ export class PortfolioService {
         daily_change: dailyChange,
         allocation_percent: allocationPercent,
         shariah_status: stock?.shariah_status ?? 'unknown',
+        dividends_received: Number(h.dividends_received),
+        purification_rate: Number(h.purification_rate),
         notes: h.notes,
       });
     }
@@ -151,6 +159,8 @@ export class PortfolioService {
       buy_price: dto.buy_price,
       buy_date: new Date(dto.buy_date),
       notes: dto.notes ?? null,
+      dividends_received: dto.dividends_received ?? 0,
+      purification_rate: dto.purification_rate ?? 0.03,
       is_open: true,
     });
 
@@ -170,6 +180,10 @@ export class PortfolioService {
     if (dto.buy_price !== undefined) holding.buy_price = dto.buy_price;
     if (dto.buy_date !== undefined) holding.buy_date = new Date(dto.buy_date);
     if (dto.notes !== undefined) holding.notes = dto.notes;
+    if (dto.dividends_received !== undefined)
+      holding.dividends_received = dto.dividends_received;
+    if (dto.purification_rate !== undefined)
+      holding.purification_rate = dto.purification_rate;
 
     return this.portfolioRepository.save(holding);
   }
@@ -361,6 +375,73 @@ export class PortfolioService {
       compliant_percent:
         totalValue > 0 ? (compliantValue / totalValue) * 100 : 0,
       holdings: holdingsList,
+    };
+  }
+
+  /**
+   * GET /api/portfolio/purification — Purification calculator.
+   * Only applies to non-blacklisted stocks (compliant or pending).
+   * Purification = dividends_received × purification_rate
+   */
+  async getPurification(): Promise<{
+    holdings: Array<{
+      symbol: string;
+      name: string;
+      shariah_status: string;
+      dividends_received: number;
+      purification_rate: number;
+      purification_amount: number;
+    }>;
+    total_purification: number;
+    total_dividends: number;
+  }> {
+    const portfolioHoldings = await this.portfolioRepository.find({
+      where: { is_open: true },
+    });
+
+    const holdings: Array<{
+      symbol: string;
+      name: string;
+      shariah_status: string;
+      dividends_received: number;
+      purification_rate: number;
+      purification_amount: number;
+    }> = [];
+    let totalPurification = 0;
+    let totalDividends = 0;
+
+    for (const h of portfolioHoldings) {
+      const stock = await this.stockRepository.findOne({
+        where: { symbol: h.symbol },
+      });
+      const status = stock?.shariah_status ?? 'unknown';
+      const dividends = Number(h.dividends_received);
+      const rate = Number(h.purification_rate);
+
+      // Purification only applies to non-blacklisted stocks
+      // (compliant or pending — not non_compliant)
+      const purificationAmount =
+        status !== 'non_compliant' ? dividends * rate : 0;
+
+      totalDividends += dividends;
+      totalPurification += purificationAmount;
+
+      if (dividends > 0) {
+        holdings.push({
+          symbol: h.symbol,
+          name: stock?.name ?? h.symbol,
+          shariah_status: status,
+          dividends_received: dividends,
+          purification_rate: rate,
+          purification_amount: purificationAmount,
+        });
+      }
+    }
+
+    return {
+      holdings,
+      total_purification: totalPurification,
+      total_dividends: totalDividends,
     };
   }
 

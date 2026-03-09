@@ -32,6 +32,12 @@ export class Portfolio {
   @Column({ type: 'boolean', default: true })
   is_open: boolean;
 
+  @Column({ type: 'decimal', precision: 12, scale: 2, default: 0 })
+  dividends_received: number;
+
+  @Column({ type: 'decimal', precision: 5, scale: 4, default: 0.03 })
+  purification_rate: number;
+
   @Column({ type: 'text', nullable: true })
   notes: string | null;
 

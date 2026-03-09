@@ -20,6 +20,7 @@ import {
   type PortfolioHolding,
   type PortfolioSummary,
   type PortfolioShariahSummary,
+  type PurificationSummary,
 } from '@/lib/api';
 import {
   Wallet,
@@ -31,6 +32,7 @@ import {
   X,
   ShieldCheck,
   PieChart,
+  Heart,
 } from 'lucide-react';
 
 export default function PortfolioPage() {
@@ -38,6 +40,8 @@ export default function PortfolioPage() {
   const [summary, setSummary] = useState<PortfolioSummary | null>(null);
   const [shariahSummary, setShariahSummary] =
     useState<PortfolioShariahSummary | null>(null);
+  const [purification, setPurification] =
+    useState<PurificationSummary | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [showAddForm, setShowAddForm] = useState(false);
@@ -45,11 +49,13 @@ export default function PortfolioPage() {
 
   const fetchData = useCallback(async () => {
     try {
-      const [holdingsRes, summaryRes, shariahRes] = await Promise.allSettled([
-        portfolioApi.getAll(),
-        portfolioApi.getSummary(),
-        portfolioApi.getShariah(),
-      ]);
+      const [holdingsRes, summaryRes, shariahRes, purificationRes] =
+        await Promise.allSettled([
+          portfolioApi.getAll(),
+          portfolioApi.getSummary(),
+          portfolioApi.getShariah(),
+          portfolioApi.getPurification(),
+        ]);
 
       if (holdingsRes.status === 'fulfilled')
         setHoldings(holdingsRes.value.data);
@@ -57,6 +63,8 @@ export default function PortfolioPage() {
         setSummary(summaryRes.value.data);
       if (shariahRes.status === 'fulfilled')
         setShariahSummary(shariahRes.value.data);
+      if (purificationRes.status === 'fulfilled')
+        setPurification(purificationRes.value.data);
     } catch (err) {
       setError('Failed to load portfolio data');
       console.error(err);
@@ -331,6 +339,15 @@ export default function PortfolioPage() {
             </div>
           </CardContent>
         </Card>
+      )}
+
+      {/* Purification Calculator */}
+      {holdings.length > 0 && (
+        <PurificationSection
+          holdings={holdings}
+          purification={purification}
+          onUpdate={fetchData}
+        />
       )}
     </div>
   );
@@ -615,6 +632,187 @@ function AddHoldingForm({
             </p>
           )}
         </form>
+      </CardContent>
+    </Card>
+  );
+}
+
+function PurificationSection({
+  holdings,
+  purification,
+  onUpdate,
+}: {
+  holdings: PortfolioHolding[];
+  purification: PurificationSummary | null;
+  onUpdate: () => void;
+}) {
+  const [editingSymbol, setEditingSymbol] = useState<string | null>(null);
+  const [dividends, setDividends] = useState('');
+  const [rate, setRate] = useState('');
+  const [saving, setSaving] = useState(false);
+
+  const startEdit = (h: PortfolioHolding) => {
+    setEditingSymbol(h.symbol);
+    setDividends(String(h.dividends_received));
+    setRate(String((h.purification_rate * 100).toFixed(2)));
+  };
+
+  const handleSave = async (holdingId: number) => {
+    setSaving(true);
+    try {
+      await portfolioApi.update(holdingId, {
+        dividends_received: Number(dividends),
+        purification_rate: Number(rate) / 100,
+      });
+      setEditingSymbol(null);
+      onUpdate();
+    } catch (err) {
+      console.error('Failed to update purification data', err);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const totalPurification = purification?.total_purification ?? 0;
+
+  return (
+    <Card>
+      <CardHeader>
+        <div className="flex items-center gap-2">
+          <Heart className="h-4 w-4 text-pink-500" />
+          <CardTitle className="text-base">Purification Calculator</CardTitle>
+        </div>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        {/* Total */}
+        <div className="flex items-center justify-between rounded-lg border border-pink-500/20 bg-pink-500/5 p-4">
+          <div>
+            <p className="text-sm text-muted-foreground">
+              Total Purification Amount
+            </p>
+            <p className="text-2xl font-bold text-pink-500">
+              LKR{' '}
+              {totalPurification.toLocaleString('en-US', {
+                minimumFractionDigits: 2,
+                maximumFractionDigits: 2,
+              })}
+            </p>
+          </div>
+          <div className="text-right text-sm text-muted-foreground">
+            <p>
+              Total Dividends: LKR{' '}
+              {(purification?.total_dividends ?? 0).toLocaleString('en-US', {
+                minimumFractionDigits: 2,
+                maximumFractionDigits: 2,
+              })}
+            </p>
+          </div>
+        </div>
+
+        {/* Per-holding table */}
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead>Symbol</TableHead>
+              <TableHead>Name</TableHead>
+              <TableHead>Shariah</TableHead>
+              <TableHead className="text-right">Dividends (LKR)</TableHead>
+              <TableHead className="text-right">Rate %</TableHead>
+              <TableHead className="text-right">Purification (LKR)</TableHead>
+              <TableHead className="text-right">Actions</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {holdings.map((h) => {
+              const purEntry = purification?.holdings.find(
+                (p) => p.symbol === h.symbol,
+              );
+              const isEditing = editingSymbol === h.symbol;
+              const purAmount =
+                h.shariah_status !== 'non_compliant'
+                  ? h.dividends_received * h.purification_rate
+                  : 0;
+
+              return (
+                <TableRow key={h.id}>
+                  <TableCell className="font-medium">{h.symbol}</TableCell>
+                  <TableCell className="max-w-[150px] truncate">
+                    {h.name}
+                  </TableCell>
+                  <TableCell>
+                    <ShariahBadge status={h.shariah_status} />
+                  </TableCell>
+                  <TableCell className="text-right">
+                    {isEditing ? (
+                      <Input
+                        type="number"
+                        step="0.01"
+                        min="0"
+                        value={dividends}
+                        onChange={(e) => setDividends(e.target.value)}
+                        className="w-28 ml-auto"
+                      />
+                    ) : (
+                      Number(h.dividends_received).toFixed(2)
+                    )}
+                  </TableCell>
+                  <TableCell className="text-right">
+                    {isEditing ? (
+                      <Input
+                        type="number"
+                        step="0.01"
+                        min="0"
+                        max="100"
+                        value={rate}
+                        onChange={(e) => setRate(e.target.value)}
+                        className="w-20 ml-auto"
+                      />
+                    ) : (
+                      (Number(h.purification_rate) * 100).toFixed(2) + '%'
+                    )}
+                  </TableCell>
+                  <TableCell className="text-right text-pink-500">
+                    {purAmount.toFixed(2)}
+                  </TableCell>
+                  <TableCell className="text-right">
+                    {isEditing ? (
+                      <div className="flex justify-end gap-1">
+                        <Button
+                          size="sm"
+                          onClick={() => handleSave(h.id)}
+                          disabled={saving}
+                        >
+                          {saving ? '...' : 'Save'}
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => setEditingSymbol(null)}
+                        >
+                          Cancel
+                        </Button>
+                      </div>
+                    ) : (
+                      <button
+                        onClick={() => startEdit(h)}
+                        className="p-1 text-muted-foreground hover:text-foreground"
+                      >
+                        <Pencil className="h-3.5 w-3.5" />
+                      </button>
+                    )}
+                  </TableCell>
+                </TableRow>
+              );
+            })}
+          </TableBody>
+        </Table>
+
+        <p className="text-xs text-muted-foreground italic">
+          Purification amounts are estimates based on a default 3%
+          non-compliant income ratio. Click the edit icon to enter actual
+          dividends received and adjust the purification rate per stock. Consult
+          a qualified Shariah scholar for exact calculations.
+        </p>
       </CardContent>
     </Card>
   );
