@@ -153,8 +153,23 @@ export class PortfolioService {
       );
     }
 
+    let symbol = dto.symbol.toUpperCase().trim();
+
+    // Auto-append .N0000 suffix if not present (CSE convention)
+    if (!symbol.includes('.')) {
+      symbol = `${symbol}.N0000`;
+    }
+
+    // Validate symbol exists in the stocks table
+    const stock = await this.stockRepository.findOne({ where: { symbol } });
+    if (!stock) {
+      throw new BadRequestException(
+        `Stock "${symbol}" not found. Use the full CSE symbol format (e.g., JKH.N0000). Check /api/stocks for valid symbols.`,
+      );
+    }
+
     const holding = this.portfolioRepository.create({
-      symbol: dto.symbol.toUpperCase(),
+      symbol,
       quantity: dto.quantity,
       buy_price: dto.buy_price,
       buy_date: new Date(dto.buy_date),
