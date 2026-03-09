@@ -9,6 +9,7 @@ import { AppService } from './app.service';
 import { CseDataModule } from './modules/cse-data/cse-data.module';
 import { StocksModule } from './modules/stocks/stocks.module';
 import { ShariahScreeningModule } from './modules/shariah-screening/shariah-screening.module';
+import { PortfolioModule } from './modules/portfolio/portfolio.module';
 
 @Module({
   imports: [
@@ -64,6 +65,7 @@ import { ShariahScreeningModule } from './modules/shariah-screening/shariah-scre
     CseDataModule,
     StocksModule,
     ShariahScreeningModule,
+    PortfolioModule,
   ],
   controllers: [AppController],
   providers: [AppService],

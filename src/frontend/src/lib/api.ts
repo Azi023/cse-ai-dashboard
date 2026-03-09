@@ -128,4 +128,82 @@ export const shariahApi = {
     api.get<ShariahStockStatus>(`/shariah/status/${symbol}`),
 };
 
+// Portfolio Types
+export interface PortfolioHolding {
+  id: number;
+  symbol: string;
+  name: string;
+  sector: string | null;
+  quantity: number;
+  buy_price: number;
+  buy_date: string;
+  current_price: number | null;
+  invested_value: number;
+  current_value: number | null;
+  pnl: number | null;
+  pnl_percent: number | null;
+  daily_change: number | null;
+  allocation_percent: number | null;
+  shariah_status: string;
+  notes: string | null;
+}
+
+export interface PortfolioSummary {
+  total_value: number;
+  total_invested: number;
+  total_pnl: number;
+  total_pnl_percent: number;
+  daily_change: number;
+  holdings_count: number;
+  allocation: Array<{
+    symbol: string;
+    name: string;
+    value: number;
+    percent: number;
+  }>;
+  sector_allocation: Array<{
+    sector: string;
+    value: number;
+    percent: number;
+  }>;
+}
+
+export interface PortfolioShariahSummary {
+  compliant_count: number;
+  non_compliant_count: number;
+  pending_count: number;
+  compliant_value: number;
+  total_value: number;
+  compliant_percent: number;
+  holdings: Array<{
+    symbol: string;
+    name: string;
+    value: number;
+    shariah_status: string;
+  }>;
+}
+
+export const portfolioApi = {
+  getAll: () => api.get<PortfolioHolding[]>('/portfolio'),
+  getSummary: () => api.get<PortfolioSummary>('/portfolio/summary'),
+  getShariah: () => api.get<PortfolioShariahSummary>('/portfolio/shariah'),
+  add: (data: {
+    symbol: string;
+    quantity: number;
+    buy_price: number;
+    buy_date: string;
+    notes?: string;
+  }) => api.post('/portfolio', data),
+  update: (
+    id: number,
+    data: {
+      quantity?: number;
+      buy_price?: number;
+      buy_date?: string;
+      notes?: string;
+    },
+  ) => api.put(`/portfolio/${id}`, data),
+  delete: (id: number) => api.delete(`/portfolio/${id}`),
+};
+
 export default api;
