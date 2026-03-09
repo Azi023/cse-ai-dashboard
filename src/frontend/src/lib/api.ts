@@ -226,4 +226,63 @@ export const portfolioApi = {
   delete: (id: number) => api.delete(`/portfolio/${id}`),
 };
 
+// AI Engine Types
+export interface AiStatus {
+  mode: 'live' | 'mock';
+  model: string | null;
+}
+
+export interface DailyBrief {
+  date: string;
+  marketSentiment: 'BULLISH' | 'BEARISH' | 'NEUTRAL' | 'CAUTIOUS';
+  summary: string;
+  topOpportunities: string[];
+  keyRisks: string[];
+  sectorOutlook: { sector: string; outlook: string }[];
+  generatedAt: string;
+}
+
+export interface StockAnalysis {
+  symbol: string;
+  name: string;
+  currentPrice: number;
+  fundamentalScore: number;
+  technicalSignal: 'BULLISH' | 'BEARISH' | 'NEUTRAL';
+  shariahStatus: string;
+  analysis: string;
+  riskFactors: string[];
+  confidence: 'HIGH' | 'MEDIUM' | 'LOW';
+  generatedAt: string;
+}
+
+export interface ChatMessage {
+  role: 'user' | 'assistant';
+  content: string;
+  timestamp: string;
+}
+
+export interface TradingSignal {
+  symbol: string;
+  name: string;
+  currentPrice: number;
+  direction: 'BUY' | 'HOLD' | 'SELL';
+  reasoning: string;
+  confidence: 'HIGH' | 'MEDIUM' | 'LOW';
+  shariahStatus: string;
+  generatedAt: string;
+}
+
+export const aiApi = {
+  getStatus: () => api.get<AiStatus>('/ai/status'),
+  getDailyBrief: () => api.get<DailyBrief>('/ai/daily-brief'),
+  analyzeStock: (symbol: string) =>
+    api.get<StockAnalysis>(`/ai/analyze/${symbol}`),
+  chat: (message: string, history?: ChatMessage[]) =>
+    api.post<{ role: 'assistant'; content: string; timestamp: string }>(
+      '/ai/chat',
+      { message, history: history ?? [] },
+    ),
+  getSignals: () => api.get<TradingSignal[]>('/ai/signals'),
+};
+
 export default api;

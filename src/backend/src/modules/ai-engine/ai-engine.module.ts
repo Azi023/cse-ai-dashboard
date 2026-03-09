@@ -1,0 +1,15 @@
+import { Module } from '@nestjs/common';
+import { TypeOrmModule } from '@nestjs/typeorm';
+import { AiEngineController } from './ai-engine.controller';
+import { AiEngineService } from './ai-engine.service';
+import { MockGenerator } from './mock-generator';
+import { CseDataModule } from '../cse-data/cse-data.module';
+import { Stock } from '../../entities';
+
+@Module({
+  imports: [TypeOrmModule.forFeature([Stock]), CseDataModule],
+  controllers: [AiEngineController],
+  providers: [AiEngineService, MockGenerator],
+  exports: [AiEngineService],
+})
+export class AiEngineModule {}
