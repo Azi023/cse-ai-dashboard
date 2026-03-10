@@ -297,19 +297,19 @@ export function Header() {
           {aspiValue != null && (
             <div className="hidden sm:flex items-center gap-1.5 rounded-md border px-2.5 py-1">
               <span className="text-xs text-muted-foreground">ASPI</span>
-              <span className="font-medium">{aspiValue.toFixed(2)}</span>
+              <span className="font-medium">{Number(aspiValue).toFixed(2)}</span>
               {aspiChange != null && (
                 <span
                   className={`text-xs ${
-                    aspiChange > 0
+                    Number(aspiChange) > 0
                       ? 'text-green-500'
-                      : aspiChange < 0
+                      : Number(aspiChange) < 0
                         ? 'text-red-500'
                         : 'text-muted-foreground'
                   }`}
                 >
-                  {aspiChange > 0 ? '+' : ''}
-                  {aspiChange.toFixed(2)}%
+                  {Number(aspiChange) > 0 ? '+' : ''}
+                  {Number(aspiChange).toFixed(2)}%
                 </span>
               )}
             </div>
