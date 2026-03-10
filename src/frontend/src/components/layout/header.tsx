@@ -426,19 +426,19 @@ export function Header() {
           <div className="flex items-center gap-4 px-3 py-2 text-xs text-muted-foreground border-t mt-1 pt-2">
             {aspiValue != null && (
               <span>
-                ASPI {aspiValue.toFixed(2)}{' '}
+                ASPI {Number(aspiValue).toFixed(2)}{' '}
                 {aspiChange != null && (
                   <span
                     className={
-                      aspiChange > 0
+                      Number(aspiChange) > 0
                         ? 'text-green-500'
-                        : aspiChange < 0
+                        : Number(aspiChange) < 0
                           ? 'text-red-500'
                           : ''
                     }
                   >
-                    ({aspiChange > 0 ? '+' : ''}
-                    {aspiChange.toFixed(2)}%)
+                    ({Number(aspiChange) > 0 ? '+' : ''}
+                    {Number(aspiChange).toFixed(2)}%)
                   </span>
                 )}
               </span>
