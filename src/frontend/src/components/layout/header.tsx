@@ -24,9 +24,13 @@ import {
   ChevronDown,
   Newspaper,
   FlaskConical,
-  Download,
+  Star,
+  Settings,
+  Sun,
+  Moon,
 } from 'lucide-react';
 import { marketApi, alertsApi } from '@/lib/api';
+import { useDisplayMode } from '@/contexts/display-mode-context';
 
 function checkMarketHours(): boolean {
   const now = new Date();
@@ -57,6 +61,7 @@ interface NavGroup {
 }
 
 const topLinks: NavLink[] = [
+  { href: '/journey', label: 'My Journey', icon: Star },
   { href: '/', label: 'Dashboard', icon: TrendingUp },
   { href: '/stocks', label: 'Stocks', icon: BarChart3 },
   { href: '/portfolio', label: 'Portfolio', icon: Wallet },
@@ -91,18 +96,13 @@ const toolsGroup: NavGroup = {
   links: [
     { href: '/dividends', label: 'Dividends', icon: CalendarDays },
     { href: '/admin/financials', label: 'Financials', icon: FileSpreadsheet },
+    { href: '/settings', label: 'Settings', icon: Settings },
   ],
 };
 
 const dropdownGroups = [analysisGroup, intelligenceGroup, toolsGroup];
-const allLinks = [
-  ...topLinks,
-  ...analysisGroup.links,
-  ...intelligenceGroup.links,
-  ...toolsGroup.links,
-];
 
-function DropdownMenu({ group, isActive, pathname }: { group: NavGroup; isActive: boolean; pathname: string }) {
+function DropdownMenu({ group, pathname }: { group: NavGroup; pathname: string }) {
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
 
@@ -161,6 +161,7 @@ function DropdownMenu({ group, isActive, pathname }: { group: NavGroup; isActive
 
 export function Header() {
   const pathname = usePathname();
+  const { mode, toggleMode } = useDisplayMode();
   const [mounted, setMounted] = useState(false);
   const [currentTime, setCurrentTime] = useState<Date | null>(null);
   const [marketOpen, setMarketOpen] = useState(false);
@@ -214,7 +215,7 @@ export function Header() {
       <div className="container flex h-14 items-center justify-between px-4">
         {/* Logo + Nav */}
         <div className="flex items-center gap-6">
-          <Link href="/" className="flex items-center gap-2">
+          <Link href={mode === 'simple' ? '/journey' : '/'} className="flex items-center gap-2">
             <TrendingUp className="h-5 w-5 text-primary" />
             <h1 className="text-lg font-bold hidden sm:block">CSE Dashboard</h1>
           </Link>
@@ -245,7 +246,6 @@ export function Header() {
               <DropdownMenu
                 key={group.label}
                 group={group}
-                isActive={false}
                 pathname={pathname}
               />
             ))}
@@ -254,6 +254,27 @@ export function Header() {
 
         {/* Right side */}
         <div className="flex items-center gap-3 text-sm">
+          {/* Simple/Pro Mode Toggle */}
+          {mounted && (
+            <button
+              onClick={toggleMode}
+              className="hidden sm:flex items-center gap-1.5 rounded-md border px-2.5 py-1 text-xs transition-colors hover:bg-muted/50"
+              title={mode === 'simple' ? 'Switch to Pro Mode' : 'Switch to Simple Mode'}
+            >
+              {mode === 'simple' ? (
+                <>
+                  <Sun className="h-3 w-3 text-yellow-500" />
+                  <span>Simple</span>
+                </>
+              ) : (
+                <>
+                  <Moon className="h-3 w-3 text-blue-400" />
+                  <span>Pro</span>
+                </>
+              )}
+            </button>
+          )}
+
           {/* Alert bell */}
           <Link
             href="/alerts"
@@ -322,6 +343,25 @@ export function Header() {
       {/* Mobile Nav */}
       {mobileMenuOpen && (
         <nav className="md:hidden border-t px-4 py-2 space-y-0.5 max-h-[70vh] overflow-y-auto">
+          {/* Mode toggle (mobile) */}
+          <div className="flex items-center justify-between px-3 py-2 border-b mb-1 pb-2">
+            <span className="text-xs text-muted-foreground">Display Mode</span>
+            <button
+              onClick={toggleMode}
+              className="inline-flex items-center gap-1.5 rounded-md border px-2.5 py-1 text-xs hover:bg-muted/50"
+            >
+              {mode === 'simple' ? (
+                <>
+                  <Sun className="h-3 w-3 text-yellow-500" /> Simple
+                </>
+              ) : (
+                <>
+                  <Moon className="h-3 w-3 text-blue-400" /> Pro
+                </>
+              )}
+            </button>
+          </div>
+
           <p className="text-[10px] text-muted-foreground uppercase tracking-wider px-3 pt-1 pb-0.5">
             Main
           </p>

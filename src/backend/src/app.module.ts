@@ -20,6 +20,9 @@ import { SignalTrackingModule } from './modules/signal-tracking/signal-tracking.
 import { NewsModule } from './modules/news/news.module';
 import { ExportModule } from './modules/export/export.module';
 import { BacktestModule } from './modules/backtest/backtest.module';
+import { ATradSyncModule } from './modules/atrad-sync/atrad-sync.module';
+import { JourneyModule } from './modules/journey/journey.module';
+import { InsightsModule } from './modules/insights/insights.module';
 
 @Module({
   imports: [
@@ -86,6 +89,9 @@ import { BacktestModule } from './modules/backtest/backtest.module';
     NewsModule,
     ExportModule,
     BacktestModule,
+    ATradSyncModule,
+    JourneyModule,
+    InsightsModule,
   ],
   controllers: [AppController],
   providers: [AppService],

@@ -673,4 +673,140 @@ export const backtestApi = {
   getSymbols: () => api.get<string[]>('/backtest/symbols'),
 };
 
+// Journey / Investment Tracker Types
+export interface MonthlyDepositRecord {
+  id: number;
+  month: string;
+  deposit_amount: number;
+  deposit_date: string;
+  portfolio_value_at_deposit: number;
+  cumulative_deposited: number;
+  source: string;
+  notes: string | null;
+  created_at: string;
+}
+
+export interface InvestmentKPIs {
+  totalDeposited: number;
+  currentPortfolioValue: number;
+  totalProfitLoss: number;
+  totalProfitLossPct: number;
+  thisMonthReturn: number;
+  thisMonthReturnPct: number;
+  bestMonth: { month: string; returnPct: number } | null;
+  worstMonth: { month: string; returnPct: number } | null;
+  monthsInvested: number;
+  positiveMonths: number;
+  consecutiveDeposits: number;
+  portfolioReturnPct: number;
+  aspiReturnSamePeriod: number;
+  beatingMarket: boolean;
+  shariahCompliantPct: number;
+  totalPurificationDue: number;
+  totalDividendsReceived: number;
+}
+
+export interface InvestmentGoalData {
+  id: number;
+  target_amount: number;
+  target_date: string | null;
+  is_active: boolean;
+  label: string | null;
+  currentProgress: number;
+  progressPercent: number;
+  estimatedCompletionDate: string | null;
+  monthlyDepositNeeded: number;
+  onTrack: boolean;
+  milestones: Array<{ percent: number; reached: boolean; reachedDate?: string }>;
+}
+
+export interface PortfolioHealthScore {
+  overallScore: number;
+  grade: string;
+  diversification: { score: number; label: string };
+  shariahCompliance: { score: number; label: string };
+  riskLevel: { score: number; label: string };
+  costEfficiency: { score: number; label: string };
+  consistency: { score: number; label: string };
+  suggestion: string;
+}
+
+export const journeyApi = {
+  getJourney: () => api.get<MonthlyDepositRecord[]>('/journey'),
+  getKPIs: () => api.get<InvestmentKPIs>('/journey/kpis'),
+  getHealth: () => api.get<PortfolioHealthScore>('/journey/health'),
+  getGoals: () => api.get<InvestmentGoalData[]>('/journey/goals'),
+  recordDeposit: (data: {
+    month: string;
+    depositAmount: number;
+    depositDate: string;
+    notes?: string;
+  }) => api.post<MonthlyDepositRecord>('/journey/deposit', data),
+  createGoal: (data: {
+    targetAmount: number;
+    targetDate?: string;
+    label?: string;
+  }) => api.post<InvestmentGoalData>('/journey/goals', data),
+  updateGoal: (id: number, data: { targetAmount?: number; targetDate?: string; label?: string }) =>
+    api.put(`/journey/goals/${id}`, data),
+  deleteGoal: (id: number) => api.delete(`/journey/goals/${id}`),
+};
+
+// ATrad Sync Types
+export interface ATradHolding {
+  symbol: string;
+  companyName: string;
+  quantity: number;
+  avgPrice: number;
+  currentPrice: number;
+  marketValue: number;
+  unrealizedPL: number;
+  unrealizedPLPct: number;
+}
+
+export interface ATradSyncStatus {
+  lastSynced: string | null;
+  syncSuccess: boolean;
+  holdingsCount: number;
+  buyingPower: number;
+  error?: string;
+  configured: boolean;
+}
+
+export const atradApi = {
+  sync: () => api.post<{ message: string }>('/atrad/sync'),
+  getStatus: () => api.get<ATradSyncStatus>('/atrad/status'),
+  getHoldings: () => api.get<ATradHolding[]>('/atrad/holdings'),
+  testConnection: () => api.post<{ success: boolean; message: string }>('/atrad/test'),
+};
+
+// Insights Types
+export interface DynamicInsight {
+  id: string;
+  text: string;
+  category: string;
+  relevance: string;
+  icon: string;
+  actionText?: string;
+  actionLink?: string;
+  createdAt: string;
+}
+
+export interface MarketExplainer {
+  id: string;
+  trigger: string;
+  headline: string;
+  explanation: string;
+  whatItMeans: string;
+  actionSuggestion: string;
+  createdAt: string;
+  expiresAt: string;
+}
+
+export const insightsApi = {
+  getCurrent: () => api.get<DynamicInsight[]>('/insights/current'),
+  getExplainer: () => api.get<MarketExplainer | null>('/insights/explainer'),
+  getTips: () => api.get<DynamicInsight[]>('/insights/tips'),
+};
+
 export default api;

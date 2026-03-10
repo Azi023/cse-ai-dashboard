@@ -10,3 +10,5 @@ export { Dividend } from './dividend.entity';
 export { Alert } from './alert.entity';
 export { SignalRecord } from './signal-record.entity';
 export { NewsItem } from './news-item.entity';
+export { MonthlyDeposit } from './monthly-deposit.entity';
+export { InvestmentGoal } from './investment-goal.entity';
