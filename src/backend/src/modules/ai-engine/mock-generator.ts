@@ -247,8 +247,8 @@ export class MockGenerator {
           name: loser.name || stock.name,
           currentPrice: loser.price,
           direction: 'BUY',
-          reasoning: `${loser.symbol} has declined ${Math.abs(loser.changePercentage).toFixed(1)}% today to LKR ${loser.price.toFixed(2)}, potentially offering a buying opportunity if fundamentals remain intact. Volume of ${loser.volume.toLocaleString()} shares suggests active interest.`,
-          confidence: Math.abs(loser.changePercentage) > 5 ? 'MEDIUM' : 'LOW',
+          reasoning: `${loser.symbol} has declined ${Math.abs(loser.changePercentage ?? 0).toFixed(1)}% today to LKR ${(loser.price ?? 0).toFixed(2)}, potentially offering a buying opportunity if fundamentals remain intact. Volume of ${(loser.volume ?? 0).toLocaleString()} shares suggests active interest.`,
+          confidence: Math.abs(loser.changePercentage ?? 0) > 5 ? 'MEDIUM' : 'LOW',
           shariahStatus: stock.shariah_status,
           generatedAt: now,
         });
@@ -266,7 +266,7 @@ export class MockGenerator {
           name: gainer.name || stock.name,
           currentPrice: gainer.price,
           direction: 'HOLD',
-          reasoning: `${gainer.symbol} is showing strong momentum, up ${gainer.changePercentage.toFixed(1)}% to LKR ${gainer.price.toFixed(2)}. The upward movement suggests positive market sentiment, but chasing gains at current levels carries risk.`,
+          reasoning: `${gainer.symbol} is showing strong momentum, up ${(gainer.changePercentage ?? 0).toFixed(1)}% to LKR ${(gainer.price ?? 0).toFixed(2)}. The upward movement suggests positive market sentiment, but chasing gains at current levels carries risk.`,
           confidence: 'MEDIUM',
           shariahStatus: stock.shariah_status,
           generatedAt: now,
@@ -279,14 +279,14 @@ export class MockGenerator {
       const stock = await this.stockRepository.findOne({
         where: { symbol: active.symbol },
       });
-      if (stock && active.changePercentage < -1) {
+      if (stock && (active.changePercentage ?? 0) < -1) {
         signals.push({
           symbol: active.symbol,
           name: active.name || stock.name,
-          currentPrice: active.price,
+          currentPrice: active.price ?? 0,
           direction: 'SELL',
-          reasoning: `${active.symbol} is seeing heavy volume (${active.volume.toLocaleString()} shares) with a ${active.changePercentage.toFixed(1)}% decline. High volume selling could indicate institutional distribution. Consider reviewing your position.`,
-          confidence: active.volume > 100000 ? 'MEDIUM' : 'LOW',
+          reasoning: `${active.symbol} is seeing heavy volume (${(active.volume ?? 0).toLocaleString()} shares) with a ${(active.changePercentage ?? 0).toFixed(1)}% decline. High volume selling could indicate institutional distribution. Consider reviewing your position.`,
+          confidence: (active.volume ?? 0) > 100000 ? 'MEDIUM' : 'LOW',
           shariahStatus: stock.shariah_status,
           generatedAt: now,
         });
@@ -384,13 +384,13 @@ export class MockGenerator {
 
     if (topGainers.length > 0) {
       const gainerStr = topGainers
-        .map((g) => `${g.symbol} (+${g.changePercentage.toFixed(1)}%)`)
+        .map((g) => `${g.symbol} (+${(g.changePercentage ?? 0).toFixed(1)}%)`)
         .join(' and ');
       summary += `Top performers today included ${gainerStr}`;
     }
     if (topLosers.length > 0) {
       const loserStr = topLosers
-        .map((l) => `${l.symbol} (${l.changePercentage.toFixed(1)}%)`)
+        .map((l) => `${l.symbol} (${(l.changePercentage ?? 0).toFixed(1)}%)`)
         .join(' and ');
       summary += `, while ${loserStr} faced selling pressure`;
     }
@@ -407,7 +407,7 @@ export class MockGenerator {
     if (data.losers.length > 0) {
       const topLoser = data.losers[0];
       opps.push(
-        `${topLoser.symbol} declined ${Math.abs(topLoser.changePercentage).toFixed(1)}% — may present a value entry if fundamentals remain sound`,
+        `${topLoser.symbol} declined ${Math.abs(topLoser.changePercentage ?? 0).toFixed(1)}% — may present a value entry if fundamentals remain sound`,
       );
     }
 
@@ -421,7 +421,7 @@ export class MockGenerator {
     if (data.active.length > 0) {
       const highVol = data.active[0];
       opps.push(
-        `${highVol.symbol} seeing elevated volume (${highVol.volume.toLocaleString()} shares) — increased institutional interest possible`,
+        `${highVol.symbol} seeing elevated volume (${(highVol.volume ?? 0).toLocaleString()} shares) — increased institutional interest possible`,
       );
     }
 
@@ -590,10 +590,10 @@ export class MockGenerator {
     }
 
     if (data.gainers.length > 0) {
-      response += `**Top Gainers:** ${data.gainers.slice(0, 3).map((g) => `${g.symbol} (+${g.changePercentage.toFixed(1)}%)`).join(', ')}\n`;
+      response += `**Top Gainers:** ${data.gainers.slice(0, 3).map((g) => `${g.symbol} (+${(g.changePercentage ?? 0).toFixed(1)}%)`).join(', ')}\n`;
     }
     if (data.losers.length > 0) {
-      response += `**Top Losers:** ${data.losers.slice(0, 3).map((l) => `${l.symbol} (${l.changePercentage.toFixed(1)}%)`).join(', ')}\n\n`;
+      response += `**Top Losers:** ${data.losers.slice(0, 3).map((l) => `${l.symbol} (${(l.changePercentage ?? 0).toFixed(1)}%)`).join(', ')}\n\n`;
     }
 
     response += `Market turnover is ${data.turnover ? `LKR ${(data.turnover / 1_000_000).toFixed(1)}M` : 'not yet available'} with ${data.volume ? `${(data.volume / 1_000_000).toFixed(1)}M shares` : 'volume data pending'}.\n\n`;
