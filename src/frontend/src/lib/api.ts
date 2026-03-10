@@ -145,6 +145,7 @@ export const shariahApi = {
   getPending: () => api.get<Stock[]>('/shariah/pending'),
   getStatus: (symbol: string) =>
     api.get<ShariahStockStatus>(`/shariah/status/${symbol}`),
+  getOverview: () => api.get<{ screened: number; total: number; lastUpdated: string; message: string }>('/shariah/overview'),
 };
 
 // Portfolio Types
@@ -541,8 +542,10 @@ export interface TradingSignal {
   currentPrice: number;
   direction: 'BUY' | 'HOLD' | 'SELL';
   reasoning: string;
+  rationale_simple?: string;
   confidence: 'HIGH' | 'MEDIUM' | 'LOW';
   shariahStatus: string;
+  suggested_holding_period?: string;
   generatedAt: string;
 }
 

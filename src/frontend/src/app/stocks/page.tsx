@@ -14,7 +14,7 @@ import {
   TableRow,
 } from '@/components/ui/table';
 import { Skeleton } from '@/components/ui/skeleton';
-import { stocksApi, type Stock } from '@/lib/api';
+import { stocksApi, shariahApi, type Stock } from '@/lib/api';
 import { Search, BarChart3, ShieldCheck } from 'lucide-react';
 import { useDisplayMode } from '@/contexts/display-mode-context';
 import { getSimpleLabel } from '@/lib/simple-mode-constants';
@@ -27,6 +27,7 @@ export default function StocksPage() {
   const [search, setSearch] = useState('');
   const [sectorFilter, setSectorFilter] = useState('');
   const [shariahFilter, setShariahFilter] = useState(false);
+  const [shariahOverview, setShariahOverview] = useState<{ screened: number; total: number; lastUpdated: string } | null>(null);
 
   useEffect(() => {
     stocksApi
@@ -37,6 +38,9 @@ export default function StocksPage() {
         console.error(err);
       })
       .finally(() => setLoading(false));
+
+    // Fetch Shariah overview for header status
+    shariahApi.getOverview().then((res) => setShariahOverview(res.data)).catch(() => {});
   }, []);
 
   const sectors = useMemo(() => {
@@ -65,15 +69,25 @@ export default function StocksPage() {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h2 className="text-2xl font-bold tracking-tight">
-          {isSimple ? 'Browse Companies' : 'All Stocks'}
-        </h2>
-        <p className="text-muted-foreground">
-          {isSimple
-            ? `${stocks.length} companies listed on the Colombo Stock Exchange`
-            : `Browse all CSE-listed securities (${stocks.length} total)`}
-        </p>
+      <div className="flex items-start justify-between flex-wrap gap-3">
+        <div>
+          <h2 className="text-2xl font-bold tracking-tight">
+            {isSimple ? 'Browse Companies' : 'All Stocks'}
+          </h2>
+          <p className="text-muted-foreground">
+            {isSimple
+              ? `${stocks.length} companies listed on the Colombo Stock Exchange`
+              : `Browse all CSE-listed securities (${stocks.length} total)`}
+          </p>
+        </div>
+        {shariahOverview && (
+          <div className="flex items-center gap-1.5 rounded-lg border border-green-600/20 bg-green-500/5 px-3 py-1.5 text-xs">
+            <ShieldCheck className="h-3.5 w-3.5 text-green-500" />
+            <span className="text-muted-foreground">
+              Shariah data last updated: {shariahOverview.lastUpdated} &middot; {shariahOverview.screened}/{shariahOverview.total} stocks screened
+            </span>
+          </div>
+        )}
       </div>
 
       {error && (

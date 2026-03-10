@@ -1,0 +1,27 @@
+{
+  "name": "cse-ai-dashboard",
+  "version": "1.0.0",
+  "description": "AI-powered trading intelligence platform for the Colombo Stock Exchange (CSE) with Shariah compliance screening.",
+  "main": "index.js",
+  "directories": {
+    "doc": "docs"
+  },
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Azi023/cse-ai-dashboard.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "bugs": {
+    "url": "https://github.com/Azi023/cse-ai-dashboard/issues"
+  },
+  "homepage": "https://github.com/Azi023/cse-ai-dashboard#readme",
+  "dependencies": {
+    "playwright": "^1.58.2"
+  }
+}

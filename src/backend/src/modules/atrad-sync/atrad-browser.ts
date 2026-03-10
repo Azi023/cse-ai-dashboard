@@ -478,7 +478,7 @@ async function scrapeAccountSummary(
 // ── Main sync function ──────────────────────────────────────────────────────
 
 export async function syncATradPortfolio(): Promise<ATradPortfolio> {
-  const loginUrl = process.env.ATRAD_LOGIN_URL || 'https://trade.hnbstockbrokers.lk/atsweb/login';
+  const loginUrl = process.env.ATRAD_URL || process.env.ATRAD_LOGIN_URL || 'https://trade.hnbstockbrokers.lk/atsweb/login';
   const username = process.env.ATRAD_USERNAME;
   const password = process.env.ATRAD_PASSWORD;
 

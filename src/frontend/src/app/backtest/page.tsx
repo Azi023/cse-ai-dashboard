@@ -119,20 +119,51 @@ export default function BacktestPage() {
             ))}
           </div>
 
+          {/* Quick-select popular stocks */}
+          <div>
+            <label className="text-xs text-muted-foreground block mb-2">Popular Stocks</label>
+            <div className="flex flex-wrap gap-2">
+              {['JKH.N0000', 'SAMP.N0000', 'COMB.N0000', 'HNB.N0000', 'DIAL.N0000'].map((s) => (
+                <button
+                  key={s}
+                  onClick={() => setSelectedSymbol(s)}
+                  className={cn(
+                    'rounded-md border px-3 py-1 text-xs font-medium transition-colors',
+                    selectedSymbol === s
+                      ? 'border-primary bg-primary/10 text-primary'
+                      : 'hover:bg-muted/50 text-muted-foreground',
+                  )}
+                >
+                  {s.replace('.N0000', '')}
+                </button>
+              ))}
+            </div>
+          </div>
+
           {/* Parameters */}
           <div className="grid gap-4 sm:grid-cols-4">
             <div>
               <label className="text-xs text-muted-foreground block mb-1">Symbol</label>
+              <input
+                type="text"
+                value={symbolSearch}
+                onChange={(e) => setSymbolSearch(e.target.value)}
+                placeholder="Search symbol..."
+                className="w-full rounded-md border bg-background px-3 py-2 text-sm mb-1"
+              />
               <select
                 value={selectedSymbol}
                 onChange={(e) => setSelectedSymbol(e.target.value)}
                 className="w-full rounded-md border bg-background px-3 py-2 text-sm"
+                size={filteredSymbols.length > 5 ? 5 : undefined}
               >
                 {initialLoading ? (
                   <option>Loading...</option>
+                ) : filteredSymbols.length === 0 ? (
+                  <option disabled>No symbols found</option>
                 ) : (
                   filteredSymbols.map((s) => (
-                    <option key={s} value={s}>{s.replace('.N0000', '')}</option>
+                    <option key={s} value={s}>{s.replace('.N0000', '')} — {s}</option>
                   ))
                 )}
               </select>

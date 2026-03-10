@@ -41,8 +41,10 @@ export interface TradingSignal {
   currentPrice: number;
   direction: 'BUY' | 'HOLD' | 'SELL';
   reasoning: string;
+  rationale_simple: string;
   confidence: 'HIGH' | 'MEDIUM' | 'LOW';
   shariahStatus: string;
+  suggested_holding_period: string;
   generatedAt: Date;
 }
 
@@ -55,9 +57,9 @@ const CACHE_KEYS = {
 
 // Cache TTLs in seconds
 const TTL = {
-  DAILY_BRIEF: 4 * 3600,   // 4 hours
+  DAILY_BRIEF: 4 * 3600,    // 4 hours
   STOCK_ANALYSIS: 2 * 3600, // 2 hours
-  SIGNALS: 3600,             // 1 hour
+  SIGNALS: 20 * 3600,        // 20 hours — generated once at EOD (2:30 PM), valid until next EOD
 };
 
 // Rate limits: max calls per hour (after cache miss)
@@ -306,6 +308,13 @@ export class AiEngineService {
       const marketData = await this.mockGenerator.getMarketData();
       const dataContext = JSON.stringify(marketData, null, 2);
 
+      const todayStr = new Date().toLocaleDateString('en-GB', {
+        timeZone: 'Asia/Colombo',
+        day: '2-digit',
+        month: 'short',
+        year: 'numeric',
+      });
+
       const response = await client.messages.create({
         model: 'claude-sonnet-4-6',
         max_tokens: 1500,
@@ -313,7 +322,7 @@ export class AiEngineService {
         messages: [
           {
             role: 'user',
-            content: `Here is today's CSE market data. Generate a comprehensive daily brief:\n\n${dataContext}`,
+            content: `Today's date in Colombo, Sri Lanka is: ${todayStr}\n\nHere is today's CSE market data. Generate a comprehensive daily brief with the exact date "${todayStr}" in the MARKET PULSE header:\n\n${dataContext}`,
           },
         ],
       });
@@ -431,7 +440,7 @@ export class AiEngineService {
         messages: [
           {
             role: 'user',
-            content: `Generate trading signals based on today's CSE market data. Output ONLY a valid JSON array (no markdown, no explanation outside the array) matching this structure per signal:\n{\n  "symbol": "SYMBOL.N0000",\n  "name": "Company Name",\n  "currentPrice": 100.00,\n  "direction": "BUY|HOLD|SELL",\n  "reasoning": "2-3 sentences",\n  "confidence": "HIGH|MEDIUM|LOW",\n  "shariahStatus": "compliant|non_compliant|pending_review"\n}\n\nMarket data:\n${JSON.stringify(marketData, null, 2)}`,
+            content: `Generate trading signals based on today's CSE market data. Output ONLY a valid JSON array (no markdown, no explanation outside the array) matching this structure per signal:\n{\n  "symbol": "SYMBOL.N0000",\n  "name": "Company Name",\n  "currentPrice": 100.00,\n  "direction": "BUY|HOLD|SELL",\n  "reasoning": "2-3 technical sentences for analysts",\n  "rationale_simple": "One plain-English sentence a beginner investor can understand",\n  "confidence": "HIGH|MEDIUM|LOW",\n  "shariahStatus": "compliant|non_compliant|pending_review",\n  "suggested_holding_period": "e.g. 12-24 months, 3-6 months, Short-term: 1-4 weeks"\n}\n\nIMPORTANT: Never say 'buy' or 'sell' as direct instructions. Use 'worth considering' or 'may warrant attention'. Always include suggested_holding_period and rationale_simple.\n\nMarket data:\n${JSON.stringify(marketData, null, 2)}`,
           },
         ],
       });
@@ -451,8 +460,10 @@ export class AiEngineService {
         currentPrice?: number;
         direction?: string;
         reasoning?: string;
+        rationale_simple?: string;
         confidence?: string;
         shariahStatus?: string;
+        suggested_holding_period?: string;
       }>;
 
       const validDirections = new Set(['BUY', 'HOLD', 'SELL']);
@@ -467,10 +478,12 @@ export class AiEngineService {
           currentPrice: s.currentPrice ?? 0,
           direction: s.direction as TradingSignal['direction'],
           reasoning: s.reasoning ?? '',
+          rationale_simple: s.rationale_simple ?? 'Research recommended before investing.',
           confidence: validConfidences.has(s.confidence ?? '')
             ? (s.confidence as TradingSignal['confidence'])
             : 'MEDIUM',
           shariahStatus: s.shariahStatus ?? 'pending_review',
+          suggested_holding_period: s.suggested_holding_period ?? 'Duration: Research recommended',
           generatedAt: now,
         }));
 

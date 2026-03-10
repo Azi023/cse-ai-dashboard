@@ -13,9 +13,38 @@ import {
   Bell,
   User,
   Plug,
+  Pencil,
+  Save,
+  X,
 } from 'lucide-react';
 import { atradApi, aiApi, type ATradSyncStatus, type AiStatus } from '@/lib/api';
 import { useDisplayMode } from '@/contexts/display-mode-context';
+
+const PROFILE_KEY = 'cse_investment_profile';
+
+interface InvestmentProfile {
+  monthlyContribution: number;
+  riskTolerance: 'Conservative' | 'Moderate' | 'Aggressive';
+  strategy: 'Rupee Cost Averaging' | 'Lump Sum' | 'Value Averaging';
+  journeyStartDate: string;
+}
+
+const DEFAULT_PROFILE: InvestmentProfile = {
+  monthlyContribution: 10000,
+  riskTolerance: 'Conservative',
+  strategy: 'Rupee Cost Averaging',
+  journeyStartDate: new Date().toISOString().slice(0, 10),
+};
+
+export function getInvestmentProfile(): InvestmentProfile {
+  if (typeof window === 'undefined') return DEFAULT_PROFILE;
+  try {
+    const saved = localStorage.getItem(PROFILE_KEY);
+    return saved ? { ...DEFAULT_PROFILE, ...JSON.parse(saved) } : DEFAULT_PROFILE;
+  } catch {
+    return DEFAULT_PROFILE;
+  }
+}
 
 export default function SettingsPage() {
   const { mode, setMode } = useDisplayMode();
@@ -26,6 +55,12 @@ export default function SettingsPage() {
   const [testing, setTesting] = useState(false);
   const [syncResult, setSyncResult] = useState<string | null>(null);
   const [testResult, setTestResult] = useState<{ success: boolean; message: string } | null>(null);
+
+  // Investment profile editing
+  const [profile, setProfile] = useState<InvestmentProfile>(DEFAULT_PROFILE);
+  const [editingProfile, setEditingProfile] = useState(false);
+  const [editProfile, setEditProfile] = useState<InvestmentProfile>(DEFAULT_PROFILE);
+  const [profileSaved, setProfileSaved] = useState(false);
 
   useEffect(() => {
     const fetchStatuses = async () => {
@@ -39,6 +74,10 @@ export default function SettingsPage() {
       setLoading(false);
     };
     fetchStatuses();
+    // Load saved investment profile
+    const saved = getInvestmentProfile();
+    setProfile(saved);
+    setEditProfile(saved);
   }, []);
 
   const handleSync = async () => {
@@ -289,32 +328,123 @@ export default function SettingsPage() {
       </div>
 
       {/* Investment Profile */}
-      <div className="rounded-xl border bg-card p-6 space-y-3">
-        <h2 className="text-lg font-semibold flex items-center gap-2">
-          <User className="h-5 w-5 text-primary" />
-          Investment Profile
-        </h2>
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-sm">
-          <div className="rounded-lg bg-muted/30 p-3">
-            <p className="text-xs text-muted-foreground">Monthly Contribution</p>
-            <p className="font-medium mt-0.5">LKR 10,000</p>
-          </div>
-          <div className="rounded-lg bg-muted/30 p-3">
-            <p className="text-xs text-muted-foreground">Strategy</p>
-            <p className="font-medium mt-0.5">Rupee Cost Averaging</p>
-          </div>
-          <div className="rounded-lg bg-muted/30 p-3">
-            <p className="text-xs text-muted-foreground">Risk Tolerance</p>
-            <p className="font-medium mt-0.5">Conservative</p>
-          </div>
-          <div className="rounded-lg bg-muted/30 p-3">
-            <p className="text-xs text-muted-foreground">Shariah Filter</p>
-            <p className="font-medium mt-0.5 text-green-400">Always ON ✅</p>
-          </div>
+      <div className="rounded-xl border bg-card p-6 space-y-4">
+        <div className="flex items-center justify-between">
+          <h2 className="text-lg font-semibold flex items-center gap-2">
+            <User className="h-5 w-5 text-primary" />
+            Investment Profile
+          </h2>
+          {!editingProfile ? (
+            <button
+              onClick={() => { setEditProfile(profile); setEditingProfile(true); setProfileSaved(false); }}
+              className="inline-flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-sm hover:bg-muted/50 transition-colors"
+            >
+              <Pencil className="h-3.5 w-3.5" /> Edit
+            </button>
+          ) : (
+            <div className="flex gap-2">
+              <button
+                onClick={() => {
+                  localStorage.setItem(PROFILE_KEY, JSON.stringify(editProfile));
+                  setProfile(editProfile);
+                  setEditingProfile(false);
+                  setProfileSaved(true);
+                  setTimeout(() => setProfileSaved(false), 3000);
+                }}
+                className="inline-flex items-center gap-1.5 rounded-lg bg-primary px-3 py-1.5 text-sm font-medium text-primary-foreground hover:bg-primary/90 transition-colors"
+              >
+                <Save className="h-3.5 w-3.5" /> Save
+              </button>
+              <button
+                onClick={() => { setEditingProfile(false); setEditProfile(profile); }}
+                className="inline-flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-sm hover:bg-muted/50 transition-colors"
+              >
+                <X className="h-3.5 w-3.5" /> Cancel
+              </button>
+            </div>
+          )}
         </div>
-        <p className="text-xs text-muted-foreground">
-          These settings are configured in the backend. Edit safety parameters to change.
-        </p>
+
+        {profileSaved && (
+          <div className="rounded-lg bg-green-500/10 border border-green-500/20 p-3 text-sm text-green-400">
+            ✅ Investment profile saved successfully.
+          </div>
+        )}
+
+        {editingProfile ? (
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-sm">
+            <div className="space-y-1">
+              <label className="text-xs text-muted-foreground">Monthly Contribution (LKR)</label>
+              <input
+                type="number"
+                value={editProfile.monthlyContribution}
+                onChange={(e) => setEditProfile(p => ({ ...p, monthlyContribution: Number(e.target.value) }))}
+                className="w-full rounded-lg border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+              />
+            </div>
+            <div className="space-y-1">
+              <label className="text-xs text-muted-foreground">Risk Tolerance</label>
+              <select
+                value={editProfile.riskTolerance}
+                onChange={(e) => setEditProfile(p => ({ ...p, riskTolerance: e.target.value as InvestmentProfile['riskTolerance'] }))}
+                className="w-full rounded-lg border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+              >
+                <option>Conservative</option>
+                <option>Moderate</option>
+                <option>Aggressive</option>
+              </select>
+            </div>
+            <div className="space-y-1">
+              <label className="text-xs text-muted-foreground">Investment Strategy</label>
+              <select
+                value={editProfile.strategy}
+                onChange={(e) => setEditProfile(p => ({ ...p, strategy: e.target.value as InvestmentProfile['strategy'] }))}
+                className="w-full rounded-lg border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+              >
+                <option>Rupee Cost Averaging</option>
+                <option>Lump Sum</option>
+                <option>Value Averaging</option>
+              </select>
+            </div>
+            <div className="space-y-1">
+              <label className="text-xs text-muted-foreground">Journey Start Date</label>
+              <input
+                type="date"
+                value={editProfile.journeyStartDate}
+                onChange={(e) => setEditProfile(p => ({ ...p, journeyStartDate: e.target.value }))}
+                className="w-full rounded-lg border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+              />
+            </div>
+            <div className="rounded-lg bg-muted/30 p-3">
+              <p className="text-xs text-muted-foreground">Shariah Filter</p>
+              <p className="font-medium mt-0.5 text-green-400">Always ON ✅</p>
+              <p className="text-xs text-muted-foreground mt-1">Shariah compliance is always enforced and cannot be disabled.</p>
+            </div>
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-sm">
+            <div className="rounded-lg bg-muted/30 p-3">
+              <p className="text-xs text-muted-foreground">Monthly Contribution</p>
+              <p className="font-medium mt-0.5">LKR {profile.monthlyContribution.toLocaleString()}</p>
+            </div>
+            <div className="rounded-lg bg-muted/30 p-3">
+              <p className="text-xs text-muted-foreground">Strategy</p>
+              <p className="font-medium mt-0.5">{profile.strategy}</p>
+            </div>
+            <div className="rounded-lg bg-muted/30 p-3">
+              <p className="text-xs text-muted-foreground">Risk Tolerance</p>
+              <p className="font-medium mt-0.5">{profile.riskTolerance}</p>
+            </div>
+            <div className="rounded-lg bg-muted/30 p-3">
+              <p className="text-xs text-muted-foreground">Journey Start Date</p>
+              <p className="font-medium mt-0.5">{profile.journeyStartDate}</p>
+            </div>
+            <div className="rounded-lg bg-muted/30 p-3">
+              <p className="text-xs text-muted-foreground">Shariah Filter</p>
+              <p className="font-medium mt-0.5 text-green-400">Always ON ✅</p>
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Notifications */}

@@ -523,11 +523,17 @@ export default function JourneyPage() {
             <ShieldCheck className="h-5 w-5 text-green-500" />
             Shariah Health
           </h2>
+          {kpis.currentPortfolioValue === 0 ? (
+            <p className="text-sm text-muted-foreground">
+              No holdings yet. Start investing to track your Shariah compliance score.
+            </p>
+          ) : (
           <p className="text-sm">
             <span className="text-foreground font-medium">{Math.round(kpis.shariahCompliantPct)}%</span>{' '}
             <span className="text-muted-foreground">of your portfolio is Shariah compliant</span>{' '}
             {kpis.shariahCompliantPct >= 90 ? '✅' : kpis.shariahCompliantPct >= 50 ? '⚠️' : '❌'}
           </p>
+          )}
           {kpis.totalPurificationDue > 0 && (
             <p className="text-sm text-muted-foreground">
               Purification due: <span className="text-foreground">{formatLKR(kpis.totalPurificationDue)}</span>{' '}
@@ -559,9 +565,44 @@ export default function JourneyPage() {
         </div>
 
         {goals.length === 0 && !showGoalForm && (
-          <p className="text-sm text-muted-foreground text-center py-4">
-            No goals set yet. Set a target to track your progress!
-          </p>
+          <div className="space-y-3">
+            <p className="text-sm text-muted-foreground">
+              No goals yet. Choose a template to get started, or set a custom goal:
+            </p>
+            <div className="grid gap-2 sm:grid-cols-3">
+              {[
+                {
+                  label: 'Emergency Fund Portfolio',
+                  amount: '500000',
+                  description: 'Build a LKR 500,000 portfolio in 3 years as a safety net',
+                },
+                {
+                  label: 'Grow Monthly SIP',
+                  amount: '300000',
+                  description: 'Reach LKR 25,000/month contribution within 12 months',
+                },
+                {
+                  label: '15% Return Target',
+                  amount: '115000',
+                  description: 'Achieve 15% portfolio return within 2 years',
+                },
+              ].map((template) => (
+                <button
+                  key={template.label}
+                  onClick={() => {
+                    setGoalAmount(template.amount);
+                    setGoalLabel(template.label);
+                    setShowGoalForm(true);
+                  }}
+                  className="text-left rounded-lg border p-3 hover:border-primary/50 hover:bg-primary/5 transition-colors space-y-1"
+                >
+                  <p className="text-sm font-medium">{template.label}</p>
+                  <p className="text-xs text-muted-foreground">{template.description}</p>
+                  <p className="text-xs text-primary">Use this template →</p>
+                </button>
+              ))}
+            </div>
+          </div>
         )}
 
         {goals.map((goal) => (

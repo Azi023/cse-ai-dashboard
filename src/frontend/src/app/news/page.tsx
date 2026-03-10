@@ -211,11 +211,18 @@ export default function NewsPage() {
                         item.title
                       )}
                     </h3>
-                    {item.summary && (
+                    {item.summary && item.summary !== item.title && !item.title.startsWith(item.summary.slice(0, 40)) ? (
                       <p className="text-xs text-muted-foreground mt-1 line-clamp-2">
                         {item.summary}
                       </p>
-                    )}
+                    ) : !item.summary ? (
+                      <p className="text-xs text-muted-foreground mt-1">
+                        {sourceLabels[item.source] || item.source}
+                        {item.url && (
+                          <> &middot; <a href={item.url} target="_blank" rel="noopener noreferrer" className="text-primary hover:underline">Read more</a></>
+                        )}
+                      </p>
+                    ) : null}
                   </div>
                   <span className="text-[10px] text-muted-foreground whitespace-nowrap">
                     {timeAgo(item.published_at)}
@@ -228,6 +235,14 @@ export default function NewsPage() {
                     <span className={cn('text-[10px] font-medium', directionColors[item.impact_direction])}>
                       {item.impact_direction === 'POSITIVE' ? 'Positive' : 'Negative'}
                     </span>
+                  )}
+                  {/* Shariah Impact tag — shown when news may affect Shariah screening */}
+                  {/banking|interest rate|alcohol|tobacco|insurance|riba|liquor|beer|finance charge|conventional loan/i.test(
+                    (item.title || '') + ' ' + (item.summary || '')
+                  ) && (
+                    <Badge variant="outline" className="text-[10px] h-4 px-1 border-green-600/40 text-green-500">
+                      Shariah-relevant
+                    </Badge>
                   )}
                   {item.affected_symbols?.map((s) => (
                     <Badge key={s} variant="outline" className="text-[10px] h-4 px-1">

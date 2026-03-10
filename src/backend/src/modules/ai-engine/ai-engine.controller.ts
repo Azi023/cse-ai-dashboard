@@ -44,4 +44,11 @@ export class AiEngineController {
   ): Promise<TradingSignal[]> {
     return this.aiEngineService.getSignals(forceRefresh === 'true');
   }
+
+  // Called by cron at 14:35 SLT weekdays (end of market day)
+  @Post('signals/generate-eod')
+  async generateEodSignals(): Promise<{ message: string; count: number }> {
+    const signals = await this.aiEngineService.getSignals(true);
+    return { message: 'EOD signals generated and cached for 20 hours', count: signals.length };
+  }
 }

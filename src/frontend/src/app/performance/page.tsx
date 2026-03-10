@@ -100,8 +100,39 @@ export default function PerformancePage() {
         </button>
       </div>
 
+      {/* Onboarding message when no signals exist */}
+      {!loading && signals.length === 0 && (
+        <Card>
+          <CardContent className="py-10 space-y-4">
+            <div className="text-center space-y-3">
+              <div className="rounded-full bg-primary/10 p-4 w-16 h-16 flex items-center justify-center mx-auto">
+                <Target className="h-8 w-8 text-primary" />
+              </div>
+              <h3 className="text-lg font-semibold">Your AI Signal History</h3>
+              <p className="text-sm text-muted-foreground max-w-md mx-auto">
+                This page automatically tracks every stock suggestion the AI makes. Once signals are generated on the Signals page, they&apos;ll appear here with their outcomes after 7 and 30 days. No action needed — tracking is fully automatic.
+              </p>
+            </div>
+            <details className="max-w-md mx-auto">
+              <summary className="text-sm text-muted-foreground cursor-pointer hover:text-foreground text-center">
+                How does this work?
+              </summary>
+              <div className="mt-3 rounded-lg border p-4 text-sm text-muted-foreground space-y-2">
+                <p><strong>Win Rate</strong> = % of signals where the stock moved in the predicted direction within the timeframe.</p>
+                <p><strong>7-day signals:</strong> Evaluated after 7 trading days. Did the BUY signal go up? Did the SELL signal go down?</p>
+                <p><strong>30-day signals:</strong> Evaluated after 30 trading days for a longer-term view of AI accuracy.</p>
+                <p>The system checks prices daily and automatically marks signals as won or lost — you don&apos;t need to do anything.</p>
+              </div>
+            </details>
+            <p className="text-xs text-muted-foreground text-center">
+              Go to <a href="/signals" className="text-primary hover:underline">Signals</a> to generate your first AI signals.
+            </p>
+          </CardContent>
+        </Card>
+      )}
+
       {/* Performance Summary Cards */}
-      {stats && (
+      {stats && stats.totalSignals > 0 && (
         <div className="grid gap-4 grid-cols-2 sm:grid-cols-3 lg:grid-cols-6">
           <StatCard label="Total Signals" value={stats.totalSignals} />
           <StatCard label="Completed" value={stats.completedSignals} />
@@ -128,7 +159,7 @@ export default function PerformancePage() {
       )}
 
       {/* Confidence Breakdown */}
-      {stats && (
+      {stats && stats.totalSignals > 0 && (
         <Card>
           <CardHeader className="pb-3">
             <CardTitle className="text-sm">Performance by Confidence Level</CardTitle>

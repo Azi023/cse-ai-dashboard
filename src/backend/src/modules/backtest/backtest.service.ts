@@ -292,6 +292,7 @@ export class BacktestService {
   }
 
   async getAvailableSymbols(): Promise<string[]> {
+    // Prefer stocks with price history (30+ days), fallback to all active stocks
     const results = await this.priceRepo
       .createQueryBuilder('p')
       .select('s.symbol', 'symbol')
@@ -302,7 +303,17 @@ export class BacktestService {
       .orderBy('s.symbol', 'ASC')
       .getRawMany();
 
-    return results.map((r: { symbol: string }) => r.symbol);
+    if (results.length > 0) {
+      return results.map((r: { symbol: string }) => r.symbol);
+    }
+
+    // Fallback: return all active stocks from DB
+    const allStocks = await this.stockRepo.find({
+      where: { is_active: true },
+      select: ['symbol'],
+      order: { symbol: 'ASC' },
+    });
+    return allStocks.map((s) => s.symbol);
   }
 
   // --- Helpers ---

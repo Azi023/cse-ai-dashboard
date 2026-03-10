@@ -12,6 +12,7 @@ import {
   Shield,
   Filter,
   Loader2,
+  Clock,
 } from 'lucide-react';
 import Link from 'next/link';
 import { format } from 'date-fns';
@@ -213,9 +214,22 @@ export default function SignalsPage() {
                     </div>
                   </div>
 
-                  <p className="text-sm text-muted-foreground leading-relaxed">
-                    {signal.reasoning}
-                  </p>
+                  {isSimple && signal.rationale_simple ? (
+                    <p className="text-sm text-muted-foreground leading-relaxed">
+                      {signal.rationale_simple}
+                    </p>
+                  ) : (
+                    <p className="text-sm text-muted-foreground leading-relaxed">
+                      {signal.reasoning}
+                    </p>
+                  )}
+
+                  {signal.suggested_holding_period && (
+                    <div className="flex items-center gap-1.5 text-xs text-muted-foreground/70">
+                      <Clock className="h-3 w-3" />
+                      <span>{signal.suggested_holding_period}</span>
+                    </div>
+                  )}
 
                   <div className="flex items-center justify-between pt-1">
                     <div className="flex items-center gap-2">

@@ -17,10 +17,12 @@ import {
 import { Skeleton } from '@/components/ui/skeleton';
 import {
   portfolioApi,
+  atradApi,
   type PortfolioHolding,
   type PortfolioSummary,
   type PortfolioShariahSummary,
   type PurificationSummary,
+  type ATradSyncStatus,
 } from '@/lib/api';
 import {
   Wallet,
@@ -33,6 +35,8 @@ import {
   ShieldCheck,
   PieChart,
   Heart,
+  RefreshCw,
+  Loader2,
 } from 'lucide-react';
 
 export default function PortfolioPage() {
@@ -46,6 +50,8 @@ export default function PortfolioPage() {
   const [error, setError] = useState<string | null>(null);
   const [showAddForm, setShowAddForm] = useState(false);
   const [editingId, setEditingId] = useState<number | null>(null);
+  const [atradStatus, setAtradStatus] = useState<ATradSyncStatus | null>(null);
+  const [syncing, setSyncing] = useState(false);
 
   const fetchData = useCallback(async () => {
     try {
@@ -76,8 +82,23 @@ export default function PortfolioPage() {
   useEffect(() => {
     fetchData();
     const interval = setInterval(fetchData, 60000);
+    atradApi.getStatus().then((res) => setAtradStatus(res.data)).catch(() => {});
     return () => clearInterval(interval);
   }, [fetchData]);
+
+  const handleAtradSync = async () => {
+    setSyncing(true);
+    try {
+      await atradApi.sync();
+      await fetchData();
+      const statusRes = await atradApi.getStatus();
+      setAtradStatus(statusRes.data);
+    } catch {
+      // silent
+    } finally {
+      setSyncing(false);
+    }
+  };
 
   const handleDelete = async (id: number) => {
     try {
@@ -90,6 +111,26 @@ export default function PortfolioPage() {
 
   return (
     <div className="space-y-6">
+      {/* ATrad sync banner */}
+      {atradStatus?.configured && (
+        <div className={`flex items-center gap-2 rounded-lg border px-4 py-2 text-sm ${atradStatus.syncSuccess ? 'border-green-500/20 bg-green-500/5' : 'border-yellow-500/20 bg-yellow-500/5'}`}>
+          <RefreshCw className={`h-3.5 w-3.5 ${atradStatus.syncSuccess ? 'text-green-500' : 'text-yellow-500'}`} />
+          <span className={atradStatus.syncSuccess ? 'text-green-400' : 'text-yellow-400'}>
+            {atradStatus.syncSuccess
+              ? `Last synced from ATrad: ${atradStatus.lastSynced ? new Date(atradStatus.lastSynced).toLocaleTimeString() : 'recently'}`
+              : 'ATrad sync not yet connected'}
+          </span>
+          <button
+            onClick={handleAtradSync}
+            disabled={syncing}
+            className="ml-auto inline-flex items-center gap-1.5 rounded-md border px-2.5 py-1 text-xs hover:bg-muted/50 transition-colors disabled:opacity-50"
+          >
+            {syncing ? <Loader2 className="h-3 w-3 animate-spin" /> : <RefreshCw className="h-3 w-3" />}
+            Sync Now
+          </button>
+        </div>
+      )}
+
       <div className="flex items-center justify-between">
         <div>
           <h2 className="text-2xl font-bold tracking-tight">My Portfolio</h2>
@@ -181,10 +222,11 @@ export default function PortfolioPage() {
         />
         <SummaryCard
           title="Shariah Compliant"
-          value={shariahSummary?.compliant_percent ?? null}
+          value={holdings.length === 0 ? null : (shariahSummary?.compliant_percent ?? null)}
           format="percent"
           loading={loading}
           icon={<ShieldCheck className="h-4 w-4 text-green-500" />}
+          emptyLabel="Add holdings to track"
         />
       </div>
 
@@ -362,6 +404,7 @@ function SummaryCard({
   percent,
   loading,
   icon,
+  emptyLabel,
 }: {
   title: string;
   value: number | null;
@@ -369,6 +412,7 @@ function SummaryCard({
   percent?: number | null;
   loading: boolean;
   icon: React.ReactNode;
+  emptyLabel?: string;
 }) {
   const formatValue = (v: number) => {
     if (format === 'percent') return v.toFixed(1) + '%';
@@ -397,6 +441,9 @@ function SummaryCard({
             <div className={`text-2xl font-bold ${colorClass}`}>
               {value != null ? formatValue(value) : '—'}
             </div>
+            {value == null && emptyLabel && (
+              <p className="text-xs text-muted-foreground mt-1">{emptyLabel}</p>
+            )}
             {percent != null && (
               <p
                 className={`text-xs ${percent >= 0 ? 'text-green-500' : 'text-red-500'}`}

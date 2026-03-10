@@ -218,8 +218,10 @@ export class MockGenerator {
       currentPrice: number;
       direction: 'BUY' | 'HOLD' | 'SELL';
       reasoning: string;
+      rationale_simple: string;
       confidence: 'HIGH' | 'MEDIUM' | 'LOW';
       shariahStatus: string;
+      suggested_holding_period: string;
       generatedAt: Date;
     }>
   > {
@@ -230,8 +232,10 @@ export class MockGenerator {
       currentPrice: number;
       direction: 'BUY' | 'HOLD' | 'SELL';
       reasoning: string;
+      rationale_simple: string;
       confidence: 'HIGH' | 'MEDIUM' | 'LOW';
       shariahStatus: string;
+      suggested_holding_period: string;
       generatedAt: Date;
     }> = [];
     const now = new Date();
@@ -248,8 +252,10 @@ export class MockGenerator {
           currentPrice: loser.price,
           direction: 'BUY',
           reasoning: `${loser.symbol} has declined ${Math.abs(loser.changePercentage ?? 0).toFixed(1)}% today to LKR ${(loser.price ?? 0).toFixed(2)}, potentially offering a buying opportunity if fundamentals remain intact. Volume of ${(loser.volume ?? 0).toLocaleString()} shares suggests active interest.`,
+          rationale_simple: `${loser.symbol} dropped today, which may make it worth considering at a lower price — but research the company before investing.`,
           confidence: Math.abs(loser.changePercentage ?? 0) > 5 ? 'MEDIUM' : 'LOW',
           shariahStatus: stock.shariah_status,
+          suggested_holding_period: '12–24 months',
           generatedAt: now,
         });
       }
@@ -267,8 +273,10 @@ export class MockGenerator {
           currentPrice: gainer.price,
           direction: 'HOLD',
           reasoning: `${gainer.symbol} is showing strong momentum, up ${(gainer.changePercentage ?? 0).toFixed(1)}% to LKR ${(gainer.price ?? 0).toFixed(2)}. The upward movement suggests positive market sentiment, but chasing gains at current levels carries risk.`,
+          rationale_simple: `${gainer.symbol} is rising today — if you already hold it, this is a good sign. If not, wait for a pullback rather than buying at today's high.`,
           confidence: 'MEDIUM',
           shariahStatus: stock.shariah_status,
+          suggested_holding_period: '12–24 months',
           generatedAt: now,
         });
       }
@@ -286,8 +294,10 @@ export class MockGenerator {
           currentPrice: active.price ?? 0,
           direction: 'SELL',
           reasoning: `${active.symbol} is seeing heavy volume (${(active.volume ?? 0).toLocaleString()} shares) with a ${(active.changePercentage ?? 0).toFixed(1)}% decline. High volume selling could indicate institutional distribution. Consider reviewing your position.`,
+          rationale_simple: `${active.symbol} is falling with heavy trading — this may warrant a review of your position if you currently hold it.`,
           confidence: (active.volume ?? 0) > 100000 ? 'MEDIUM' : 'LOW',
           shariahStatus: stock.shariah_status,
+          suggested_holding_period: 'Review position',
           generatedAt: now,
         });
       }
@@ -313,8 +323,10 @@ export class MockGenerator {
           currentPrice: price,
           direction,
           reasoning: `Based on current market conditions, ${stock.symbol} at LKR ${price.toFixed(2)} (${change > 0 ? '+' : ''}${change.toFixed(1)}%) is showing ${direction === 'BUY' ? 'potential value at current levels' : 'stable price action with no strong directional signal'}.`,
+          rationale_simple: `${stock.symbol} at LKR ${price.toFixed(2)} is ${direction === 'BUY' ? 'worth researching as a potential long-term holding' : 'showing stable movement — a good one to monitor'}.`,
           confidence: 'LOW',
           shariahStatus: stock.shariah_status,
+          suggested_holding_period: '12–24 months',
           generatedAt: now,
         });
       }

@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect, useMemo, useCallback } from 'react';
+import { useRouter } from 'next/navigation';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { IndexCard } from '@/components/market/index-card';
@@ -81,6 +82,14 @@ function timeAgo(dateStr: string): string {
 
 export default function DashboardPage() {
   const { isSimple } = useDisplayMode();
+  const router = useRouter();
+
+  // Simple mode: redirect to Journey page
+  useEffect(() => {
+    if (isSimple) {
+      router.replace('/journey');
+    }
+  }, [isSimple, router]);
   const [summary, setSummary] = useState<MarketSummary | null>(null);
   const [gainers, setGainers] = useState<TopStock[]>([]);
   const [losers, setLosers] = useState<TopStock[]>([]);

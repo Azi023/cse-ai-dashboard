@@ -8,11 +8,14 @@ import { Send, Bot, User, Sparkles, Loader2 } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 
 const SUGGESTED_PROMPTS = [
-  "What's driving today's market movement?",
-  'Analyze JKH.N0000 for me',
-  'How do Iran-US tensions affect Sri Lankan stocks?',
-  'Which Shariah-compliant sectors look strongest?',
-  'Explain what P/E ratio means for a beginner',
+  'I have LKR 10,000 to invest this month — which Shariah-compliant stocks should I consider and why?',
+  "Explain today's ASPI movement in simple terms — is this a good time to buy?",
+  'What does Rupee Cost Averaging mean and how should I use it on the CSE as a beginner?',
+  'Which sectors on the CSE are growing right now and which ones are Shariah-compliant?',
+  'Show me the top 3 most actively traded Shariah-compliant stocks today — are they worth holding long term?',
+  "I'm completely new to investing. What's the safest way to start with LKR 5,000–10,000 per month on CSE?",
+  'How do global oil prices and Middle East tensions affect Sri Lankan stocks specifically?',
+  'Explain the difference between buying a stock for short-term gains vs long-term wealth building — which is better for me?',
 ];
 
 export default function ChatPage() {

@@ -337,4 +337,23 @@ export class ShariahScreeningService implements OnModuleInit {
       blacklisted_count: getBlacklistedSymbols().length,
     };
   }
+
+  /**
+   * Returns a summary overview for the Stocks page header.
+   */
+  async getOverviewStatus(): Promise<{
+    screened: number;
+    total: number;
+    lastUpdated: string;
+    message: string;
+  }> {
+    const stats = await this.getStats();
+    const screened = stats.compliant + stats.non_compliant;
+    return {
+      screened,
+      total: stats.total,
+      lastUpdated: new Date().toLocaleTimeString('en-LK', { timeZone: 'Asia/Colombo', hour: '2-digit', minute: '2-digit' }),
+      message: `${screened}/${stats.total} stocks screened`,
+    };
+  }
 }

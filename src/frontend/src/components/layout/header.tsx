@@ -222,7 +222,10 @@ export function Header() {
 
           {/* Desktop Nav */}
           <nav className="hidden md:flex items-center gap-1">
-            {topLinks.map((link) => {
+            {topLinks
+              .filter((link) => !(mode === 'simple' && link.href === '/signals'))
+              .filter((link) => !(mode === 'simple' && link.href === '/'))
+              .map((link) => {
               const Icon = link.icon;
               const active = isActive(link.href);
               return (
@@ -241,8 +244,10 @@ export function Header() {
               );
             })}
 
-            {/* Dropdown groups */}
-            {dropdownGroups.map((group) => (
+            {/* Dropdown groups — hide Analysis in Simple mode */}
+            {dropdownGroups
+              .filter((group) => !(mode === 'simple' && group.label === 'Analysis'))
+              .map((group) => (
               <DropdownMenu
                 key={group.label}
                 group={group}
@@ -365,7 +370,10 @@ export function Header() {
           <p className="text-[10px] text-muted-foreground uppercase tracking-wider px-3 pt-1 pb-0.5">
             Main
           </p>
-          {topLinks.map((link) => {
+          {topLinks
+            .filter((link) => !(mode === 'simple' && link.href === '/signals'))
+            .filter((link) => !(mode === 'simple' && link.href === '/'))
+            .map((link) => {
             const Icon = link.icon;
             const active = isActive(link.href);
             return (
@@ -385,7 +393,9 @@ export function Header() {
             );
           })}
 
-          {dropdownGroups.map((group) => (
+          {dropdownGroups
+            .filter((group) => !(mode === 'simple' && group.label === 'Analysis'))
+            .map((group) => (
             <div key={group.label}>
               <p className="text-[10px] text-muted-foreground uppercase tracking-wider px-3 pt-2 pb-0.5 border-t mt-1">
                 {group.label}
