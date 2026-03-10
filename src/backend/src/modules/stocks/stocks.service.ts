@@ -186,11 +186,15 @@ export class StocksService {
   }
 
   /**
-   * Get recent announcements with optional type filter and limit.
+   * Get recent announcements with optional filters.
    */
   async getAnnouncements(
     type?: string,
     limit: number = 50,
+    symbol?: string,
+    category?: string,
+    from?: string,
+    to?: string,
   ): Promise<Announcement[]> {
     const query = this.announcementRepository
       .createQueryBuilder('a')
@@ -198,9 +202,113 @@ export class StocksService {
       .take(limit);
 
     if (type) {
-      query.where('a.type = :type', { type });
+      query.andWhere('a.type = :type', { type });
+    }
+    if (symbol) {
+      query.andWhere('a.symbol = :symbol', { symbol: symbol.toUpperCase() });
+    }
+    if (category) {
+      query.andWhere('a.category = :category', { category });
+    }
+    if (from) {
+      query.andWhere('a.announced_at >= :from', { from });
+    }
+    if (to) {
+      query.andWhere('a.announced_at <= :to', { to });
     }
 
     return query.getMany();
+  }
+
+  /**
+   * Get a single announcement by ID.
+   */
+  async getAnnouncementById(id: number): Promise<Announcement> {
+    const announcement = await this.announcementRepository.findOne({
+      where: { id },
+    });
+    if (!announcement) {
+      throw new NotFoundException(`Announcement ${id} not found`);
+    }
+    return announcement;
+  }
+
+  /**
+   * Categorize announcement based on title keywords.
+   */
+  /**
+   * Get sector breakdown: each sector with stock count, total market cap, avg change %.
+   */
+  async getSectorBreakdown(): Promise<
+    Array<{
+      sector: string;
+      stockCount: number;
+      totalMarketCap: number;
+      avgChangePercent: number;
+      topStocks: Array<{ symbol: string; name: string; last_price: number; change_percent: number }>;
+    }>
+  > {
+    const stocks = await this.stockRepository.find({
+      where: { is_active: true },
+      order: { symbol: 'ASC' },
+    });
+
+    const sectorMap = new Map<
+      string,
+      {
+        stocks: Stock[];
+        totalMcap: number;
+        totalChange: number;
+      }
+    >();
+
+    for (const stock of stocks) {
+      const sector = stock.sector ?? 'Unknown';
+      if (!sectorMap.has(sector)) {
+        sectorMap.set(sector, { stocks: [], totalMcap: 0, totalChange: 0 });
+      }
+      const entry = sectorMap.get(sector)!;
+      entry.stocks.push(stock);
+      entry.totalMcap += Number(stock.market_cap) || 0;
+      entry.totalChange += Number(stock.change_percent) || 0;
+    }
+
+    return Array.from(sectorMap.entries())
+      .map(([sector, data]) => ({
+        sector,
+        stockCount: data.stocks.length,
+        totalMarketCap: data.totalMcap,
+        avgChangePercent:
+          data.stocks.length > 0
+            ? Math.round((data.totalChange / data.stocks.length) * 100) / 100
+            : 0,
+        topStocks: data.stocks
+          .sort((a, b) => (Number(b.market_cap) || 0) - (Number(a.market_cap) || 0))
+          .slice(0, 5)
+          .map((s) => ({
+            symbol: s.symbol,
+            name: s.name,
+            last_price: Number(s.last_price) || 0,
+            change_percent: Number(s.change_percent) || 0,
+          })),
+      }))
+      .sort((a, b) => b.totalMarketCap - a.totalMarketCap);
+  }
+
+  static categorizeAnnouncement(title: string): string {
+    const t = title.toLowerCase();
+    if (t.includes('interim') || t.includes('quarter') || t.includes('financial statement') || t.includes('annual report'))
+      return 'earnings';
+    if (t.includes('dividend'))
+      return 'dividend';
+    if (t.includes('agm') || t.includes('annual general') || t.includes('egm') || t.includes('extraordinary general'))
+      return 'agm';
+    if (t.includes('director') || t.includes('board') || t.includes('appointment') || t.includes('resignation'))
+      return 'board_change';
+    if (t.includes('compliance') || t.includes('cse rule') || t.includes('sec'))
+      return 'regulatory';
+    if (t.includes('listing') || t.includes('ipo') || t.includes('listed'))
+      return 'listing';
+    return 'other';
   }
 }

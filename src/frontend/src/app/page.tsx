@@ -2,21 +2,25 @@
 
 import { useState, useEffect, useMemo, useCallback } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Badge } from '@/components/ui/badge';
 import { IndexCard } from '@/components/market/index-card';
 import { MarketStatsCard } from '@/components/market/market-stats-card';
 import { TopStocksTable } from '@/components/market/top-stocks-table';
 import { DailyBriefCard } from '@/components/market/daily-brief';
 import { MacroIndicatorsCard } from '@/components/market/macro-indicators';
+import { GlobalIndicatorsCard } from '@/components/market/global-indicators';
 import {
   marketApi,
   shariahApi,
   stocksApi,
+  newsApi,
+  alertsApi,
   type MarketSummary,
   type TopStock,
   type SectorIndex,
   type Stock,
+  type NewsItemData,
+  type AlertRecord,
 } from '@/lib/api';
 import {
   TrendingUp,
@@ -27,6 +31,10 @@ import {
   Star,
   Search,
   X,
+  AlertTriangle,
+  Newspaper,
+  Bell,
+  ExternalLink,
 } from 'lucide-react';
 import Link from 'next/link';
 
@@ -58,6 +66,16 @@ function useWatchlist() {
   return { watchlist, toggle, has };
 }
 
+function timeAgo(dateStr: string): string {
+  const diff = Date.now() - new Date(dateStr).getTime();
+  const mins = Math.floor(diff / 60000);
+  if (mins < 60) return `${mins}m ago`;
+  const hours = Math.floor(mins / 60);
+  if (hours < 24) return `${hours}h ago`;
+  const days = Math.floor(hours / 24);
+  return `${days}d ago`;
+}
+
 export default function DashboardPage() {
   const [summary, setSummary] = useState<MarketSummary | null>(null);
   const [gainers, setGainers] = useState<TopStock[]>([]);
@@ -67,11 +85,10 @@ export default function DashboardPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [shariahFilter, setShariahFilter] = useState(false);
-  const [nonCompliantSymbols, setNonCompliantSymbols] = useState<Set<string>>(
-    new Set(),
-  );
+  const [nonCompliantSymbols, setNonCompliantSymbols] = useState<Set<string>>(new Set());
+  const [recentNews, setRecentNews] = useState<NewsItemData[]>([]);
+  const [recentAlerts, setRecentAlerts] = useState<AlertRecord[]>([]);
 
-  // Watchlist
   const { watchlist, toggle: toggleWatch, has: inWatchlist } = useWatchlist();
   const [watchlistStocks, setWatchlistStocks] = useState<Stock[]>([]);
   const [watchSearch, setWatchSearch] = useState('');
@@ -107,31 +124,27 @@ export default function DashboardPage() {
     return () => clearInterval(interval);
   }, []);
 
-  // Fetch non-compliant symbols + all stocks for watchlist search
+  // Fetch non-compliant symbols, all stocks, news, alerts
   useEffect(() => {
-    shariahApi
-      .getNonCompliant()
-      .then((res) => {
-        setNonCompliantSymbols(new Set(res.data.map((s) => s.symbol)));
-      })
-      .catch(() => {});
+    shariahApi.getNonCompliant().then((res) => {
+      setNonCompliantSymbols(new Set(res.data.map((s) => s.symbol)));
+    }).catch(() => {});
 
-    stocksApi
-      .getAll()
-      .then((res) => setAllStocks(res.data))
-      .catch(() => {});
+    stocksApi.getAll().then((res) => setAllStocks(res.data)).catch(() => {});
+
+    newsApi.getNews({ limit: 5, impact: 'HIGH' }).then((res) => {
+      setRecentNews(res.data);
+    }).catch(() => {
+      newsApi.getNews({ limit: 5 }).then((res) => setRecentNews(res.data)).catch(() => {});
+    });
+
+    alertsApi.getNotifications(5).then((res) => setRecentAlerts(res.data)).catch(() => {});
   }, []);
 
-  // Fetch watchlist stock details
   useEffect(() => {
-    if (watchlist.length === 0) {
-      setWatchlistStocks([]);
-      return;
-    }
+    if (watchlist.length === 0) { setWatchlistStocks([]); return; }
     if (allStocks.length > 0) {
-      setWatchlistStocks(
-        allStocks.filter((s) => watchlist.includes(s.symbol)),
-      );
+      setWatchlistStocks(allStocks.filter((s) => watchlist.includes(s.symbol)));
     }
   }, [watchlist, allStocks]);
 
@@ -139,12 +152,8 @@ export default function DashboardPage() {
     if (!watchSearch.trim()) return [];
     const q = watchSearch.toLowerCase();
     return allStocks
-      .filter(
-        (s) =>
-          !watchlist.includes(s.symbol) &&
-          (s.symbol.toLowerCase().includes(q) ||
-            s.name.toLowerCase().includes(q)),
-      )
+      .filter((s) => !watchlist.includes(s.symbol) &&
+        (s.symbol.toLowerCase().includes(q) || s.name.toLowerCase().includes(q)))
       .slice(0, 5);
   }, [watchSearch, allStocks, watchlist]);
 
@@ -159,11 +168,31 @@ export default function DashboardPage() {
 
   return (
     <div className="max-w-[1400px] mx-auto space-y-6">
-      <div>
-        <h2 className="text-2xl font-bold tracking-tight">Market Overview</h2>
-        <p className="text-muted-foreground">
-          Colombo Stock Exchange &mdash; Live Dashboard
-        </p>
+      {/* Header */}
+      <div className="flex items-center justify-between">
+        <div>
+          <h2 className="text-2xl font-bold tracking-tight">Market Overview</h2>
+          <p className="text-muted-foreground text-sm">
+            Colombo Stock Exchange — Live Dashboard
+          </p>
+        </div>
+        {summary && (
+          <div className="hidden md:flex items-center gap-2">
+            <Badge
+              variant="outline"
+              className={
+                (summary.aspi_change_percent ?? 0) > 0
+                  ? 'border-green-500/30 text-green-500'
+                  : (summary.aspi_change_percent ?? 0) < 0
+                    ? 'border-red-500/30 text-red-500'
+                    : ''
+              }
+            >
+              ASPI {(summary.aspi_change_percent ?? 0) > 0 ? '+' : ''}
+              {(summary.aspi_change_percent ?? 0).toFixed(2)}%
+            </Badge>
+          </div>
+        )}
       </div>
 
       {error && (
@@ -177,7 +206,7 @@ export default function DashboardPage() {
         </Card>
       )}
 
-      {/* Index Cards */}
+      {/* Row 1: Index Cards */}
       <div className="grid gap-4 md:grid-cols-3">
         <IndexCard
           title="ASPI (All Share Price Index)"
@@ -201,243 +230,291 @@ export default function DashboardPage() {
         />
       </div>
 
-      {/* AI Daily Brief */}
-      <DailyBriefCard />
+      {/* Row 2: AI Brief + Latest News side by side */}
+      <div className="grid gap-4 lg:grid-cols-3">
+        <div className="lg:col-span-2">
+          <DailyBriefCard />
+        </div>
+        <Card>
+          <CardHeader className="pb-2">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <Newspaper className="h-4 w-4 text-primary" />
+                <CardTitle className="text-sm">Latest News</CardTitle>
+              </div>
+              <Link
+                href="/news"
+                className="text-xs text-muted-foreground hover:text-foreground transition-colors"
+              >
+                View all
+              </Link>
+            </div>
+          </CardHeader>
+          <CardContent className="space-y-2">
+            {recentNews.length > 0 ? (
+              recentNews.map((item) => (
+                <div key={item.id} className="space-y-0.5">
+                  <div className="flex items-start gap-2">
+                    {item.impact_level === 'HIGH' && (
+                      <AlertTriangle className="h-3 w-3 text-red-500 mt-0.5 flex-shrink-0" />
+                    )}
+                    <p className="text-xs leading-tight line-clamp-2">
+                      {item.url ? (
+                        <a
+                          href={item.url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="hover:text-primary"
+                        >
+                          {item.title}
+                        </a>
+                      ) : (
+                        item.title
+                      )}
+                    </p>
+                  </div>
+                  <p className="text-[10px] text-muted-foreground pl-5">
+                    {timeAgo(item.published_at)}
+                  </p>
+                </div>
+              ))
+            ) : (
+              <p className="text-xs text-muted-foreground text-center py-4">
+                No news yet. News feeds refresh automatically.
+              </p>
+            )}
+          </CardContent>
+        </Card>
+      </div>
 
-      {/* Macro Economic Indicators */}
-      <MacroIndicatorsCard />
+      {/* Row 3: Macro + Global Indicators */}
+      <div className="grid gap-4 lg:grid-cols-2">
+        <MacroIndicatorsCard />
+        <GlobalIndicatorsCard />
+      </div>
 
-      {/* Watchlist */}
-      {(watchlist.length > 0 || showWatchSearch) && (
+      {/* Row 4: Watchlist + Recent Alerts */}
+      <div className="grid gap-4 lg:grid-cols-3">
+        {/* Watchlist */}
+        <div className="lg:col-span-2">
+          {(watchlist.length > 0 || showWatchSearch) && (
+            <Card>
+              <CardHeader className="pb-3">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <Star className="h-4 w-4 text-yellow-500" />
+                    <CardTitle className="text-sm">Watchlist</CardTitle>
+                  </div>
+                  <button
+                    onClick={() => setShowWatchSearch(!showWatchSearch)}
+                    className="text-xs text-muted-foreground hover:text-foreground transition-colors"
+                  >
+                    {showWatchSearch ? 'Done' : '+ Add'}
+                  </button>
+                </div>
+              </CardHeader>
+              <CardContent className="space-y-3">
+                {showWatchSearch && (
+                  <div className="relative">
+                    <Search className="absolute left-3 top-2.5 h-3.5 w-3.5 text-muted-foreground" />
+                    <input
+                      type="text"
+                      value={watchSearch}
+                      onChange={(e) => setWatchSearch(e.target.value)}
+                      placeholder="Search stocks to add..."
+                      className="w-full rounded-md border bg-background pl-9 pr-3 py-2 text-sm placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring"
+                    />
+                    {watchSearchResults.length > 0 && (
+                      <div className="absolute z-10 w-full mt-1 rounded-md border bg-popover shadow-md">
+                        {watchSearchResults.map((stock) => (
+                          <button
+                            key={stock.symbol}
+                            onClick={() => { toggleWatch(stock.symbol); setWatchSearch(''); }}
+                            className="flex items-center justify-between w-full px-3 py-2 text-sm hover:bg-muted/50 transition-colors"
+                          >
+                            <span>
+                              <span className="font-medium">{stock.symbol}</span>{' '}
+                              <span className="text-muted-foreground">{stock.name}</span>
+                            </span>
+                            <Star className="h-3 w-3 text-muted-foreground" />
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {watchlistStocks.length > 0 ? (
+                  <div className="space-y-1">
+                    {watchlistStocks.map((stock) => {
+                      const change = Number(stock.change_percent) || 0;
+                      return (
+                        <div
+                          key={stock.symbol}
+                          className="flex items-center justify-between rounded-md px-2 py-1.5 hover:bg-muted/30 transition-colors"
+                        >
+                          <div className="flex items-center gap-2">
+                            <button
+                              onClick={() => toggleWatch(stock.symbol)}
+                              className="text-yellow-500 hover:text-yellow-600 transition-colors"
+                            >
+                              <Star className="h-3.5 w-3.5 fill-current" />
+                            </button>
+                            <Link
+                              href={`/stocks/${stock.symbol}`}
+                              className="font-medium text-sm hover:underline"
+                            >
+                              {stock.symbol}
+                            </Link>
+                            <span className="text-xs text-muted-foreground truncate max-w-[150px]">
+                              {stock.name}
+                            </span>
+                          </div>
+                          <div className="flex items-center gap-3">
+                            <span className="text-sm font-medium">
+                              {stock.last_price ? Number(stock.last_price).toFixed(2) : '\u2014'}
+                            </span>
+                            <span
+                              className={`text-xs font-medium ${
+                                change > 0 ? 'text-green-500' : change < 0 ? 'text-red-500' : 'text-muted-foreground'
+                              }`}
+                            >
+                              {change > 0 ? '+' : ''}{change.toFixed(2)}%
+                            </span>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                ) : (
+                  !showWatchSearch && (
+                    <p className="text-xs text-muted-foreground text-center py-2">
+                      Your watchlist is empty.{' '}
+                      <button onClick={() => setShowWatchSearch(true)} className="text-primary hover:underline">
+                        Add stocks
+                      </button>
+                    </p>
+                  )
+                )}
+              </CardContent>
+            </Card>
+          )}
+        </div>
+
+        {/* Recent Alerts */}
+        <Card>
+          <CardHeader className="pb-2">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <Bell className="h-4 w-4 text-primary" />
+                <CardTitle className="text-sm">Recent Alerts</CardTitle>
+              </div>
+              <Link
+                href="/alerts"
+                className="text-xs text-muted-foreground hover:text-foreground transition-colors"
+              >
+                View all
+              </Link>
+            </div>
+          </CardHeader>
+          <CardContent>
+            {recentAlerts.length > 0 ? (
+              <div className="space-y-2">
+                {recentAlerts.map((alert) => (
+                  <div key={alert.id} className="flex items-start gap-2 text-xs">
+                    {!alert.is_read && <span className="h-1.5 w-1.5 rounded-full bg-blue-500 mt-1.5 flex-shrink-0" />}
+                    <div className="flex-1 min-w-0">
+                      <p className="leading-tight">{alert.title}</p>
+                      <p className="text-muted-foreground">{timeAgo(alert.created_at)}</p>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <p className="text-xs text-muted-foreground text-center py-4">No recent alerts</p>
+            )}
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* Row 5: Top Stocks Tabs */}
+      <Card>
+        <CardHeader className="pb-3">
+          <div className="flex items-center justify-between flex-wrap gap-2">
+            <CardTitle className="text-sm">Market Movers</CardTitle>
+            <button
+              onClick={() => setShariahFilter((prev) => !prev)}
+              className={`flex items-center gap-1.5 rounded-md border px-3 py-1.5 text-xs font-medium transition-colors ${
+                shariahFilter
+                  ? 'border-green-500 bg-green-500/10 text-green-500'
+                  : 'border-muted-foreground/30 text-muted-foreground hover:border-muted-foreground/50'
+              }`}
+            >
+              <ShieldCheck className="h-3 w-3" />
+              {shariahFilter ? 'Shariah ON' : 'Shariah'}
+            </button>
+          </div>
+        </CardHeader>
+        <CardContent>
+          <div className="grid gap-4 lg:grid-cols-3">
+            <div>
+              <h4 className="text-xs font-medium text-green-500 mb-2 flex items-center gap-1">
+                <TrendingUp className="h-3 w-3" /> Top Gainers
+              </h4>
+              <TopStocksTable stocks={filterStocks(gainers)} loading={loading} type="gainers" />
+            </div>
+            <div>
+              <h4 className="text-xs font-medium text-red-500 mb-2 flex items-center gap-1">
+                <TrendingDown className="h-3 w-3" /> Top Losers
+              </h4>
+              <TopStocksTable stocks={filterStocks(losers)} loading={loading} type="losers" />
+            </div>
+            <div>
+              <h4 className="text-xs font-medium text-blue-500 mb-2 flex items-center gap-1">
+                <Activity className="h-3 w-3" /> Most Active
+              </h4>
+              <TopStocksTable stocks={filterStocks(active)} loading={loading} type="active" />
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Row 6: Sectors */}
+      {sortedSectors.length > 0 && (
         <Card>
           <CardHeader className="pb-3">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
-                <Star className="h-4 w-4 text-yellow-500" />
-                <CardTitle className="text-sm">Watchlist</CardTitle>
+                <BarChart3 className="h-4 w-4" />
+                <CardTitle className="text-sm">Sector Performance</CardTitle>
               </div>
-              <button
-                onClick={() => setShowWatchSearch(!showWatchSearch)}
+              <Link
+                href="/sectors"
                 className="text-xs text-muted-foreground hover:text-foreground transition-colors"
               >
-                {showWatchSearch ? 'Done' : '+ Add'}
-              </button>
-            </div>
-          </CardHeader>
-          <CardContent className="space-y-3">
-            {showWatchSearch && (
-              <div className="relative">
-                <Search className="absolute left-3 top-2.5 h-3.5 w-3.5 text-muted-foreground" />
-                <input
-                  type="text"
-                  value={watchSearch}
-                  onChange={(e) => setWatchSearch(e.target.value)}
-                  placeholder="Search stocks to add..."
-                  className="w-full rounded-md border bg-background pl-9 pr-3 py-2 text-sm placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring"
-                />
-                {watchSearchResults.length > 0 && (
-                  <div className="absolute z-10 w-full mt-1 rounded-md border bg-popover shadow-md">
-                    {watchSearchResults.map((stock) => (
-                      <button
-                        key={stock.symbol}
-                        onClick={() => {
-                          toggleWatch(stock.symbol);
-                          setWatchSearch('');
-                        }}
-                        className="flex items-center justify-between w-full px-3 py-2 text-sm hover:bg-muted/50 transition-colors"
-                      >
-                        <span>
-                          <span className="font-medium">{stock.symbol}</span>{' '}
-                          <span className="text-muted-foreground">
-                            {stock.name}
-                          </span>
-                        </span>
-                        <Star className="h-3 w-3 text-muted-foreground" />
-                      </button>
-                    ))}
-                  </div>
-                )}
-              </div>
-            )}
-
-            {watchlistStocks.length > 0 ? (
-              <div className="space-y-1">
-                {watchlistStocks.map((stock) => {
-                  const change = Number(stock.change_percent) || 0;
-                  return (
-                    <div
-                      key={stock.symbol}
-                      className="flex items-center justify-between rounded-md px-2 py-1.5 hover:bg-muted/30 transition-colors group"
-                    >
-                      <div className="flex items-center gap-2">
-                        <button
-                          onClick={() => toggleWatch(stock.symbol)}
-                          className="text-yellow-500 hover:text-yellow-600 transition-colors"
-                        >
-                          <Star className="h-3.5 w-3.5 fill-current" />
-                        </button>
-                        <Link
-                          href={`/stocks/${stock.symbol}`}
-                          className="font-medium text-sm hover:underline"
-                        >
-                          {stock.symbol}
-                        </Link>
-                        <span className="text-xs text-muted-foreground truncate max-w-[150px]">
-                          {stock.name}
-                        </span>
-                        {stock.shariah_status === 'compliant' && (
-                          <span className="h-2 w-2 rounded-full bg-green-500" title="Shariah Compliant" />
-                        )}
-                      </div>
-                      <div className="flex items-center gap-3">
-                        <span className="text-sm font-medium">
-                          {stock.last_price
-                            ? Number(stock.last_price).toFixed(2)
-                            : '\u2014'}
-                        </span>
-                        <span
-                          className={`text-xs font-medium ${
-                            change > 0
-                              ? 'text-green-500'
-                              : change < 0
-                                ? 'text-red-500'
-                                : 'text-muted-foreground'
-                          }`}
-                        >
-                          {change > 0 ? '+' : ''}
-                          {change.toFixed(2)}%
-                        </span>
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            ) : (
-              !showWatchSearch && (
-                <p className="text-xs text-muted-foreground text-center py-2">
-                  Your watchlist is empty.{' '}
-                  <button
-                    onClick={() => setShowWatchSearch(true)}
-                    className="text-primary hover:underline"
-                  >
-                    Add stocks
-                  </button>
-                </p>
-              )
-            )}
-          </CardContent>
-        </Card>
-      )}
-
-      {/* Top Stocks Tabs */}
-      <Tabs defaultValue="gainers" className="space-y-4">
-        <div className="flex items-center justify-between">
-          <TabsList>
-            <TabsTrigger value="gainers" className="gap-1">
-              <TrendingUp className="h-3 w-3" /> Top Gainers
-            </TabsTrigger>
-            <TabsTrigger value="losers" className="gap-1">
-              <TrendingDown className="h-3 w-3" /> Top Losers
-            </TabsTrigger>
-            <TabsTrigger value="active" className="gap-1">
-              <Activity className="h-3 w-3" /> Most Active
-            </TabsTrigger>
-          </TabsList>
-          <button
-            onClick={() => setShariahFilter((prev) => !prev)}
-            className={`flex items-center gap-1.5 rounded-md border px-3 py-1.5 text-xs font-medium transition-colors ${
-              shariahFilter
-                ? 'border-green-500 bg-green-500/10 text-green-500'
-                : 'border-muted-foreground/30 text-muted-foreground hover:border-muted-foreground/50'
-            }`}
-          >
-            <ShieldCheck className="h-3 w-3" />
-            {shariahFilter ? 'Shariah Filter ON' : 'Shariah Filter'}
-          </button>
-        </div>
-        <TabsContent value="gainers">
-          <Card>
-            <CardContent className="pt-4">
-              <TopStocksTable
-                stocks={filterStocks(gainers)}
-                loading={loading}
-                type="gainers"
-              />
-            </CardContent>
-          </Card>
-        </TabsContent>
-        <TabsContent value="losers">
-          <Card>
-            <CardContent className="pt-4">
-              <TopStocksTable
-                stocks={filterStocks(losers)}
-                loading={loading}
-                type="losers"
-              />
-            </CardContent>
-          </Card>
-        </TabsContent>
-        <TabsContent value="active">
-          <Card>
-            <CardContent className="pt-4">
-              <TopStocksTable
-                stocks={filterStocks(active)}
-                loading={loading}
-                type="active"
-              />
-            </CardContent>
-          </Card>
-        </TabsContent>
-      </Tabs>
-
-      {/* Sectors — sorted by performance, color-coded */}
-      {sortedSectors.length > 0 && (
-        <Card>
-          <CardHeader>
-            <div className="flex items-center gap-2">
-              <BarChart3 className="h-4 w-4" />
-              <CardTitle>Sector Indices</CardTitle>
+                Full analysis
+              </Link>
             </div>
           </CardHeader>
           <CardContent>
-            <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-4">
-              {sortedSectors.map((sector) => {
+            <div className="grid gap-2 grid-cols-2 sm:grid-cols-3 lg:grid-cols-5">
+              {sortedSectors.slice(0, 10).map((sector) => {
                 const pct = sector.percentage;
-                const sectorBg =
-                  pct > 2
-                    ? 'border-green-500/30 bg-green-500/15'
-                    : pct > 0
-                      ? 'border-green-500/20 bg-green-500/5'
-                      : pct > -2
-                        ? 'border-red-500/20 bg-red-500/5'
-                        : 'border-red-500/30 bg-red-500/15';
                 return (
                   <div
                     key={sector.name}
-                    className={`flex items-center justify-between rounded-lg border p-3 transition-colors ${
-                      pct === 0 ? '' : sectorBg
-                    }`}
+                    className="flex items-center justify-between rounded-lg border p-2.5 transition-colors hover:bg-muted/20"
                   >
-                    <span className="text-sm font-medium truncate mr-2">
+                    <span className="text-xs font-medium truncate mr-2">
                       {sector.name}
                     </span>
-                    <div className="text-right">
-                      <div className="text-sm font-medium">
-                        {sector.indexValue?.toFixed(2)}
-                      </div>
-                      <div
-                        className={`text-xs ${
-                          pct > 0
-                            ? 'text-green-500'
-                            : pct < 0
-                              ? 'text-red-500'
-                              : 'text-muted-foreground'
-                        }`}
-                      >
-                        {pct > 0 ? '+' : ''}
-                        {sector.percentage?.toFixed(2)}%
-                      </div>
-                    </div>
+                    <span
+                      className={`text-xs font-medium whitespace-nowrap ${
+                        pct > 0 ? 'text-green-500' : pct < 0 ? 'text-red-500' : 'text-muted-foreground'
+                      }`}
+                    >
+                      {pct > 0 ? '+' : ''}{sector.percentage?.toFixed(2)}%
+                    </span>
                   </div>
                 );
               })}

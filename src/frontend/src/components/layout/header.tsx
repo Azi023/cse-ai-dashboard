@@ -1,15 +1,36 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { format } from 'date-fns';
-import { Activity, TrendingUp, BarChart3, ShieldCheck, Wallet, Menu, X, Zap, Sparkles, FileSpreadsheet } from 'lucide-react';
-import { marketApi } from '@/lib/api';
+import {
+  Activity,
+  TrendingUp,
+  BarChart3,
+  ShieldCheck,
+  Wallet,
+  Menu,
+  X,
+  Zap,
+  Sparkles,
+  FileSpreadsheet,
+  Megaphone,
+  Bell,
+  CalendarDays,
+  Target,
+  GitCompare,
+  PieChart,
+  ChevronDown,
+  Newspaper,
+  FlaskConical,
+  Download,
+} from 'lucide-react';
+import { marketApi, alertsApi } from '@/lib/api';
 
 function checkMarketHours(): boolean {
   const now = new Date();
-  const sltOffset = 5.5 * 60; // UTC+5:30 in minutes
+  const sltOffset = 5.5 * 60;
   const utcMinutes = now.getUTCHours() * 60 + now.getUTCMinutes();
   const sltMinutes = utcMinutes + sltOffset;
   const day = now.getUTCDay();
@@ -17,21 +38,126 @@ function checkMarketHours(): boolean {
   const sltDay = sltMinutes >= 1440 ? (day + 1) % 7 : day;
   const adjustedMinutes = sltMinutes >= 1440 ? sltMinutes - 1440 : sltMinutes;
 
-  const marketOpen = 9 * 60 + 30; // 9:30
-  const marketClose = 14 * 60 + 30; // 14:30
+  const marketOpen = 9 * 60 + 30;
+  const marketClose = 14 * 60 + 30;
 
   return sltDay >= 1 && sltDay <= 5 && adjustedMinutes >= marketOpen && adjustedMinutes <= marketClose;
 }
 
-const navLinks = [
+interface NavLink {
+  href: string;
+  label: string;
+  icon: React.ElementType;
+}
+
+interface NavGroup {
+  label: string;
+  icon: React.ElementType;
+  links: NavLink[];
+}
+
+const topLinks: NavLink[] = [
   { href: '/', label: 'Dashboard', icon: TrendingUp },
   { href: '/stocks', label: 'Stocks', icon: BarChart3 },
-  { href: '/shariah', label: 'Shariah', icon: ShieldCheck },
   { href: '/portfolio', label: 'Portfolio', icon: Wallet },
   { href: '/signals', label: 'Signals', icon: Zap },
-  { href: '/chat', label: 'Strategy', icon: Sparkles },
-  { href: '/admin/financials', label: 'Financials', icon: FileSpreadsheet },
 ];
+
+const analysisGroup: NavGroup = {
+  label: 'Analysis',
+  icon: PieChart,
+  links: [
+    { href: '/sectors', label: 'Sectors', icon: PieChart },
+    { href: '/compare', label: 'Compare', icon: GitCompare },
+    { href: '/shariah', label: 'Shariah', icon: ShieldCheck },
+    { href: '/performance', label: 'AI Performance', icon: Target },
+    { href: '/backtest', label: 'Backtester', icon: FlaskConical },
+  ],
+};
+
+const intelligenceGroup: NavGroup = {
+  label: 'Intelligence',
+  icon: Newspaper,
+  links: [
+    { href: '/news', label: 'News Feed', icon: Newspaper },
+    { href: '/announcements', label: 'Announcements', icon: Megaphone },
+    { href: '/chat', label: 'Strategy Chat', icon: Sparkles },
+  ],
+};
+
+const toolsGroup: NavGroup = {
+  label: 'Tools',
+  icon: FileSpreadsheet,
+  links: [
+    { href: '/dividends', label: 'Dividends', icon: CalendarDays },
+    { href: '/admin/financials', label: 'Financials', icon: FileSpreadsheet },
+  ],
+};
+
+const dropdownGroups = [analysisGroup, intelligenceGroup, toolsGroup];
+const allLinks = [
+  ...topLinks,
+  ...analysisGroup.links,
+  ...intelligenceGroup.links,
+  ...toolsGroup.links,
+];
+
+function DropdownMenu({ group, isActive, pathname }: { group: NavGroup; isActive: boolean; pathname: string }) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const handler = (e: MouseEvent) => {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, []);
+
+  const groupIsActive = group.links.some((link) =>
+    link.href === '/' ? pathname === '/' : pathname.startsWith(link.href),
+  );
+
+  return (
+    <div className="relative" ref={ref}>
+      <button
+        onClick={() => setOpen(!open)}
+        className={`flex items-center gap-1 rounded-md px-2.5 py-1.5 text-sm font-medium transition-colors ${
+          groupIsActive
+            ? 'bg-primary/10 text-primary'
+            : 'text-muted-foreground hover:text-foreground hover:bg-muted/50'
+        }`}
+      >
+        {group.label}
+        <ChevronDown className={`h-3 w-3 transition-transform ${open ? 'rotate-180' : ''}`} />
+      </button>
+
+      {open && (
+        <div className="absolute left-0 top-full mt-1 w-48 rounded-md border bg-popover shadow-lg z-50">
+          {group.links.map((link) => {
+            const Icon = link.icon;
+            const active = link.href === '/' ? pathname === '/' : pathname.startsWith(link.href);
+            return (
+              <Link
+                key={link.href}
+                href={link.href}
+                onClick={() => setOpen(false)}
+                className={`flex items-center gap-2 px-3 py-2 text-sm transition-colors ${
+                  active
+                    ? 'bg-primary/10 text-primary'
+                    : 'text-muted-foreground hover:text-foreground hover:bg-muted/50'
+                }`}
+              >
+                <Icon className="h-3.5 w-3.5" />
+                {link.label}
+              </Link>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
 
 export function Header() {
   const pathname = usePathname();
@@ -41,6 +167,7 @@ export function Header() {
   const [aspiValue, setAspiValue] = useState<number | null>(null);
   const [aspiChange, setAspiChange] = useState<number | null>(null);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [unreadAlerts, setUnreadAlerts] = useState(0);
 
   useEffect(() => {
     setMounted(true);
@@ -54,7 +181,17 @@ export function Header() {
     return () => clearInterval(timer);
   }, []);
 
-  // Fetch ASPI data
+  useEffect(() => {
+    const fetchAlerts = () => {
+      alertsApi.getUnreadCount().then((res) => {
+        setUnreadAlerts(res.data.count);
+      }).catch(() => {});
+    };
+    fetchAlerts();
+    const interval = setInterval(fetchAlerts, 30000);
+    return () => clearInterval(interval);
+  }, []);
+
   useEffect(() => {
     const fetchAspi = () => {
       marketApi.getSummary().then((res) => {
@@ -84,14 +221,14 @@ export function Header() {
 
           {/* Desktop Nav */}
           <nav className="hidden md:flex items-center gap-1">
-            {navLinks.map((link) => {
+            {topLinks.map((link) => {
               const Icon = link.icon;
               const active = isActive(link.href);
               return (
                 <Link
                   key={link.href}
                   href={link.href}
-                  className={`flex items-center gap-1.5 rounded-md px-3 py-1.5 text-sm font-medium transition-colors ${
+                  className={`flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-sm font-medium transition-colors ${
                     active
                       ? 'bg-primary/10 text-primary'
                       : 'text-muted-foreground hover:text-foreground hover:bg-muted/50'
@@ -102,11 +239,34 @@ export function Header() {
                 </Link>
               );
             })}
+
+            {/* Dropdown groups */}
+            {dropdownGroups.map((group) => (
+              <DropdownMenu
+                key={group.label}
+                group={group}
+                isActive={false}
+                pathname={pathname}
+              />
+            ))}
           </nav>
         </div>
 
-        {/* Right side: ASPI + Market status + Time */}
+        {/* Right side */}
         <div className="flex items-center gap-3 text-sm">
+          {/* Alert bell */}
+          <Link
+            href="/alerts"
+            className="relative p-1.5 text-muted-foreground hover:text-foreground transition-colors"
+          >
+            <Bell className="h-4 w-4" />
+            {unreadAlerts > 0 && (
+              <span className="absolute -top-0.5 -right-0.5 flex h-4 min-w-[16px] items-center justify-center rounded-full bg-red-500 px-1 text-[10px] font-bold text-white">
+                {unreadAlerts > 99 ? '99+' : unreadAlerts}
+              </span>
+            )}
+          </Link>
+
           {/* ASPI ticker */}
           {aspiValue != null && (
             <div className="hidden sm:flex items-center gap-1.5 rounded-md border px-2.5 py-1">
@@ -154,19 +314,18 @@ export function Header() {
             className="md:hidden p-1 text-muted-foreground hover:text-foreground"
             onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
           >
-            {mobileMenuOpen ? (
-              <X className="h-5 w-5" />
-            ) : (
-              <Menu className="h-5 w-5" />
-            )}
+            {mobileMenuOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
           </button>
         </div>
       </div>
 
       {/* Mobile Nav */}
       {mobileMenuOpen && (
-        <nav className="md:hidden border-t px-4 py-2 space-y-1">
-          {navLinks.map((link) => {
+        <nav className="md:hidden border-t px-4 py-2 space-y-0.5 max-h-[70vh] overflow-y-auto">
+          <p className="text-[10px] text-muted-foreground uppercase tracking-wider px-3 pt-1 pb-0.5">
+            Main
+          </p>
+          {topLinks.map((link) => {
             const Icon = link.icon;
             const active = isActive(link.href);
             return (
@@ -185,8 +344,36 @@ export function Header() {
               </Link>
             );
           })}
+
+          {dropdownGroups.map((group) => (
+            <div key={group.label}>
+              <p className="text-[10px] text-muted-foreground uppercase tracking-wider px-3 pt-2 pb-0.5 border-t mt-1">
+                {group.label}
+              </p>
+              {group.links.map((link) => {
+                const Icon = link.icon;
+                const active = isActive(link.href);
+                return (
+                  <Link
+                    key={link.href}
+                    href={link.href}
+                    onClick={() => setMobileMenuOpen(false)}
+                    className={`flex items-center gap-2 rounded-md px-3 py-2 text-sm font-medium transition-colors ${
+                      active
+                        ? 'bg-primary/10 text-primary'
+                        : 'text-muted-foreground hover:text-foreground hover:bg-muted/50'
+                    }`}
+                  >
+                    <Icon className="h-4 w-4" />
+                    {link.label}
+                  </Link>
+                );
+              })}
+            </div>
+          ))}
+
           {/* Mobile-only: ASPI + status */}
-          <div className="flex items-center gap-4 px-3 py-2 text-xs text-muted-foreground border-t mt-2 pt-2">
+          <div className="flex items-center gap-4 px-3 py-2 text-xs text-muted-foreground border-t mt-1 pt-2">
             {aspiValue != null && (
               <span>
                 ASPI {aspiValue.toFixed(2)}{' '}
@@ -207,9 +394,7 @@ export function Header() {
               </span>
             )}
             {mounted && (
-              <span>
-                Market {marketOpen ? 'Open' : 'Closed'}
-              </span>
+              <span>Market {marketOpen ? 'Open' : 'Closed'}</span>
             )}
           </div>
         </nav>

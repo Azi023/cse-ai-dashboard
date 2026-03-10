@@ -92,13 +92,35 @@ export class StocksController {
   }
 
   /**
-   * GET /api/announcements - Recent announcements.
+   * GET /api/sectors/breakdown - Sector breakdown with stock counts and metrics.
+   */
+  @Get('sectors/breakdown')
+  async getSectorBreakdown() {
+    return this.stocksService.getSectorBreakdown();
+  }
+
+  /**
+   * GET /api/announcements - Recent announcements with filters.
    */
   @Get('announcements')
   async getAnnouncements(
     @Query('type') type?: string,
     @Query('limit', new DefaultValuePipe(50), ParseIntPipe) limit?: number,
+    @Query('symbol') symbol?: string,
+    @Query('category') category?: string,
+    @Query('from') from?: string,
+    @Query('to') to?: string,
   ): Promise<Announcement[]> {
-    return this.stocksService.getAnnouncements(type, limit);
+    return this.stocksService.getAnnouncements(type, limit, symbol, category, from, to);
+  }
+
+  /**
+   * GET /api/announcements/:id - Single announcement detail.
+   */
+  @Get('announcements/:id')
+  async getAnnouncementById(
+    @Param('id', ParseIntPipe) id: number,
+  ): Promise<Announcement> {
+    return this.stocksService.getAnnouncementById(id);
   }
 }

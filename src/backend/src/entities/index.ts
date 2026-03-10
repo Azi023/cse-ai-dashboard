@@ -6,3 +6,7 @@ export { MarketSummary } from './market-summary.entity';
 export { Portfolio } from './portfolio.entity';
 export { ShariahScreening } from './shariah-screening.entity';
 export { CompanyFinancial } from './company-financial.entity';
+export { Dividend } from './dividend.entity';
+export { Alert } from './alert.entity';
+export { SignalRecord } from './signal-record.entity';
+export { NewsItem } from './news-item.entity';

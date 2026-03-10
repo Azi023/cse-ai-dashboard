@@ -13,6 +13,13 @@ import { PortfolioModule } from './modules/portfolio/portfolio.module';
 import { CompanyFinancialsModule } from './modules/company-financials/company-financials.module';
 import { CbslDataModule } from './modules/cbsl-data/cbsl-data.module';
 import { AiEngineModule } from './modules/ai-engine/ai-engine.module';
+import { GlobalDataModule } from './modules/global-data/global-data.module';
+import { DividendsModule } from './modules/dividends/dividends.module';
+import { AlertsModule } from './modules/alerts/alerts.module';
+import { SignalTrackingModule } from './modules/signal-tracking/signal-tracking.module';
+import { NewsModule } from './modules/news/news.module';
+import { ExportModule } from './modules/export/export.module';
+import { BacktestModule } from './modules/backtest/backtest.module';
 
 @Module({
   imports: [
@@ -72,6 +79,13 @@ import { AiEngineModule } from './modules/ai-engine/ai-engine.module';
     CompanyFinancialsModule,
     CbslDataModule,
     AiEngineModule,
+    GlobalDataModule,
+    DividendsModule,
+    AlertsModule,
+    SignalTrackingModule,
+    NewsModule,
+    ExportModule,
+    BacktestModule,
   ],
   controllers: [AppController],
   providers: [AppService],

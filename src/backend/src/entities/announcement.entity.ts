@@ -21,6 +21,10 @@ export class Announcement {
   @Column({ type: 'text', nullable: true })
   content: string | null;
 
+  @Column({ type: 'varchar', length: 50, nullable: true })
+  category: string | null; // 'earnings', 'dividend', 'agm', 'board_change', 'regulatory', 'listing', 'other'
+
+  @Index()
   @Column({ type: 'varchar', length: 20, nullable: true })
   symbol: string | null;
 

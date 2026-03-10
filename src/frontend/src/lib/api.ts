@@ -62,7 +62,10 @@ export interface Announcement {
   id: number;
   type: string;
   title: string;
+  content: string | null;
+  category: string | null;
   symbol: string | null;
+  url: string | null;
   announced_at: string;
 }
 
@@ -75,17 +78,33 @@ export const marketApi = {
   getSectors: () => api.get<SectorIndex[]>('/market/sectors'),
 };
 
+export interface SectorBreakdown {
+  sector: string;
+  stockCount: number;
+  totalMarketCap: number;
+  avgChangePercent: number;
+  topStocks: Array<{ symbol: string; name: string; last_price: number; change_percent: number }>;
+}
+
 export const stocksApi = {
   getAll: (params?: { sector?: string; shariah?: string }) =>
     api.get<Stock[]>('/stocks', { params }),
   getOne: (symbol: string) => api.get<Stock>(`/stocks/${symbol}`),
   getPrices: (symbol: string, days?: number) =>
     api.get<StockPrice[]>(`/stocks/${symbol}/prices`, { params: { days } }),
+  getSectorBreakdown: () => api.get<SectorBreakdown[]>('/sectors/breakdown'),
 };
 
 export const announcementsApi = {
-  getRecent: (params?: { type?: string; limit?: number }) =>
-    api.get<Announcement[]>('/announcements', { params }),
+  getRecent: (params?: {
+    type?: string;
+    limit?: number;
+    symbol?: string;
+    category?: string;
+    from?: string;
+    to?: string;
+  }) => api.get<Announcement[]>('/announcements', { params }),
+  getById: (id: number) => api.get<Announcement>(`/announcements/${id}`),
 };
 
 // Shariah Screening Types
@@ -339,6 +358,148 @@ export const macroApi = {
     api.get<MacroIndicator[]>(`/macro/history/${indicator}`),
 };
 
+// Signal Tracking Types
+export interface SignalRecordData {
+  id: number;
+  symbol: string;
+  direction: string;
+  confidence: string;
+  price_at_signal: number;
+  price_after_7d: number | null;
+  price_after_14d: number | null;
+  price_after_30d: number | null;
+  return_7d: number | null;
+  return_14d: number | null;
+  return_30d: number | null;
+  reasoning: string | null;
+  outcome: string;
+  signal_date: string;
+}
+
+export interface PerformanceStats {
+  totalSignals: number;
+  completedSignals: number;
+  pendingSignals: number;
+  winRate7d: number | null;
+  winRate14d: number | null;
+  winRate30d: number | null;
+  avgReturn7d: number | null;
+  avgReturn14d: number | null;
+  avgReturn30d: number | null;
+  byConfidence: {
+    HIGH: { count: number; winRate: number | null };
+    MEDIUM: { count: number; winRate: number | null };
+    LOW: { count: number; winRate: number | null };
+  };
+}
+
+export const signalTrackingApi = {
+  getPerformance: () => api.get<PerformanceStats>('/signal-tracking/performance'),
+  getSignals: (limit?: number) =>
+    api.get<SignalRecordData[]>('/signal-tracking/signals', { params: { limit } }),
+  record: (data: {
+    symbol: string;
+    direction: string;
+    confidence: string;
+    price_at_signal: number;
+    reasoning?: string;
+  }) => api.post<SignalRecordData>('/signal-tracking/record', data),
+  checkOutcomes: () => api.post('/signal-tracking/check-outcomes'),
+};
+
+// Alert Types
+export interface AlertRecord {
+  id: number;
+  symbol: string | null;
+  alert_type: string;
+  title: string;
+  message: string | null;
+  threshold: number | null;
+  is_active: boolean;
+  is_read: boolean;
+  is_triggered: boolean;
+  triggered_at: string | null;
+  created_at: string;
+}
+
+export const alertsApi = {
+  getNotifications: (limit?: number) =>
+    api.get<AlertRecord[]>('/alerts/notifications', { params: { limit } }),
+  getUnreadCount: () => api.get<{ count: number }>('/alerts/unread-count'),
+  getActive: () => api.get<AlertRecord[]>('/alerts/active'),
+  create: (data: { symbol: string; alert_type: string; title: string; threshold?: number }) =>
+    api.post<AlertRecord>('/alerts', data),
+  markRead: (id: number) => api.post(`/alerts/mark-read/${id}`),
+  markAllRead: () => api.post('/alerts/mark-all-read'),
+  check: () => api.post('/alerts/check'),
+  delete: (id: number) => api.delete(`/alerts/${id}`),
+};
+
+// Dividend Types
+export interface DividendRecord {
+  id: number;
+  symbol: string;
+  amount_per_share: number;
+  declaration_date: string | null;
+  ex_date: string;
+  payment_date: string | null;
+  type: string;
+  fiscal_year: string | null;
+  source: string;
+}
+
+export interface DividendYield {
+  symbol: string;
+  annualDividend: number;
+  yield: number | null;
+}
+
+export interface PortfolioDividendIncome {
+  holdings: Array<{
+    symbol: string;
+    quantity: number;
+    dividends: Array<{ ex_date: string; amount_per_share: number; total: number }>;
+    total_income: number;
+  }>;
+  total_portfolio_income: number;
+}
+
+export const dividendsApi = {
+  getBySymbol: (symbol: string) => api.get<DividendRecord[]>(`/dividends/${symbol}`),
+  getUpcoming: () => api.get<DividendRecord[]>('/dividends/upcoming'),
+  getYield: (symbol: string) => api.get<DividendYield>(`/dividends/${symbol}/yield`),
+  getPortfolioIncome: () => api.get<PortfolioDividendIncome>('/dividends/portfolio'),
+  add: (data: {
+    symbol: string;
+    amount_per_share: number;
+    ex_date: string;
+    declaration_date?: string;
+    payment_date?: string;
+    type?: string;
+    fiscal_year?: string;
+  }) => api.post<DividendRecord>('/dividends', data),
+  delete: (id: number) => api.delete(`/dividends/${id}`),
+};
+
+// Global Market Indicators Types
+export interface GlobalIndicator {
+  indicator: string;
+  label: string;
+  value: number;
+  change: number;
+  changePercent: number;
+  data_date: string;
+  source: string;
+  currency: string;
+}
+
+export const globalApi = {
+  getIndicators: () => api.get<GlobalIndicator[]>('/global/indicators'),
+  refresh: () => api.post<{ message: string; errors: string[] }>('/global/refresh'),
+  setManual: (data: { indicator: string; value: number; date?: string }) =>
+    api.post('/global/manual', data),
+};
+
 // AI Engine Types
 export interface AiStatus {
   mode: 'live' | 'mock';
@@ -396,6 +557,120 @@ export const aiApi = {
       { message, history: history ?? [] },
     ),
   getSignals: () => api.get<TradingSignal[]>('/ai/signals'),
+};
+
+// News Intelligence Types
+export interface NewsItemData {
+  id: number;
+  title: string;
+  summary: string | null;
+  source: string;
+  url: string | null;
+  impact_level: string;
+  impact_direction: string;
+  affected_symbols: string[] | null;
+  affected_sectors: string[] | null;
+  category: string | null;
+  ai_analysis: string | null;
+  published_at: string;
+  created_at: string;
+}
+
+export interface NewsSource {
+  name: string;
+  label: string;
+  count: number;
+}
+
+export const newsApi = {
+  getNews: (params?: {
+    limit?: number;
+    source?: string;
+    category?: string;
+    impact?: string;
+    search?: string;
+  }) => api.get<NewsItemData[]>('/news', { params }),
+  getSources: () => api.get<NewsSource[]>('/news/sources'),
+  getHighImpact: (hours?: number) =>
+    api.get<NewsItemData[]>('/news/high-impact', { params: { hours } }),
+  getById: (id: number) => api.get<NewsItemData>(`/news/${id}`),
+  refresh: () => api.post<{ fetched: number; errors: string[] }>('/news/refresh'),
+};
+
+// Export Types
+export interface PortfolioExport {
+  csv: string;
+  json: Record<string, unknown>[];
+  generatedAt: string;
+}
+
+export interface ShariahExport {
+  csv: string;
+  json: Record<string, unknown>[];
+  generatedAt: string;
+  summary: {
+    total: number;
+    compliant: number;
+    nonCompliant: number;
+    pending: number;
+  };
+}
+
+export const exportApi = {
+  getPortfolio: () => api.get<PortfolioExport>('/export/portfolio'),
+  getShariah: () => api.get<ShariahExport>('/export/shariah'),
+  getPrices: (symbol: string, days?: number) =>
+    api.get<{ csv: string; json: Record<string, unknown>[] }>(
+      `/export/prices/${symbol}`,
+      { params: { days } },
+    ),
+};
+
+// Backtest Types
+export interface BacktestTrade {
+  date: string;
+  type: 'BUY' | 'SELL';
+  price: number;
+  quantity: number;
+  reason: string;
+}
+
+export interface BacktestResult {
+  strategy: string;
+  symbol: string;
+  startDate: string;
+  endDate: string;
+  initialCapital: number;
+  finalCapital: number;
+  totalReturn: number;
+  totalReturnPercent: number;
+  totalTrades: number;
+  winningTrades: number;
+  losingTrades: number;
+  winRate: number;
+  maxDrawdown: number;
+  sharpeRatio: number | null;
+  trades: BacktestTrade[];
+  equityCurve: Array<{ date: string; equity: number }>;
+  buyAndHoldReturn: number;
+}
+
+export interface BacktestStrategy {
+  id: string;
+  name: string;
+  description: string;
+}
+
+export const backtestApi = {
+  run: (params: {
+    strategy: string;
+    symbol: string;
+    days?: number;
+    capital?: number;
+  }) =>
+    api.get<BacktestResult>('/backtest/run', { params }),
+  getStrategies: () => api.get<BacktestStrategy[]>('/backtest/strategies'),
+  getSymbols: () => api.get<string[]>('/backtest/symbols'),
 };
 
 export default api;
