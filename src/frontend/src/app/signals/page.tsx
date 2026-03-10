@@ -15,6 +15,8 @@ import {
 } from 'lucide-react';
 import Link from 'next/link';
 import { format } from 'date-fns';
+import { useDisplayMode } from '@/contexts/display-mode-context';
+import { getSimpleLabel } from '@/lib/simple-mode-constants';
 
 const directionConfig = {
   BUY: { icon: TrendingUp, color: 'text-green-500', bg: 'bg-green-500/10', label: 'Buy Signal' },
@@ -29,6 +31,7 @@ const confidenceColor = {
 };
 
 export default function SignalsPage() {
+  const { isSimple } = useDisplayMode();
   const [signals, setSignals] = useState<TradingSignal[]>([]);
   const [aiStatus, setAiStatus] = useState<AiStatus | null>(null);
   const [loading, setLoading] = useState(true);
@@ -85,10 +88,12 @@ export default function SignalsPage() {
         <div>
           <h2 className="text-2xl font-bold tracking-tight flex items-center gap-2">
             <Sparkles className="h-5 w-5 text-primary" />
-            Trading Signals
+            {isSimple ? 'Stock Suggestions' : 'Trading Signals'}
           </h2>
           <p className="text-muted-foreground text-sm">
-            {filtered.length} active signal{filtered.length !== 1 ? 's' : ''}
+            {isSimple
+              ? `${filtered.length} suggestion${filtered.length !== 1 ? 's' : ''} based on market data`
+              : `${filtered.length} active signal${filtered.length !== 1 ? 's' : ''}`}
           </p>
         </div>
         {aiStatus && (
@@ -131,22 +136,26 @@ export default function SignalsPage() {
             </button>
           ))}
         </div>
-        <span className="text-muted-foreground text-xs">|</span>
-        <div className="flex gap-1">
-          {(['ALL', 'HIGH', 'MEDIUM', 'LOW'] as const).map((conf) => (
-            <button
-              key={conf}
-              onClick={() => setConfFilter(conf)}
-              className={`rounded-md px-2.5 py-1 text-xs font-medium transition-colors ${
-                confFilter === conf
-                  ? 'bg-primary text-primary-foreground'
-                  : 'text-muted-foreground hover:bg-muted/50'
-              }`}
-            >
-              {conf === 'ALL' ? 'All Confidence' : conf}
-            </button>
-          ))}
-        </div>
+        {!isSimple && (
+          <>
+            <span className="text-muted-foreground text-xs">|</span>
+            <div className="flex gap-1">
+              {(['ALL', 'HIGH', 'MEDIUM', 'LOW'] as const).map((conf) => (
+                <button
+                  key={conf}
+                  onClick={() => setConfFilter(conf)}
+                  className={`rounded-md px-2.5 py-1 text-xs font-medium transition-colors ${
+                    confFilter === conf
+                      ? 'bg-primary text-primary-foreground'
+                      : 'text-muted-foreground hover:bg-muted/50'
+                  }`}
+                >
+                  {conf === 'ALL' ? 'All Confidence' : conf}
+                </button>
+              ))}
+            </div>
+          </>
+        )}
         <span className="text-muted-foreground text-xs">|</span>
         <button
           onClick={() => setShariahOnly(!shariahOnly)}
@@ -211,7 +220,7 @@ export default function SignalsPage() {
                   <div className="flex items-center justify-between pt-1">
                     <div className="flex items-center gap-2">
                       <Badge variant="outline" className={confidenceColor[signal.confidence]}>
-                        {signal.confidence}
+                        {isSimple ? getSimpleLabel(signal.confidence) : signal.confidence}
                       </Badge>
                       {signal.shariahStatus === 'compliant' && (
                         <Badge

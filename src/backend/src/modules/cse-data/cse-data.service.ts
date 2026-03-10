@@ -1,7 +1,7 @@
 import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
 import { Cron } from '@nestjs/schedule';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { IsNull, Repository } from 'typeorm';
 import { CseApiService } from './cse-api.service';
 import { RedisService } from './redis.service';
 import {
@@ -122,6 +122,11 @@ export class CseDataService implements OnModuleInit {
       // Save today's data to PostgreSQL for historical records
       await this.saveDailyMarketSummary();
       this.logger.log('Initial data fetch complete');
+
+      // Sync sectors in background (non-blocking)
+      this.syncStockSectors().catch((err) =>
+        this.logger.error(`Sector sync failed: ${String(err)}`),
+      );
     } catch (error) {
       this.logger.error(`Initial data fetch failed: ${String(error)}`);
     }
@@ -561,6 +566,125 @@ export class CseDataService implements OnModuleInit {
       this.logger.error(
         `Error saving macro data ${indicator}: ${String(error)}`,
       );
+    }
+  }
+
+  /**
+   * Normalize sector names from CSE API (inconsistent casing, trailing spaces, codes).
+   */
+  private normalizeSector(raw: string): string {
+    let s = raw.trim();
+    // Remove numeric codes like "45103010 - ", "Materials (1510)"
+    s = s.replace(/^\d+\s*-\s*/, '');
+    s = s.replace(/\s*\(\d+\)\s*$/, '');
+    // Remove leading " - "
+    s = s.replace(/^-\s*/, '');
+    // Remove trailing period
+    s = s.replace(/\.\s*$/, '');
+    // Title case normalization
+    s = s
+      .split(/\s+/)
+      .map((w) => {
+        const lower = w.toLowerCase();
+        // Keep short conjunctions lowercase
+        if (['&', 'and', 'of', 'the'].includes(lower)) return lower === '&' ? '&' : lower;
+        return w.charAt(0).toUpperCase() + w.slice(1).toLowerCase();
+      })
+      .join(' ');
+    // Merge known duplicates
+    const aliases: Record<string, string> = {
+      'Food Beverage & Tobacco': 'Food Beverage & Tobacco',
+      'Food, Beverage & Tobacco': 'Food Beverage & Tobacco',
+      'Food & Staples Retailing': 'Food Beverage & Tobacco',
+      'Diversified Financial': 'Diversified Financials',
+      'Diversified Financial Services': 'Diversified Financials',
+      'Banks Finance & Insurance': 'Banks',
+      'Multi-line Insurance': 'Insurance',
+      'Property & Casualty Insurance': 'Insurance',
+      'Healthcare Equipment & Services': 'Health Care Equipment & Services',
+      'Application Software': 'Technology',
+      'Independent Power Producers & Energy Traders': 'Energy',
+      'Power and Energy': 'Energy',
+      'Real Estate Development': 'Real Estate Management & Development',
+      'Real Estate': 'Real Estate Management & Development',
+      'Investment Banking & Brokerage': 'Diversified Financials',
+      'Consumer Finance': 'Diversified Financials',
+      'Services': 'Consumer Services',
+      'Trading': 'Consumer Services',
+    };
+    return aliases[s] ?? s;
+  }
+
+  /**
+   * Sync sector data for stocks that have null sector.
+   * Calls CSE companyProfile API for each stock to get its sector.
+   */
+  async syncStockSectors(): Promise<void> {
+    // First normalize existing sectors
+    await this.normalizeExistingSectors();
+
+    const stocks = await this.stockRepository.find({
+      where: { is_active: true, sector: IsNull() },
+    });
+
+    if (stocks.length === 0) {
+      this.logger.log('All stocks already have sector data');
+      return;
+    }
+
+    this.logger.log(
+      `Syncing sectors for ${stocks.length} stocks...`,
+    );
+    let updated = 0;
+
+    for (const stock of stocks) {
+      try {
+        const profile = (await this.cseApiService.getCompanyProfile(
+          stock.symbol,
+        )) as {
+          reqComSumInfo?: Array<{ sector?: string }>;
+        } | null;
+
+        const sector = profile?.reqComSumInfo?.[0]?.sector;
+        if (sector) {
+          stock.sector = this.normalizeSector(sector);
+          await this.stockRepository.save(stock);
+          updated++;
+        }
+
+        // Throttle API calls — 100ms between requests
+        await new Promise((r) => setTimeout(r, 100));
+      } catch (error) {
+        this.logger.warn(
+          `Failed to fetch sector for ${stock.symbol}: ${String(error)}`,
+        );
+      }
+    }
+
+    this.logger.log(`Sector sync complete: ${updated}/${stocks.length} updated`);
+  }
+
+  /**
+   * Normalize existing sector names in the database to fix inconsistencies.
+   */
+  private async normalizeExistingSectors(): Promise<void> {
+    const stocks = await this.stockRepository.find({
+      where: { is_active: true },
+    });
+
+    let fixed = 0;
+    for (const stock of stocks) {
+      if (!stock.sector) continue;
+      const normalized = this.normalizeSector(stock.sector);
+      if (normalized !== stock.sector) {
+        stock.sector = normalized;
+        await this.stockRepository.save(stock);
+        fixed++;
+      }
+    }
+
+    if (fixed > 0) {
+      this.logger.log(`Normalized ${fixed} sector names`);
     }
   }
 

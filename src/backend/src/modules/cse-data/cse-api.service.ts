@@ -84,7 +84,11 @@ export class CseApiService {
   }
 
   async getCompanyInfo(symbol: string): Promise<unknown> {
-    return this.post('companyInfoSummery', `company=${encodeURIComponent(symbol)}`);
+    return this.post('companyInfoSummery', `symbol=${encodeURIComponent(symbol)}`);
+  }
+
+  async getCompanyProfile(symbol: string): Promise<unknown> {
+    return this.post('companyProfile', `symbol=${encodeURIComponent(symbol)}`);
   }
 
   async getChartData(symbol: string): Promise<unknown> {

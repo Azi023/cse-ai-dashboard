@@ -6,6 +6,7 @@ import { Badge } from '@/components/ui/badge';
 import { stocksApi, marketApi, type SectorBreakdown, type SectorIndex } from '@/lib/api';
 import { BarChart3, TrendingUp, TrendingDown, ChevronDown, ChevronUp } from 'lucide-react';
 import Link from 'next/link';
+import { useDisplayMode } from '@/contexts/display-mode-context';
 
 function formatMarketCap(mcap: number): string {
   if (mcap >= 1_000_000_000_000) return `Rs. ${(mcap / 1_000_000_000_000).toFixed(1)}T`;
@@ -15,6 +16,7 @@ function formatMarketCap(mcap: number): string {
 }
 
 export default function SectorsPage() {
+  const { isSimple } = useDisplayMode();
   const [sectors, setSectors] = useState<SectorBreakdown[]>([]);
   const [sectorIndices, setSectorIndices] = useState<SectorIndex[]>([]);
   const [loading, setLoading] = useState(true);
@@ -40,14 +42,18 @@ export default function SectorsPage() {
   return (
     <div className="max-w-[1400px] mx-auto space-y-6">
       <div>
-        <h2 className="text-2xl font-bold tracking-tight">Sector Analysis</h2>
+        <h2 className="text-2xl font-bold tracking-tight">
+          {isSimple ? 'Industry Groups' : 'Sector Analysis'}
+        </h2>
         <p className="text-muted-foreground">
-          Sector performance, constituent stocks & market cap breakdown
+          {isSimple
+            ? 'See which industries are doing well today'
+            : 'Sector performance, constituent stocks & market cap breakdown'}
         </p>
       </div>
 
-      {/* Sector Index Performance Cards */}
-      {sectorIndices.length > 0 && (
+      {/* Sector Index Performance Cards (hidden in Simple mode) */}
+      {!isSimple && sectorIndices.length > 0 && (
         <Card>
           <CardHeader className="pb-3">
             <div className="flex items-center gap-2">

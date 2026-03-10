@@ -16,8 +16,11 @@ import {
 import { Skeleton } from '@/components/ui/skeleton';
 import { stocksApi, type Stock } from '@/lib/api';
 import { Search, BarChart3, ShieldCheck } from 'lucide-react';
+import { useDisplayMode } from '@/contexts/display-mode-context';
+import { getSimpleLabel } from '@/lib/simple-mode-constants';
 
 export default function StocksPage() {
+  const { isSimple } = useDisplayMode();
   const [stocks, setStocks] = useState<Stock[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -63,9 +66,13 @@ export default function StocksPage() {
   return (
     <div className="space-y-6">
       <div>
-        <h2 className="text-2xl font-bold tracking-tight">All Stocks</h2>
+        <h2 className="text-2xl font-bold tracking-tight">
+          {isSimple ? 'Browse Companies' : 'All Stocks'}
+        </h2>
         <p className="text-muted-foreground">
-          Browse all CSE-listed securities ({stocks.length} total)
+          {isSimple
+            ? `${stocks.length} companies listed on the Colombo Stock Exchange`
+            : `Browse all CSE-listed securities (${stocks.length} total)`}
         </p>
       </div>
 
@@ -194,7 +201,7 @@ export default function StocksPage() {
                         )}
                       </TableCell>
                       <TableCell>
-                        <ShariahBadge status={stock.shariah_status} />
+                        <ShariahBadge status={stock.shariah_status} simple={isSimple} />
                       </TableCell>
                     </TableRow>
                   ))}
@@ -208,24 +215,24 @@ export default function StocksPage() {
   );
 }
 
-function ShariahBadge({ status }: { status: string }) {
+function ShariahBadge({ status, simple }: { status: string; simple?: boolean }) {
   switch (status) {
     case 'compliant':
       return (
         <Badge variant="outline" className="border-green-500 text-green-500 text-xs">
-          Compliant
+          {simple ? '✅ Halal' : 'Compliant'}
         </Badge>
       );
     case 'non_compliant':
       return (
         <Badge variant="outline" className="border-red-500 text-red-500 text-xs">
-          Non-Compliant
+          {simple ? '❌ Not Halal' : 'Non-Compliant'}
         </Badge>
       );
     case 'pending_review':
       return (
         <Badge variant="outline" className="border-yellow-500 text-yellow-500 text-xs">
-          Pending
+          {simple ? '⏳ Checking' : 'Pending'}
         </Badge>
       );
     default:

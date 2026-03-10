@@ -167,12 +167,50 @@ export class StocksService {
 
   /**
    * Get most active stocks from Redis cache.
+   * CSE API returns different field names, so we normalize to match TopStock interface.
    */
   async getMostActive(): Promise<unknown> {
-    const cached = await this.redisService.getJson(
-      'cse:most_active',
-    );
-    return cached ?? [];
+    const cached = await this.redisService.getJson<
+      Array<{
+        symbol?: string;
+        tradeVolume?: number;
+        shareVolume?: number;
+        turnover?: number;
+        percentageShareVolume?: number;
+      }>
+    >('cse:most_active');
+    if (!cached || !Array.isArray(cached)) return [];
+
+    // Enrich with price/name from trade summary cache
+    const tradeSummary = await this.redisService.getJson<{
+      reqTradeSummery?: Array<{
+        symbol?: string;
+        name?: string;
+        price?: number;
+        change?: number;
+        percentageChange?: number;
+      }>;
+    }>('cse:trade_summary');
+    const tradeMap = new Map<
+      string,
+      { name?: string; price?: number; change?: number; percentageChange?: number }
+    >();
+    for (const item of tradeSummary?.reqTradeSummery ?? []) {
+      if (item.symbol) tradeMap.set(item.symbol, item);
+    }
+
+    return cached.map((item) => {
+      const trade = tradeMap.get(item.symbol ?? '') ?? {};
+      return {
+        symbol: item.symbol,
+        name: trade.name ?? item.symbol,
+        price: trade.price ?? 0,
+        change: trade.change ?? 0,
+        changePercentage: trade.percentageChange ?? item.percentageShareVolume ?? 0,
+        volume: item.shareVolume ?? 0,
+        turnover: item.turnover ?? 0,
+      };
+    });
   }
 
   /**

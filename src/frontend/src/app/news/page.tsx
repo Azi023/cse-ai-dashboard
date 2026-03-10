@@ -6,6 +6,7 @@ import { Badge } from '@/components/ui/badge';
 import { newsApi, type NewsItemData } from '@/lib/api';
 import { Newspaper, ExternalLink, RefreshCw, Search, AlertTriangle } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { useDisplayMode } from '@/contexts/display-mode-context';
 
 const impactColors: Record<string, string> = {
   HIGH: 'bg-red-500/20 text-red-400 border-red-500/30',
@@ -50,6 +51,7 @@ function timeAgo(dateStr: string): string {
 }
 
 export default function NewsPage() {
+  const { isSimple } = useDisplayMode();
   const [news, setNews] = useState<NewsItemData[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -94,10 +96,12 @@ export default function NewsPage() {
         <div>
           <h2 className="text-2xl font-bold tracking-tight flex items-center gap-2">
             <Newspaper className="h-5 w-5 text-primary" />
-            News Intelligence
+            {isSimple ? 'Market News' : 'News Intelligence'}
           </h2>
           <p className="text-muted-foreground text-sm">
-            Market news from local and global sources with AI impact analysis
+            {isSimple
+              ? 'Latest news that could affect your investments'
+              : 'Market news from local and global sources with AI impact analysis'}
           </p>
         </div>
         <button
@@ -123,26 +127,30 @@ export default function NewsPage() {
             className="w-full rounded-md border bg-background pl-9 pr-3 py-2 text-sm placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring"
           />
         </div>
-        <select
-          value={sourceFilter}
-          onChange={(e) => setSourceFilter(e.target.value)}
-          className="rounded-md border bg-background px-3 py-2 text-sm"
-        >
-          <option value="">All Sources</option>
-          {Object.entries(sourceLabels).map(([k, v]) => (
-            <option key={k} value={k}>{v}</option>
-          ))}
-        </select>
-        <select
-          value={categoryFilter}
-          onChange={(e) => setCategoryFilter(e.target.value)}
-          className="rounded-md border bg-background px-3 py-2 text-sm"
-        >
-          <option value="">All Categories</option>
-          {Object.entries(categoryLabels).map(([k, v]) => (
-            <option key={k} value={k}>{v}</option>
-          ))}
-        </select>
+        {!isSimple && (
+          <>
+            <select
+              value={sourceFilter}
+              onChange={(e) => setSourceFilter(e.target.value)}
+              className="rounded-md border bg-background px-3 py-2 text-sm"
+            >
+              <option value="">All Sources</option>
+              {Object.entries(sourceLabels).map(([k, v]) => (
+                <option key={k} value={k}>{v}</option>
+              ))}
+            </select>
+            <select
+              value={categoryFilter}
+              onChange={(e) => setCategoryFilter(e.target.value)}
+              className="rounded-md border bg-background px-3 py-2 text-sm"
+            >
+              <option value="">All Categories</option>
+              {Object.entries(categoryLabels).map(([k, v]) => (
+                <option key={k} value={k}>{v}</option>
+              ))}
+            </select>
+          </>
+        )}
         <select
           value={impactFilter}
           onChange={(e) => setImpactFilter(e.target.value)}

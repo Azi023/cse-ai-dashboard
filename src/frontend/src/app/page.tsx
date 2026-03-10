@@ -35,8 +35,11 @@ import {
   Newspaper,
   Bell,
   ExternalLink,
+  HelpCircle,
 } from 'lucide-react';
 import Link from 'next/link';
+import { useDisplayMode } from '@/contexts/display-mode-context';
+import { getSimpleLabel } from '@/lib/simple-mode-constants';
 
 function useWatchlist() {
   const [watchlist, setWatchlist] = useState<string[]>([]);
@@ -77,6 +80,7 @@ function timeAgo(dateStr: string): string {
 }
 
 export default function DashboardPage() {
+  const { isSimple } = useDisplayMode();
   const [summary, setSummary] = useState<MarketSummary | null>(null);
   const [gainers, setGainers] = useState<TopStock[]>([]);
   const [losers, setLosers] = useState<TopStock[]>([]);
@@ -171,9 +175,13 @@ export default function DashboardPage() {
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h2 className="text-2xl font-bold tracking-tight">Market Overview</h2>
+          <h2 className="text-2xl font-bold tracking-tight">
+            {isSimple ? 'Your Market Dashboard' : 'Market Overview'}
+          </h2>
           <p className="text-muted-foreground text-sm">
-            Colombo Stock Exchange — Live Dashboard
+            {isSimple
+              ? 'A quick look at how the Colombo Stock Exchange is doing today'
+              : 'Colombo Stock Exchange — Live Dashboard'}
           </p>
         </div>
         {summary && (
@@ -287,11 +295,13 @@ export default function DashboardPage() {
         </Card>
       </div>
 
-      {/* Row 3: Macro + Global Indicators */}
-      <div className="grid gap-4 lg:grid-cols-2">
-        <MacroIndicatorsCard />
-        <GlobalIndicatorsCard />
-      </div>
+      {/* Row 3: Macro + Global Indicators (hidden in Simple mode) */}
+      {!isSimple && (
+        <div className="grid gap-4 lg:grid-cols-2">
+          <MacroIndicatorsCard />
+          <GlobalIndicatorsCard />
+        </div>
+      )}
 
       {/* Row 4: Watchlist + Recent Alerts */}
       <div className="grid gap-4 lg:grid-cols-3">
@@ -459,19 +469,19 @@ export default function DashboardPage() {
           <div className="grid gap-4 lg:grid-cols-3">
             <div>
               <h4 className="text-xs font-medium text-green-500 mb-2 flex items-center gap-1">
-                <TrendingUp className="h-3 w-3" /> Top Gainers
+                <TrendingUp className="h-3 w-3" /> {isSimple ? 'Biggest Winners Today' : 'Top Gainers'}
               </h4>
               <TopStocksTable stocks={filterStocks(gainers)} loading={loading} type="gainers" />
             </div>
             <div>
               <h4 className="text-xs font-medium text-red-500 mb-2 flex items-center gap-1">
-                <TrendingDown className="h-3 w-3" /> Top Losers
+                <TrendingDown className="h-3 w-3" /> {isSimple ? 'Biggest Losers Today' : 'Top Losers'}
               </h4>
               <TopStocksTable stocks={filterStocks(losers)} loading={loading} type="losers" />
             </div>
             <div>
               <h4 className="text-xs font-medium text-blue-500 mb-2 flex items-center gap-1">
-                <Activity className="h-3 w-3" /> Most Active
+                <Activity className="h-3 w-3" /> {isSimple ? 'Most Traded Today' : 'Most Active'}
               </h4>
               <TopStocksTable stocks={filterStocks(active)} loading={loading} type="active" />
             </div>
@@ -479,8 +489,8 @@ export default function DashboardPage() {
         </CardContent>
       </Card>
 
-      {/* Row 6: Sectors */}
-      {sortedSectors.length > 0 && (
+      {/* Row 6: Sectors (hidden in Simple mode) */}
+      {!isSimple && sortedSectors.length > 0 && (
         <Card>
           <CardHeader className="pb-3">
             <div className="flex items-center justify-between">
