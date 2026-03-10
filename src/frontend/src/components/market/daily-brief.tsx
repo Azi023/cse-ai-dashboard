@@ -30,7 +30,7 @@ export function DailyBriefCard() {
 
     try {
       const [briefRes, statusRes] = await Promise.allSettled([
-        aiApi.getDailyBrief(),
+        aiApi.getDailyBrief(isRefresh), // forceRefresh=true only on manual refresh
         aiApi.getStatus(),
       ]);
       if (briefRes.status === 'fulfilled') setBrief(briefRes.value.data);

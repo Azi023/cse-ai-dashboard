@@ -548,15 +548,23 @@ export interface TradingSignal {
 
 export const aiApi = {
   getStatus: () => api.get<AiStatus>('/ai/status'),
-  getDailyBrief: () => api.get<DailyBrief>('/ai/daily-brief'),
-  analyzeStock: (symbol: string) =>
-    api.get<StockAnalysis>(`/ai/analyze/${symbol}`),
+  getDailyBrief: (forceRefresh = false) =>
+    api.get<DailyBrief>('/ai/daily-brief', {
+      params: forceRefresh ? { forceRefresh: 'true' } : undefined,
+    }),
+  analyzeStock: (symbol: string, forceRefresh = false) =>
+    api.get<StockAnalysis>(`/ai/analyze/${symbol}`, {
+      params: forceRefresh ? { forceRefresh: 'true' } : undefined,
+    }),
   chat: (message: string, history?: ChatMessage[]) =>
     api.post<{ role: 'assistant'; content: string; timestamp: string }>(
       '/ai/chat',
       { message, history: history ?? [] },
     ),
-  getSignals: () => api.get<TradingSignal[]>('/ai/signals'),
+  getSignals: (forceRefresh = false) =>
+    api.get<TradingSignal[]>('/ai/signals', {
+      params: forceRefresh ? { forceRefresh: 'true' } : undefined,
+    }),
 };
 
 // News Intelligence Types

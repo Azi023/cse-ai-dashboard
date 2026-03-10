@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Param, Body } from '@nestjs/common';
+import { Controller, Get, Post, Param, Body, Query } from '@nestjs/common';
 import {
   AiEngineService,
   StockAnalysis,
@@ -17,13 +17,18 @@ export class AiEngineController {
   }
 
   @Get('daily-brief')
-  async getDailyBrief(): Promise<DailyBrief> {
-    return this.aiEngineService.getDailyBrief();
+  async getDailyBrief(
+    @Query('forceRefresh') forceRefresh?: string,
+  ): Promise<DailyBrief> {
+    return this.aiEngineService.getDailyBrief(forceRefresh === 'true');
   }
 
   @Get('analyze/:symbol')
-  async analyzeStock(@Param('symbol') symbol: string): Promise<StockAnalysis> {
-    return this.aiEngineService.analyzeStock(symbol);
+  async analyzeStock(
+    @Param('symbol') symbol: string,
+    @Query('forceRefresh') forceRefresh?: string,
+  ): Promise<StockAnalysis> {
+    return this.aiEngineService.analyzeStock(symbol, forceRefresh === 'true');
   }
 
   @Post('chat')
@@ -34,7 +39,9 @@ export class AiEngineController {
   }
 
   @Get('signals')
-  async getSignals(): Promise<TradingSignal[]> {
-    return this.aiEngineService.getSignals();
+  async getSignals(
+    @Query('forceRefresh') forceRefresh?: string,
+  ): Promise<TradingSignal[]> {
+    return this.aiEngineService.getSignals(forceRefresh === 'true');
   }
 }
