@@ -1,13 +1,16 @@
 /**
- * Safety parameters for small-capital portfolios.
- * Designed for starting capital of LKR 10,000.
+ * Safety parameters for Rupee Cost Averaging portfolios.
+ * The investor contributes LKR 10,000 monthly from salary.
+ * Portfolio value grows cumulatively over time.
+ * Position sizing is based on TOTAL portfolio value, not the monthly contribution.
  */
 export const SAFETY_PARAMS = {
-  // Capital thresholds
-  startingCapital: 10_000,
+  // Investment profile
+  monthlyContribution: 10_000, // LKR per month from salary
   minPositionSize: 5_000, // Below this, brokerage costs erode returns
-  maxPositionPercent: 0.30, // Max 30% of capital per stock
-  maxConcurrentPositions: 3,
+  maxPositionPercent: 0.30, // Max 30% of total portfolio value per stock
+  maxConcurrentPositions: 3, // When portfolio < 100K; 5 when > 100K
+  portfolioThresholdForExpansion: 100_000, // LKR — expand to 5 positions above this
 
   // CSE cost structure
   brokerage: {
@@ -36,11 +39,25 @@ export const SAFETY_PARAMS = {
     trailingStopPercent: 8, // Move stop up as price rises
   },
 
-  // Position sizing by confidence
+  // Position sizing by confidence (% of TOTAL portfolio value, not monthly contribution)
   positionSizing: {
-    HIGH: { minPercent: 0.05, maxPercent: 0.08 }, // 5-8% of capital
-    MEDIUM: { minPercent: 0.03, maxPercent: 0.05 }, // 3-5%
-    LOW: { minPercent: 0.01, maxPercent: 0.03 }, // 1-3%
+    HIGH: { minPercent: 0.05, maxPercent: 0.08 }, // 5-8% of total portfolio
+    MEDIUM: { minPercent: 0.03, maxPercent: 0.05 }, // 3-5% of total portfolio
+    LOW: { minPercent: 0.01, maxPercent: 0.03 }, // 1-3% of total portfolio
+  },
+
+  // Estimate cumulative portfolio value based on months invested
+  estimatePortfolioValue(monthsInvested: number, avgMonthlyReturn: number = 0.005): number {
+    let value = 0;
+    for (let m = 0; m < monthsInvested; m++) {
+      value = (value + this.monthlyContribution) * (1 + avgMonthlyReturn);
+    }
+    return Math.round(value);
+  },
+
+  // Get max concurrent positions based on portfolio size
+  getMaxPositions(portfolioValue: number): number {
+    return portfolioValue >= this.portfolioThresholdForExpansion ? 5 : 3;
   },
 
   // Breakeven calculator
