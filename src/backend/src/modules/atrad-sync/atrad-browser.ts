@@ -34,8 +34,10 @@ const SCREENSHOT_DIR = path.resolve(
   '../../../../data/atrad-sync',
 );
 
-// Common selectors to try for login form fields
+// Login form selectors — exact IDs confirmed from ATrad HTML recon first, then fallbacks
 const USERNAME_SELECTORS = [
+  '#txtUserName',                          // confirmed: ATrad uses this exact ID
+  'input[name="txtUserName"]',             // confirmed: ATrad name attribute
   'input[name="username"]',
   'input[name="userName"]',
   'input[name="user"]',
@@ -45,26 +47,27 @@ const USERNAME_SELECTORS = [
   'input[id="userName"]',
   'input[id="user"]',
   'input[id="loginId"]',
-  'input[type="text"]:first-of-type',
   '#txtUsername',
   '#txtLoginId',
   'input[placeholder*="user" i]',
   'input[placeholder*="login" i]',
-  'input[placeholder*="name" i]',
+  'input[type="text"]:first-of-type',
 ];
 
 const PASSWORD_SELECTORS = [
+  '#txtPassword',                          // confirmed: ATrad uses this exact ID
+  'input[name="txtPassword"]',             // confirmed: ATrad name attribute
   'input[name="password"]',
   'input[name="passwd"]',
   'input[name="pass"]',
   'input[id="password"]',
   'input[id="passwd"]',
   'input[type="password"]',
-  '#txtPassword',
   'input[placeholder*="password" i]',
 ];
 
 const LOGIN_BUTTON_SELECTORS = [
+  '#btnSubmit',                            // confirmed: ATrad uses this exact ID
   'button[type="submit"]',
   'input[type="submit"]',
   'button:has-text("Login")',
@@ -168,61 +171,122 @@ async function takeScreenshot(page: Page, name: string): Promise<void> {
   }
 }
 
-// ── Portfolio navigation helpers ────────────────────────────────────────────
-
-const PORTFOLIO_NAV_SELECTORS = [
-  'a:has-text("Portfolio")',
-  'a:has-text("Holdings")',
-  'a:has-text("My Portfolio")',
-  'a:has-text("Positions")',
-  'button:has-text("Portfolio")',
-  'button:has-text("Holdings")',
-  '[data-menu="portfolio"]',
-  '[data-tab="portfolio"]',
-  '.nav-portfolio',
-  '#portfolio-tab',
-  '#portfolioTab',
-  'li:has-text("Portfolio")',
-  'span:has-text("Portfolio")',
-];
+// ── ATrad Dojo menu navigation ───────────────────────────────────────────────
+// ATrad uses Dojo JS framework. The top nav is a MenuBar with PopupMenuBarItems.
+// Confirmed IDs from HTML recon:
+//   Client menu container: #dijit_PopupMenuBarItem_4
+//   Submenu popup:         #dijit_PopupMenuBarItem_4_dropdown
+//   Portfolio item (tr):   #dijit_MenuItem_39
+//   Stock Holding (tr):    #dijit_MenuItem_40  ← primary target
+//   Account Summary (tr):  #dijit_MenuItem_41  ← fallback
 
 async function navigateToPortfolio(page: Page): Promise<boolean> {
-  // First check if portfolio data is already visible on the page
-  const hasPortfolioTable = await page.$('table:has(th:has-text("Qty"))');
-  if (hasPortfolioTable) {
-    logger.log('Portfolio table already visible on page');
+  // Check if a holdings grid is already visible (e.g. Stock Holding page already loaded)
+  const alreadyLoaded =
+    (await page.$('#_atrad_equityDiv')) !== null ||
+    (await page.$('table:has(th:has-text("Qty"))')) !== null;
+  if (alreadyLoaded) {
+    logger.log('Holdings content already visible on page');
     return true;
   }
 
-  for (const selector of PORTFOLIO_NAV_SELECTORS) {
-    try {
-      // Safety check: never click forbidden buttons
-      for (const forbidden of FORBIDDEN_SELECTORS) {
-        if (selector.toLowerCase().includes('buy') ||
-            selector.toLowerCase().includes('sell') ||
-            selector.toLowerCase().includes('order')) {
-          continue;
-        }
-      }
+  // Step 1: Click the "Client" top-nav menu item to open the submenu
+  const clientMenuSelectors = [
+    '#dijit_PopupMenuBarItem_4',           // confirmed Dojo widget ID
+    '#dijit_PopupMenuBarItem_4_text',      // text span inside the menu item
+    'span:has-text("Client")',             // text-based fallback
+  ];
 
-      const element = await page.$(selector);
-      if (element) {
-        const text = await element.textContent();
-        // Double-check the text doesn't contain forbidden words
-        if (text && /buy|sell|order|place|confirm/i.test(text)) {
-          continue;
-        }
-        await element.click();
-        logger.log(`Navigated to portfolio using selector: ${selector}`);
-        await page.waitForTimeout(2000);
-        return true;
+  let clientMenuClicked = false;
+  for (const sel of clientMenuSelectors) {
+    try {
+      const el = await page.$(sel);
+      if (el) {
+        await el.click();
+        logger.log(`Clicked Client menu using: ${sel}`);
+        clientMenuClicked = true;
+        break;
       }
     } catch {
-      // Try next
+      // try next
     }
   }
 
-  logger.warn('Could not find portfolio navigation element');
+  if (!clientMenuClicked) {
+    logger.warn('Could not find Client menu — trying text-based approach');
+    try {
+      await page.getByText('Client', { exact: true }).first().click();
+      clientMenuClicked = true;
+      logger.log('Clicked Client menu via getByText');
+    } catch {
+      logger.error('Failed to click Client menu');
+      return false;
+    }
+  }
+
+  // Step 2: Wait for the submenu dropdown to appear
+  try {
+    await page.waitForSelector('#dijit_PopupMenuBarItem_4_dropdown', {
+      state: 'visible',
+      timeout: 8000,
+    });
+    logger.log('Client submenu dropdown appeared');
+  } catch {
+    logger.warn('Submenu dropdown not detected by ID — waiting briefly and proceeding');
+    await page.waitForTimeout(2000);
+  }
+
+  // Step 3: Click "Stock Holding" (preferred — shows equities grid with P&L)
+  //         Fall back to "Account Summary" if Stock Holding not found
+  const holdingItemSelectors = [
+    '#dijit_MenuItem_40',                  // confirmed: Stock Holding tr element
+    '#dijit_MenuItem_40_text',             // td text cell inside the tr
+    'td:has-text("Stock Holding")',        // text-based
+    'tr:has-text("Stock Holding")',
+  ];
+
+  for (const sel of holdingItemSelectors) {
+    try {
+      const el = await page.$(sel);
+      if (el) {
+        const text = await el.textContent();
+        if (text && /buy|sell|order|place|confirm/i.test(text)) continue; // safety
+        await el.click();
+        logger.log(`Clicked Stock Holding using: ${sel}`);
+        await page.waitForTimeout(4000); // Dojo loads content asynchronously
+        await takeScreenshot(page, 'stock-holding-page');
+        return true;
+      }
+    } catch {
+      // try next
+    }
+  }
+
+  // Fallback: try "Account Summary"
+  logger.warn('Stock Holding item not found — trying Account Summary');
+  const accountSummarySelectors = [
+    '#dijit_MenuItem_41',                  // confirmed: Account Summary tr element
+    '#dijit_MenuItem_41_text',
+    'td:has-text("Account Summary")',
+    'tr:has-text("Account Summary")',
+  ];
+
+  for (const sel of accountSummarySelectors) {
+    try {
+      const el = await page.$(sel);
+      if (el) {
+        await el.click();
+        logger.log(`Clicked Account Summary using: ${sel}`);
+        await page.waitForTimeout(4000);
+        await takeScreenshot(page, 'account-summary-page');
+        return true;
+      }
+    } catch {
+      // try next
+    }
+  }
+
+  logger.error('Could not navigate to Stock Holding or Account Summary');
   return false;
 }
 
@@ -231,8 +295,16 @@ async function navigateToPortfolio(page: Page): Promise<boolean> {
 async function scrapeHoldings(page: Page): Promise<ATradHolding[]> {
   const holdings: ATradHolding[] = [];
 
-  // Try multiple table selectors
+  // Try multiple table selectors — ATrad-specific first, then generic fallbacks
   const tableSelectors = [
+    // ATrad Stock Holding page: the equity grid lives inside #_atrad_equityDiv
+    '#_atrad_equityDiv table',
+    '#_atrad_equityDiv .dojoxGrid',
+    '#_atrad_equityDiv .dojoxGridScrollbox table',
+    // ATrad uses a Dojo grid with id="grid" inside gridContainer4
+    '#gridContainer4 table',
+    '#gridContainer4 .dojoxGrid',
+    // Generic fallbacks
     'table.portfolio-table',
     'table.holdings-table',
     'table#portfolioTable',
@@ -245,7 +317,6 @@ async function scrapeHoldings(page: Page): Promise<ATradHolding[]> {
     'table:has(th:has-text("Symbol"))',
     'table:has(th:has-text("Security"))',
     'table:has(th:has-text("Quantity"))',
-    // Fallback: any data table
     'table.table',
     'table.data-table',
     'table.grid',
@@ -603,10 +674,20 @@ export async function syncATradPortfolio(): Promise<ATradPortfolio> {
     logger.log('Login appears successful');
 
     // ── Step 4: Navigate to portfolio/holdings ──────────────────────────
-    logger.log('Looking for portfolio/holdings section...');
+    logger.log('Navigating to Stock Holding via Client menu...');
     await navigateToPortfolio(page);
-    await page.waitForTimeout(3000); // Allow data to load
+    await page.waitForTimeout(3000); // Allow Dojo to finish async data load
     await takeScreenshot(page, 'portfolio-page');
+
+    // Dump HTML after navigation for selector debugging
+    try {
+      const html = await page.content();
+      const htmlPath = path.join(SCREENSHOT_DIR, 'stock-holding-dump.html');
+      fs.writeFileSync(htmlPath, html);
+      logger.log(`HTML dump saved: ${htmlPath}`);
+    } catch {
+      logger.warn('Failed to dump HTML after navigation');
+    }
 
     // ── Step 5: Scrape holdings data ────────────────────────────────────
     logger.log('Scraping portfolio holdings...');
