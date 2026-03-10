@@ -62,20 +62,20 @@ export function TopStocksTable({ stocks, loading, type }: TopStocksTableProps) {
               </Link>
             </TableCell>
             <TableCell className="text-right">
-              {stock.price.toFixed(2)}
+              {(stock.price ?? 0).toFixed(2)}
             </TableCell>
             <TableCell className={cn(
               'text-right',
-              stock.change > 0 ? 'text-green-500' : stock.change < 0 ? 'text-red-500' : ''
+              (stock.change ?? 0) > 0 ? 'text-green-500' : (stock.change ?? 0) < 0 ? 'text-red-500' : ''
             )}>
-              {stock.change > 0 ? '+' : ''}{stock.change.toFixed(2)}
+              {(stock.change ?? 0) > 0 ? '+' : ''}{(stock.change ?? 0).toFixed(2)}
             </TableCell>
             <TableCell className="text-right">
               {type === 'active'
-                ? stock.volume.toLocaleString()
+                ? (stock.volume ?? 0).toLocaleString()
                 : (
-                  <Badge variant={stock.changePercentage > 0 ? 'default' : 'destructive'} className="ml-auto">
-                    {stock.changePercentage > 0 ? '+' : ''}{stock.changePercentage.toFixed(2)}%
+                  <Badge variant={(stock.changePercentage ?? 0) > 0 ? 'default' : 'destructive'} className="ml-auto">
+                    {(stock.changePercentage ?? 0) > 0 ? '+' : ''}{(stock.changePercentage ?? 0).toFixed(2)}%
                   </Badge>
                 )
               }
