@@ -63,8 +63,9 @@ const TTL = {
 };
 
 // Rate limits: max calls per hour (after cache miss)
+// daily-brief is low because the 4h Redis cache handles repeated requests
 const RATE_LIMITS: Record<string, number> = {
-  'daily-brief': 3,
+  'daily-brief': 1,
   'analyze': 20,
   'chat': 30,
   'signals': 6,
@@ -284,7 +285,7 @@ export class AiEngineService {
     // 3. Generate fresh signals
     let signals: TradingSignal[];
     if (this.isLive) {
-      signals = await this.getLiveSignals();
+      signals = await this.getLiveSignals(forceRefresh);
     } else {
       signals = await this.mockGenerator.generateSignals();
     }
@@ -424,7 +425,16 @@ export class AiEngineService {
     }
   }
 
-  private async getLiveSignals(): Promise<TradingSignal[]> {
+  private async getLiveSignals(forceRefresh = false): Promise<TradingSignal[]> {
+    // HARD CHECK: never call Claude if valid cache exists
+    if (!forceRefresh) {
+      const cached = await this.redisService.getJson<TradingSignal[]>(CACHE_KEYS.SIGNALS);
+      if (cached && cached.length > 0) {
+        this.logger.log('CACHE HIT — skipping Claude call for signals');
+        return cached;
+      }
+    }
+
     try {
       const Anthropic = (await import('@anthropic-ai/sdk')).default;
       const client = new Anthropic({
@@ -440,7 +450,7 @@ export class AiEngineService {
         messages: [
           {
             role: 'user',
-            content: `Generate trading signals based on today's CSE market data. Output ONLY a valid JSON array (no markdown, no explanation outside the array) matching this structure per signal:\n{\n  "symbol": "SYMBOL.N0000",\n  "name": "Company Name",\n  "currentPrice": 100.00,\n  "direction": "BUY|HOLD|SELL",\n  "reasoning": "2-3 technical sentences for analysts",\n  "rationale_simple": "One plain-English sentence a beginner investor can understand",\n  "confidence": "HIGH|MEDIUM|LOW",\n  "shariahStatus": "compliant|non_compliant|pending_review",\n  "suggested_holding_period": "e.g. 12-24 months, 3-6 months, Short-term: 1-4 weeks"\n}\n\nIMPORTANT: Never say 'buy' or 'sell' as direct instructions. Use 'worth considering' or 'may warrant attention'. Always include suggested_holding_period and rationale_simple.\n\nMarket data:\n${JSON.stringify(marketData, null, 2)}`,
+            content: `Respond with ONLY a raw JSON array. No markdown. No backticks. No explanation. Start your response with [ and end with ].\n\nGenerate trading signals based on today's CSE market data. Each element must match this exact structure:\n{\n  "symbol": "SYMBOL.N0000",\n  "name": "Company Name",\n  "currentPrice": 100.00,\n  "direction": "BUY|HOLD|SELL",\n  "reasoning": "2-3 technical sentences for analysts",\n  "rationale_simple": "One plain-English sentence a beginner investor can understand",\n  "confidence": "HIGH|MEDIUM|LOW",\n  "shariahStatus": "compliant|non_compliant|pending_review",\n  "suggested_holding_period": "e.g. 12-24 months, 3-6 months, Short-term: 1-4 weeks"\n}\n\nIMPORTANT: Never say 'buy' or 'sell' as direct instructions. Use 'worth considering' or 'may warrant attention'. Always include suggested_holding_period and rationale_simple.\n\nMarket data:\n${JSON.stringify(marketData, null, 2)}`,
           },
         ],
       });
