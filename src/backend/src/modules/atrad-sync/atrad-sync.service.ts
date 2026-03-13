@@ -104,11 +104,11 @@ export class ATradSyncService {
         // Detect deposits via buying power changes
         await this.detectDeposit(result.buyingPower);
 
-        // Cache the result in Redis (5 minute TTL)
+        // Cache the result in Redis (24 hour TTL — survives backend restarts)
         await this.redisService.setJson('atrad:last_sync', {
           ...result,
           lastSynced: result.lastSynced.toISOString(),
-        }, 300);
+        }, 86400);
 
         // Cache holdings separately for quick access
         await this.redisService.setJson('atrad:holdings', result.holdings, 300);
@@ -159,36 +159,78 @@ export class ATradSyncService {
 
   /**
    * Get the status of the last sync.
+   * Falls back to Redis cache so data survives backend restarts.
    */
-  getLastSyncStatus(): SyncStatus {
-    if (!this.lastSyncResult) {
+  async getLastSyncStatus(): Promise<SyncStatus> {
+    // Use in-memory first (freshest), fall back to Redis cache
+    if (this.lastSyncResult) {
       return {
-        lastSyncTime: null,
-        syncSuccess: false,
-        holdingsCount: 0,
-        buyingPower: 0,
-        accountValue: 0,
-        cashBalance: 0,
-        error: 'No sync has been performed yet',
+        lastSyncTime: this.lastSyncResult.lastSynced,
+        syncSuccess: this.lastSyncResult.syncSuccess,
+        holdingsCount: this.lastSyncResult.holdings.length,
+        buyingPower: this.lastSyncResult.buyingPower,
+        accountValue: this.lastSyncResult.accountValue,
+        cashBalance: this.lastSyncResult.cashBalance,
+        error: this.lastSyncResult.error,
       };
     }
 
+    // Restore from Redis after restart
+    try {
+      const cached = await this.redisService.getJson<{
+        buyingPower: number;
+        accountValue: number;
+        cashBalance: number;
+        lastSynced: string;
+        syncSuccess: boolean;
+        holdings: ATradHolding[];
+        error?: string;
+      }>('atrad:last_sync');
+
+      if (cached) {
+        this.logger.log(`Restored ATrad status from Redis cache (buying power: ${cached.buyingPower})`);
+        this.lastSyncResult = {
+          ...cached,
+          lastSynced: new Date(cached.lastSynced),
+        };
+        return {
+          lastSyncTime: this.lastSyncResult.lastSynced,
+          syncSuccess: this.lastSyncResult.syncSuccess,
+          holdingsCount: this.lastSyncResult.holdings.length,
+          buyingPower: this.lastSyncResult.buyingPower,
+          accountValue: this.lastSyncResult.accountValue,
+          cashBalance: this.lastSyncResult.cashBalance,
+          error: this.lastSyncResult.error,
+        };
+      }
+    } catch (err) {
+      this.logger.warn(`Could not restore ATrad status from Redis: ${String(err)}`);
+    }
+
     return {
-      lastSyncTime: this.lastSyncResult.lastSynced,
-      syncSuccess: this.lastSyncResult.syncSuccess,
-      holdingsCount: this.lastSyncResult.holdings.length,
-      buyingPower: this.lastSyncResult.buyingPower,
-      accountValue: this.lastSyncResult.accountValue,
-      cashBalance: this.lastSyncResult.cashBalance,
-      error: this.lastSyncResult.error,
+      lastSyncTime: null,
+      syncSuccess: false,
+      holdingsCount: 0,
+      buyingPower: 0,
+      accountValue: 0,
+      cashBalance: 0,
+      error: 'No sync has been performed yet',
     };
   }
 
   /**
-   * Get the latest synced holdings.
+   * Get the latest synced holdings (from memory or Redis).
    */
-  getHoldings(): ATradHolding[] {
-    return this.lastSyncResult?.holdings ?? [];
+  async getHoldings(): Promise<ATradHolding[]> {
+    if (this.lastSyncResult?.holdings?.length) {
+      return this.lastSyncResult.holdings;
+    }
+    try {
+      const cached = await this.redisService.getJson<ATradHolding[]>('atrad:holdings');
+      return cached ?? [];
+    } catch {
+      return [];
+    }
   }
 
   // ── Private: Reconcile ATrad holdings with portfolio table ────────────

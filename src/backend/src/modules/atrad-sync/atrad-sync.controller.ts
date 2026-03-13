@@ -14,13 +14,13 @@ export class ATradSyncController {
   /** GET /api/atrad/status — Last sync time, success/failure, holdings count. */
   @Get('status')
   async getStatus() {
-    return this.atradSyncService.getLastSyncStatus();
+    return await this.atradSyncService.getLastSyncStatus();
   }
 
   /** GET /api/atrad/holdings — Latest synced holdings from ATrad. */
   @Get('holdings')
   async getHoldings() {
-    return this.atradSyncService.getHoldings();
+    return await this.atradSyncService.getHoldings();
   }
 
   /** POST /api/atrad/test — Test ATrad login (validates credentials). */
