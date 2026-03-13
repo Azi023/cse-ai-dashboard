@@ -196,8 +196,8 @@ export function Header() {
   useEffect(() => {
     const fetchAspi = () => {
       marketApi.getSummary().then((res) => {
-        setAspiValue(res.data.aspi_value);
-        setAspiChange(res.data.aspi_change_percent);
+        setAspiValue(Number(res.data.aspi_value) || null);
+        setAspiChange(Number(res.data.aspi_change_percent) || null);
       }).catch(() => {});
     };
     fetchAspi();

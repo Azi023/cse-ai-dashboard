@@ -318,7 +318,7 @@ export class AiEngineService {
 
       const response = await client.messages.create({
         model: 'claude-sonnet-4-6',
-        max_tokens: 1500,
+        max_tokens: 2000,
         system: SYSTEM_PROMPTS.dailyBrief,
         messages: [
           {
@@ -366,7 +366,7 @@ export class AiEngineService {
 
       const response = await client.messages.create({
         model: 'claude-sonnet-4-6',
-        max_tokens: 1500,
+        max_tokens: 2000,
         system: SYSTEM_PROMPTS.stockAnalysis,
         messages: [
           {
@@ -408,7 +408,7 @@ export class AiEngineService {
 
       const response = await client.messages.create({
         model: 'claude-sonnet-4-6',
-        max_tokens: 1500,
+        max_tokens: 3000,
         system: systemPrompt,
         messages,
       });
