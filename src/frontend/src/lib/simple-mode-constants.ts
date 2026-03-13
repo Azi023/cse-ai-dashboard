@@ -90,13 +90,17 @@ export function getTooltip(key: string): string | undefined {
   return TOOLTIPS[key];
 }
 
-export function formatLKR(amount: number): string {
-  return `LKR ${amount.toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`;
+export function formatLKR(amount: number | string | null | undefined): string {
+  const num = Number(amount ?? 0);
+  if (isNaN(num)) return 'LKR 0';
+  return `LKR ${num.toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`;
 }
 
-export function formatPct(value: number): string {
-  const sign = value > 0 ? '+' : '';
-  return `${sign}${value.toFixed(2)}%`;
+export function formatPct(value: number | string | null | undefined): string {
+  const num = Number(value ?? 0);
+  if (isNaN(num)) return '0.00%';
+  const sign = num > 0 ? '+' : '';
+  return `${sign}${num.toFixed(2)}%`;
 }
 
 export function getGradeColor(grade: string): string {
