@@ -14,7 +14,13 @@ export class ATradSyncController {
   /** GET /api/atrad/status — Last sync time, success/failure, holdings count. */
   @Get('status')
   async getStatus() {
-    return await this.atradSyncService.getLastSyncStatus();
+    const status = await this.atradSyncService.getLastSyncStatus();
+    return {
+      ...status,
+      // Aliases for frontend compatibility
+      lastSynced: status.lastSyncTime?.toISOString() ?? null,
+      configured: status.lastSyncTime !== null,
+    };
   }
 
   /** GET /api/atrad/holdings — Latest synced holdings from ATrad. */

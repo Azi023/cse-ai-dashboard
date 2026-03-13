@@ -206,7 +206,7 @@ export default function DashboardPage() {
               }
             >
               ASPI {(summary.aspi_change_percent ?? 0) > 0 ? '+' : ''}
-              {(summary.aspi_change_percent ?? 0).toFixed(2)}%
+              {Number(summary.aspi_change_percent ?? 0).toFixed(2)}%
             </Badge>
           </div>
         )}
