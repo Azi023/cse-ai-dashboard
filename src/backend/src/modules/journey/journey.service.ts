@@ -125,14 +125,17 @@ export class JourneyService {
    */
   async getJourneyData(): Promise<
     Array<{
+      id: number;
       month: string;
-      depositAmount: number;
-      cumulativeDeposited: number;
-      portfolioValueAtDeposit: number;
+      deposit_amount: number;
+      deposit_date: Date;
+      portfolio_value_at_deposit: number;
+      cumulative_deposited: number;
+      source: string;
+      notes: string | null;
+      created_at: Date;
       profitLoss: number;
       profitLossPct: number;
-      notes: string | null;
-      depositDate: Date;
     }>
   > {
     const deposits = await this.depositRepository.find({
@@ -147,14 +150,17 @@ export class JourneyService {
         cumulative > 0 ? (profitLoss / cumulative) * 100 : 0;
 
       return {
+        id: d.id,
         month: d.month,
-        depositAmount: Number(d.deposit_amount),
-        cumulativeDeposited: cumulative,
-        portfolioValueAtDeposit: portfolioVal,
+        deposit_amount: Number(d.deposit_amount),
+        deposit_date: d.deposit_date,
+        portfolio_value_at_deposit: portfolioVal,
+        cumulative_deposited: cumulative,
+        source: d.source,
+        notes: d.notes,
+        created_at: d.created_at,
         profitLoss,
         profitLossPct,
-        notes: d.notes,
-        depositDate: d.deposit_date,
       };
     });
   }

@@ -56,6 +56,7 @@ export interface PortfolioSummary {
   total_pnl_percent: number;
   daily_change: number;
   holdings_count: number;
+  cash_balance: number;
   allocation: Array<{
     symbol: string;
     name: string;
@@ -224,14 +225,17 @@ export class PortfolioService {
       where: { is_open: true },
     });
 
+    const cashBalance = await this.getATradCashBalance();
+
     if (holdings.length === 0) {
       return {
-        total_value: 0,
+        total_value: cashBalance,
         total_invested: 0,
         total_pnl: 0,
         total_pnl_percent: 0,
         daily_change: 0,
         holdings_count: 0,
+        cash_balance: cashBalance,
         allocation: [],
         sector_allocation: [],
       };
@@ -306,12 +310,13 @@ export class PortfolioService {
       .sort((a, b) => b.value - a.value);
 
     return {
-      total_value: totalValue,
+      total_value: totalValue + cashBalance,
       total_invested: totalInvested,
       total_pnl: totalPnl,
       total_pnl_percent: totalPnlPercent,
       daily_change: dailyChange,
       holdings_count: holdings.length,
+      cash_balance: cashBalance,
       allocation,
       sector_allocation: sectorAllocation,
     };
@@ -458,6 +463,21 @@ export class PortfolioService {
       total_purification: totalPurification,
       total_dividends: totalDividends,
     };
+  }
+
+  /**
+   * Get cash balance from ATrad Redis cache.
+   */
+  private async getATradCashBalance(): Promise<number> {
+    try {
+      const cached = await this.redisService.getJson<{
+        cashBalance?: number;
+        buyingPower?: number;
+      }>('atrad:last_sync');
+      return Number(cached?.cashBalance ?? cached?.buyingPower ?? 0);
+    } catch {
+      return 0;
+    }
   }
 
   /**

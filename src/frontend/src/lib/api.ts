@@ -177,6 +177,7 @@ export interface PortfolioSummary {
   total_pnl_percent: number;
   daily_change: number;
   holdings_count: number;
+  cash_balance: number;
   allocation: Array<{
     symbol: string;
     name: string;
