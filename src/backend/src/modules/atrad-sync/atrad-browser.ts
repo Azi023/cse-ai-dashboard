@@ -177,11 +177,76 @@ async function takeScreenshot(page: Page, name: string): Promise<void> {
 //   Client menu container: #dijit_PopupMenuBarItem_4
 //   Submenu popup:         #dijit_PopupMenuBarItem_4_dropdown
 //   Portfolio item (tr):   #dijit_MenuItem_39
-//   Stock Holding (tr):    #dijit_MenuItem_40  ← primary target
-//   Account Summary (tr):  #dijit_MenuItem_41  ← fallback
+//   Stock Holding (tr):    #dijit_MenuItem_40  ← holdings data
+//   Account Summary (tr):  #dijit_MenuItem_41  ← balance data
+
+async function openClientMenu(page: Page): Promise<boolean> {
+  const clientMenuSelectors = [
+    '#dijit_PopupMenuBarItem_4',
+    '#dijit_PopupMenuBarItem_4_text',
+    'span:has-text("Client")',
+  ];
+  for (const sel of clientMenuSelectors) {
+    try {
+      const el = await page.$(sel);
+      if (el) {
+        await el.click();
+        logger.log(`Clicked Client menu using: ${sel}`);
+        try {
+          await page.waitForSelector('#dijit_PopupMenuBarItem_4_dropdown', {
+            state: 'visible',
+            timeout: 8000,
+          });
+        } catch {
+          await page.waitForTimeout(2000);
+        }
+        return true;
+      }
+    } catch { /* try next */ }
+  }
+  try {
+    await page.getByText('Client', { exact: true }).first().click();
+    await page.waitForTimeout(2000);
+    logger.log('Clicked Client menu via getByText');
+    return true;
+  } catch {
+    logger.error('Failed to click Client menu');
+    return false;
+  }
+}
+
+async function navigateToAccountSummary(page: Page): Promise<boolean> {
+  logger.log('Navigating to Account Summary...');
+  const opened = await openClientMenu(page);
+  if (!opened) return false;
+
+  const selectors = [
+    '#dijit_MenuItem_41',
+    '#dijit_MenuItem_41_text',
+    'td:has-text("Account Summary")',
+    'tr:has-text("Account Summary")',
+  ];
+  for (const sel of selectors) {
+    try {
+      const el = await page.$(sel);
+      if (el) {
+        await el.click();
+        logger.log(`Clicked Account Summary using: ${sel}`);
+        await page.waitForTimeout(5000);
+        await takeScreenshot(page, 'account-summary-nav');
+        const html = await page.content();
+        fs.writeFileSync(path.join(SCREENSHOT_DIR, 'account-summary-after-nav.html'), html);
+        logger.log('Account Summary HTML dumped after navigation');
+        return true;
+      }
+    } catch { /* try next */ }
+  }
+  logger.error('Could not navigate to Account Summary');
+  return false;
+}
 
 async function navigateToPortfolio(page: Page): Promise<boolean> {
-  // Check if a holdings grid is already visible (e.g. Stock Holding page already loaded)
+  // Check if holdings grid is already visible
   const alreadyLoaded =
     (await page.$('#_atrad_equityDiv')) !== null ||
     (await page.$('table:has(th:has-text("Qty"))')) !== null;
@@ -190,58 +255,13 @@ async function navigateToPortfolio(page: Page): Promise<boolean> {
     return true;
   }
 
-  // Step 1: Click the "Client" top-nav menu item to open the submenu
-  const clientMenuSelectors = [
-    '#dijit_PopupMenuBarItem_4',           // confirmed Dojo widget ID
-    '#dijit_PopupMenuBarItem_4_text',      // text span inside the menu item
-    'span:has-text("Client")',             // text-based fallback
-  ];
+  const opened = await openClientMenu(page);
+  if (!opened) return false;
 
-  let clientMenuClicked = false;
-  for (const sel of clientMenuSelectors) {
-    try {
-      const el = await page.$(sel);
-      if (el) {
-        await el.click();
-        logger.log(`Clicked Client menu using: ${sel}`);
-        clientMenuClicked = true;
-        break;
-      }
-    } catch {
-      // try next
-    }
-  }
-
-  if (!clientMenuClicked) {
-    logger.warn('Could not find Client menu — trying text-based approach');
-    try {
-      await page.getByText('Client', { exact: true }).first().click();
-      clientMenuClicked = true;
-      logger.log('Clicked Client menu via getByText');
-    } catch {
-      logger.error('Failed to click Client menu');
-      return false;
-    }
-  }
-
-  // Step 2: Wait for the submenu dropdown to appear
-  try {
-    await page.waitForSelector('#dijit_PopupMenuBarItem_4_dropdown', {
-      state: 'visible',
-      timeout: 8000,
-    });
-    logger.log('Client submenu dropdown appeared');
-  } catch {
-    logger.warn('Submenu dropdown not detected by ID — waiting briefly and proceeding');
-    await page.waitForTimeout(2000);
-  }
-
-  // Step 3: Click "Stock Holding" (preferred — shows equities grid with P&L)
-  //         Fall back to "Account Summary" if Stock Holding not found
   const holdingItemSelectors = [
-    '#dijit_MenuItem_40',                  // confirmed: Stock Holding tr element
-    '#dijit_MenuItem_40_text',             // td text cell inside the tr
-    'td:has-text("Stock Holding")',        // text-based
+    '#dijit_MenuItem_40',
+    '#dijit_MenuItem_40_text',
+    'td:has-text("Stock Holding")',
     'tr:has-text("Stock Holding")',
   ];
 
@@ -250,43 +270,17 @@ async function navigateToPortfolio(page: Page): Promise<boolean> {
       const el = await page.$(sel);
       if (el) {
         const text = await el.textContent();
-        if (text && /buy|sell|order|place|confirm/i.test(text)) continue; // safety
+        if (text && /buy|sell|order|place|confirm/i.test(text)) continue;
         await el.click();
         logger.log(`Clicked Stock Holding using: ${sel}`);
-        await page.waitForTimeout(4000); // Dojo loads content asynchronously
+        await page.waitForTimeout(4000);
         await takeScreenshot(page, 'stock-holding-page');
         return true;
       }
-    } catch {
-      // try next
-    }
+    } catch { /* try next */ }
   }
 
-  // Fallback: try "Account Summary"
-  logger.warn('Stock Holding item not found — trying Account Summary');
-  const accountSummarySelectors = [
-    '#dijit_MenuItem_41',                  // confirmed: Account Summary tr element
-    '#dijit_MenuItem_41_text',
-    'td:has-text("Account Summary")',
-    'tr:has-text("Account Summary")',
-  ];
-
-  for (const sel of accountSummarySelectors) {
-    try {
-      const el = await page.$(sel);
-      if (el) {
-        await el.click();
-        logger.log(`Clicked Account Summary using: ${sel}`);
-        await page.waitForTimeout(4000);
-        await takeScreenshot(page, 'account-summary-page');
-        return true;
-      }
-    } catch {
-      // try next
-    }
-  }
-
-  logger.error('Could not navigate to Stock Holding or Account Summary');
+  logger.error('Could not navigate to Stock Holding');
   return false;
 }
 
@@ -484,16 +478,23 @@ async function scrapeAccountSummary(
         })),
     );
 
+    // Sanity bound: retail account balance cannot exceed LKR 50 million
+    const MAX_RETAIL_BALANCE = 50_000_000;
+
     for (const { key, patterns } of labelPatterns) {
       for (const el of allText) {
+        // Skip elements that look like market watchlist column headers
+        if (/cash\s+in|cash\s+out|buy\s+sell|sentiment/i.test(el.text)) continue;
         for (const pattern of patterns) {
           if (pattern.test(el.text)) {
             // Try to parse the number from adjacent text
             const adjacentNumber = parseNumber(el.next) || parseNumber(el.parent.replace(el.text, ''));
-            if (adjacentNumber > 0) {
+            if (adjacentNumber > 0 && adjacentNumber < MAX_RETAIL_BALANCE) {
               result[key] = adjacentNumber;
               logger.log(`Found ${key}: ${adjacentNumber}`);
               break;
+            } else if (adjacentNumber >= MAX_RETAIL_BALANCE) {
+              logger.warn(`Skipping implausible ${key} value: ${adjacentNumber} (looks like market data, not account balance)`);
             }
           }
         }
@@ -673,10 +674,19 @@ export async function syncATradPortfolio(): Promise<ATradPortfolio> {
 
     logger.log('Login appears successful');
 
-    // ── Step 4: Navigate to portfolio/holdings ──────────────────────────
+    // ── Step 4: Navigate to Account Summary to get cash balance ────────
+    logger.log('Navigating to Account Summary for balance data...');
+    await navigateToAccountSummary(page);
+    await page.waitForTimeout(3000);
+
+    // ── Step 5: Scrape account summary (on Account Summary page) ────────
+    logger.log('Scraping account summary...');
+    const accountSummary = await scrapeAccountSummary(page);
+
+    // ── Step 6: Navigate to Stock Holding for holdings data ─────────────
     logger.log('Navigating to Stock Holding via Client menu...');
     await navigateToPortfolio(page);
-    await page.waitForTimeout(3000); // Allow Dojo to finish async data load
+    await page.waitForTimeout(3000);
     await takeScreenshot(page, 'portfolio-page');
 
     // Dump HTML after navigation for selector debugging
@@ -689,14 +699,10 @@ export async function syncATradPortfolio(): Promise<ATradPortfolio> {
       logger.warn('Failed to dump HTML after navigation');
     }
 
-    // ── Step 5: Scrape holdings data ────────────────────────────────────
+    // ── Step 7: Scrape holdings data ────────────────────────────────────
     logger.log('Scraping portfolio holdings...');
     const holdings = await scrapeHoldings(page);
     logger.log(`Found ${holdings.length} holdings`);
-
-    // ── Step 6: Scrape account summary ──────────────────────────────────
-    logger.log('Scraping account summary...');
-    const accountSummary = await scrapeAccountSummary(page);
     logger.log(
       `Account summary — Buying Power: ${accountSummary.buyingPower}, ` +
       `Account Value: ${accountSummary.accountValue}, ` +
@@ -705,7 +711,7 @@ export async function syncATradPortfolio(): Promise<ATradPortfolio> {
 
     await takeScreenshot(page, 'final-state');
 
-    // ── Step 7: Safely close browser ────────────────────────────────────
+    // ── Step 8: Safely close browser ────────────────────────────────────
     logger.log('Sync complete. Closing browser...');
     await context.close();
     await browser.close();
