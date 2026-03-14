@@ -114,7 +114,7 @@ function getValueColor(config: IndicatorDisplayConfig, value: number): string {
 }
 
 function formatValue(config: IndicatorDisplayConfig, value: number): string {
-  const formatted = value.toLocaleString('en-US', {
+  const formatted = Number(value ?? 0).toLocaleString('en-US', {
     minimumFractionDigits: config.decimals,
     maximumFractionDigits: config.decimals,
   });

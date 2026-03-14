@@ -134,7 +134,7 @@ function getChangeColor(
 }
 
 function formatValue(prefix: string, value: number, decimals: number): string {
-  const formatted = value.toLocaleString('en-US', {
+  const formatted = Number(value ?? 0).toLocaleString('en-US', {
     minimumFractionDigits: decimals,
     maximumFractionDigits: decimals,
   });
@@ -315,7 +315,7 @@ export function GlobalIndicatorsCard() {
                 </div>
                 <div className={cn('text-xs', changeColor)}>
                   {data.changePercent > 0 ? '+' : ''}
-                  {data.changePercent.toFixed(2)}%
+                  {Number(data.changePercent ?? 0).toFixed(2)}%
                 </div>
               </div>
             );

@@ -21,6 +21,7 @@ import {
   type ShariahStats,
 } from '@/lib/api';
 import { ShieldCheck, ShieldX, ShieldAlert, Shield } from 'lucide-react';
+import { safeNum } from '@/lib/format';
 
 export default function ShariahPage() {
   const [stats, setStats] = useState<ShariahStats | null>(null);
@@ -272,7 +273,7 @@ function StockTable({
               {stock.sector ?? '—'}
             </TableCell>
             <TableCell className="text-right">
-              {stock.last_price != null ? stock.last_price.toFixed(2) : '—'}
+              {stock.last_price != null ? safeNum(stock.last_price).toFixed(2) : '—'}
             </TableCell>
             <TableCell className="text-right">
               {stock.change_percent != null ? (
@@ -286,7 +287,7 @@ function StockTable({
                   }
                 >
                   {stock.change_percent > 0 ? '+' : ''}
-                  {stock.change_percent.toFixed(2)}%
+                  {safeNum(stock.change_percent).toFixed(2)}%
                 </span>
               ) : (
                 '—'
@@ -354,7 +355,7 @@ function NonCompliantTable({
               {stock.sector ?? '—'}
             </TableCell>
             <TableCell className="text-right">
-              {stock.last_price != null ? stock.last_price.toFixed(2) : '—'}
+              {stock.last_price != null ? safeNum(stock.last_price).toFixed(2) : '—'}
             </TableCell>
             <TableCell className="text-right">
               {stock.change_percent != null ? (
@@ -368,7 +369,7 @@ function NonCompliantTable({
                   }
                 >
                   {stock.change_percent > 0 ? '+' : ''}
-                  {stock.change_percent.toFixed(2)}%
+                  {safeNum(stock.change_percent).toFixed(2)}%
                 </span>
               ) : (
                 '—'

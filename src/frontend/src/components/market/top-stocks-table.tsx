@@ -4,6 +4,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
 import Link from 'next/link';
+import { safeNum, fmt2, fmt0 } from '@/lib/format';
 
 interface TopStock {
   symbol: string;
@@ -62,20 +63,20 @@ export function TopStocksTable({ stocks, loading, type }: TopStocksTableProps) {
               </Link>
             </TableCell>
             <TableCell className="text-right">
-              {(stock.price ?? 0).toFixed(2)}
+              {fmt2(stock.price)}
             </TableCell>
             <TableCell className={cn(
               'text-right',
-              (stock.change ?? 0) > 0 ? 'text-green-500' : (stock.change ?? 0) < 0 ? 'text-red-500' : ''
+              safeNum(stock.change) > 0 ? 'text-green-500' : safeNum(stock.change) < 0 ? 'text-red-500' : ''
             )}>
-              {(stock.change ?? 0) > 0 ? '+' : ''}{(stock.change ?? 0).toFixed(2)}
+              {safeNum(stock.change) > 0 ? '+' : ''}{fmt2(stock.change)}
             </TableCell>
             <TableCell className="text-right">
               {type === 'active'
-                ? (stock.volume ?? 0).toLocaleString()
+                ? fmt0(stock.volume)
                 : (
-                  <Badge variant={(stock.changePercentage ?? 0) > 0 ? 'default' : 'destructive'} className="ml-auto">
-                    {(stock.changePercentage ?? 0) > 0 ? '+' : ''}{(stock.changePercentage ?? 0).toFixed(2)}%
+                  <Badge variant={safeNum(stock.changePercentage) > 0 ? 'default' : 'destructive'} className="ml-auto">
+                    {safeNum(stock.changePercentage) > 0 ? '+' : ''}{fmt2(stock.changePercentage)}%
                   </Badge>
                 )
               }

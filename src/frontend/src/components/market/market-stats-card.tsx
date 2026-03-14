@@ -2,6 +2,7 @@
 
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { BarChart3 } from 'lucide-react';
+import { safeNum } from '@/lib/format';
 
 interface MarketStatsCardProps {
   volume: number | null;
@@ -12,10 +13,11 @@ interface MarketStatsCardProps {
 
 function formatNumber(num: number | null): string {
   if (num === null) return '\u2014';
-  if (num >= 1_000_000_000) return `${(num / 1_000_000_000).toFixed(2)}B`;
-  if (num >= 1_000_000) return `${(num / 1_000_000).toFixed(2)}M`;
-  if (num >= 1_000) return `${(num / 1_000).toFixed(2)}K`;
-  return num.toLocaleString();
+  const n = safeNum(num);
+  if (n >= 1_000_000_000) return `${(n / 1_000_000_000).toFixed(2)}B`;
+  if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(2)}M`;
+  if (n >= 1_000) return `${(n / 1_000).toFixed(2)}K`;
+  return n.toLocaleString();
 }
 
 export function MarketStatsCard({ volume, turnover, trades, loading }: MarketStatsCardProps) {

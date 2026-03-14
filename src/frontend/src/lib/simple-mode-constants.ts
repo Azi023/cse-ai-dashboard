@@ -1,6 +1,8 @@
 // Simple Mode language replacements and tooltips
 // Used when Simple Mode is ON to replace technical jargon with plain language
 
+import { safeNum } from './format';
+
 export const SIMPLE_LANGUAGE: Record<string, string> = {
   // Market Terms
   'ASPI': 'Market Index (overall market health)',
@@ -91,14 +93,12 @@ export function getTooltip(key: string): string | undefined {
 }
 
 export function formatLKR(amount: number | string | null | undefined): string {
-  const num = Number(amount ?? 0);
-  if (isNaN(num)) return 'LKR 0';
+  const num = safeNum(amount);
   return `LKR ${num.toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`;
 }
 
 export function formatPct(value: number | string | null | undefined): string {
-  const num = Number(value ?? 0);
-  if (isNaN(num)) return '0.00%';
+  const num = safeNum(value);
   const sign = num > 0 ? '+' : '';
   return `${sign}${num.toFixed(2)}%`;
 }

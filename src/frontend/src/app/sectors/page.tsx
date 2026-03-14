@@ -7,12 +7,14 @@ import { stocksApi, marketApi, type SectorBreakdown, type SectorIndex } from '@/
 import { BarChart3, TrendingUp, TrendingDown, ChevronDown, ChevronUp } from 'lucide-react';
 import Link from 'next/link';
 import { useDisplayMode } from '@/contexts/display-mode-context';
+import { safeNum } from '@/lib/format';
 
 function formatMarketCap(mcap: number): string {
-  if (mcap >= 1_000_000_000_000) return `Rs. ${(mcap / 1_000_000_000_000).toFixed(1)}T`;
-  if (mcap >= 1_000_000_000) return `Rs. ${(mcap / 1_000_000_000).toFixed(1)}B`;
-  if (mcap >= 1_000_000) return `Rs. ${(mcap / 1_000_000).toFixed(1)}M`;
-  return `Rs. ${mcap.toLocaleString()}`;
+  const n = safeNum(mcap);
+  if (n >= 1_000_000_000_000) return `Rs. ${(n / 1_000_000_000_000).toFixed(1)}T`;
+  if (n >= 1_000_000_000) return `Rs. ${(n / 1_000_000_000).toFixed(1)}B`;
+  if (n >= 1_000_000) return `Rs. ${(n / 1_000_000).toFixed(1)}M`;
+  return `Rs. ${n.toLocaleString()}`;
 }
 
 export default function SectorsPage() {
@@ -66,7 +68,7 @@ export default function SectorsPage() {
               {[...sectorIndices]
                 .sort((a, b) => b.percentage - a.percentage)
                 .map((idx) => {
-                  const pct = idx.percentage;
+                  const pct = safeNum(idx.percentage);
                   return (
                     <div
                       key={idx.name}
@@ -82,14 +84,14 @@ export default function SectorsPage() {
                         {idx.name}
                       </div>
                       <div className="text-sm font-semibold mt-0.5">
-                        {idx.indexValue?.toFixed(2)}
+                        {idx.indexValue != null ? safeNum(idx.indexValue).toFixed(2) : '\u2014'}
                       </div>
                       <div
                         className={`text-xs font-medium ${
                           pct > 0 ? 'text-green-500' : pct < 0 ? 'text-red-500' : 'text-muted-foreground'
                         }`}
                       >
-                        {pct > 0 ? '+' : ''}{pct.toFixed(2)}%
+                        {pct > 0 ? '+' : ''}{safeNum(pct).toFixed(2)}%
                       </div>
                     </div>
                   );
@@ -136,7 +138,7 @@ export default function SectorsPage() {
                     <div className="text-right">
                       {index && (
                         <div className="text-sm font-medium">
-                          {index.indexValue?.toFixed(2)}
+                          {index.indexValue != null ? safeNum(index.indexValue).toFixed(2) : '\u2014'}
                         </div>
                       )}
                       <div
@@ -153,8 +155,8 @@ export default function SectorsPage() {
                         ) : sector.avgChangePercent < 0 ? (
                           <TrendingDown className="h-3 w-3" />
                         ) : null}
-                        {sector.avgChangePercent > 0 ? '+' : ''}
-                        {sector.avgChangePercent.toFixed(2)}%
+                        {safeNum(sector.avgChangePercent) > 0 ? '+' : ''}
+                        {safeNum(sector.avgChangePercent).toFixed(2)}%
                       </div>
                     </div>
                   </div>
@@ -191,7 +193,7 @@ export default function SectorsPage() {
                             </div>
                             <div className="flex items-center gap-4">
                               <span className="text-sm font-medium">
-                                Rs. {stock.last_price.toFixed(2)}
+                                Rs. {safeNum(stock.last_price).toFixed(2)}
                               </span>
                               <span
                                 className={`text-xs font-medium ${
@@ -202,8 +204,8 @@ export default function SectorsPage() {
                                       : 'text-muted-foreground'
                                 }`}
                               >
-                                {stock.change_percent > 0 ? '+' : ''}
-                                {stock.change_percent.toFixed(2)}%
+                                {safeNum(stock.change_percent) > 0 ? '+' : ''}
+                                {safeNum(stock.change_percent).toFixed(2)}%
                               </span>
                             </div>
                           </div>

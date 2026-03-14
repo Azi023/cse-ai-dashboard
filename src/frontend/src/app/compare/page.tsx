@@ -5,6 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { stocksApi, type Stock, type StockPrice } from '@/lib/api';
 import { Search, X, Plus, Shield, ShieldAlert, ShieldQuestion } from 'lucide-react';
+import { safeNum } from '@/lib/format';
 import Link from 'next/link';
 
 const CHART_COLORS = ['#22c55e', '#3b82f6', '#f59e0b', '#ef4444'];
@@ -260,7 +261,7 @@ export default function ComparePage() {
                             }`}
                           >
                             {performance >= 0 ? '+' : ''}
-                            {performance.toFixed(2)}%
+                            {safeNum(performance).toFixed(2)}%
                           </span>
                         </div>
                       </div>
@@ -303,7 +304,7 @@ export default function ComparePage() {
                         <td className="px-3 py-2 text-muted-foreground">Price</td>
                         {metrics.map((m) => (
                           <td key={m.symbol} className="px-3 py-2 text-right font-medium">
-                            {m.price ? `Rs. ${m.price.toFixed(2)}` : '--'}
+                            {m.price ? `Rs. ${safeNum(m.price).toFixed(2)}` : '--'}
                           </td>
                         ))}
                       </tr>
@@ -316,7 +317,7 @@ export default function ComparePage() {
                               (m.change ?? 0) > 0 ? 'text-green-500' : (m.change ?? 0) < 0 ? 'text-red-500' : ''
                             }`}
                           >
-                            {m.change != null ? `${m.change > 0 ? '+' : ''}${m.change.toFixed(2)}%` : '--'}
+                            {m.change != null ? `${safeNum(m.change) > 0 ? '+' : ''}${safeNum(m.change).toFixed(2)}%` : '--'}
                           </td>
                         ))}
                       </tr>
@@ -324,7 +325,7 @@ export default function ComparePage() {
                         <td className="px-3 py-2 text-muted-foreground">Market Cap</td>
                         {metrics.map((m) => (
                           <td key={m.symbol} className="px-3 py-2 text-right">
-                            {m.marketCap ? `Rs. ${(m.marketCap / 1e9).toFixed(2)}B` : '--'}
+                            {m.marketCap ? `Rs. ${(safeNum(m.marketCap) / 1e9).toFixed(2)}B` : '--'}
                           </td>
                         ))}
                       </tr>
@@ -340,7 +341,7 @@ export default function ComparePage() {
                         <td className="px-3 py-2 text-muted-foreground">Beta</td>
                         {metrics.map((m) => (
                           <td key={m.symbol} className="px-3 py-2 text-right">
-                            {m.beta != null ? m.beta.toFixed(2) : '--'}
+                            {m.beta != null ? safeNum(m.beta).toFixed(2) : '--'}
                           </td>
                         ))}
                       </tr>
@@ -348,7 +349,7 @@ export default function ComparePage() {
                         <td className="px-3 py-2 text-muted-foreground">Period High</td>
                         {metrics.map((m) => (
                           <td key={m.symbol} className="px-3 py-2 text-right">
-                            {m.periodHigh ? `Rs. ${m.periodHigh.toFixed(2)}` : '--'}
+                            {m.periodHigh ? `Rs. ${safeNum(m.periodHigh).toFixed(2)}` : '--'}
                           </td>
                         ))}
                       </tr>
@@ -356,7 +357,7 @@ export default function ComparePage() {
                         <td className="px-3 py-2 text-muted-foreground">Period Low</td>
                         {metrics.map((m) => (
                           <td key={m.symbol} className="px-3 py-2 text-right">
-                            {m.periodLow ? `Rs. ${m.periodLow.toFixed(2)}` : '--'}
+                            {m.periodLow ? `Rs. ${safeNum(m.periodLow).toFixed(2)}` : '--'}
                           </td>
                         ))}
                       </tr>
@@ -364,7 +365,7 @@ export default function ComparePage() {
                         <td className="px-3 py-2 text-muted-foreground">Avg Volume</td>
                         {metrics.map((m) => (
                           <td key={m.symbol} className="px-3 py-2 text-right">
-                            {m.avgVolume ? m.avgVolume.toLocaleString() : '--'}
+                            {m.avgVolume ? safeNum(m.avgVolume).toLocaleString() : '--'}
                           </td>
                         ))}
                       </tr>

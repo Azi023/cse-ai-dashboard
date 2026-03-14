@@ -38,6 +38,7 @@ import {
   RefreshCw,
   Loader2,
 } from 'lucide-react';
+import { safeNum } from '@/lib/format';
 
 export default function PortfolioPage() {
   const [holdings, setHoldings] = useState<PortfolioHolding[]>([]);
@@ -296,7 +297,7 @@ export default function PortfolioPage() {
                       </TableCell>
                       <TableCell className="text-right">
                         {h.allocation_percent != null
-                          ? h.allocation_percent.toFixed(1) + '%'
+                          ? safeNum(h.allocation_percent).toFixed(1) + '%'
                           : '—'}
                       </TableCell>
                       <TableCell>
@@ -375,7 +376,7 @@ export default function PortfolioPage() {
                 {shariahSummary.pending_count} Pending
               </span>
               <span className="text-muted-foreground">
-                {shariahSummary.compliant_percent.toFixed(1)}% of portfolio
+                {safeNum(shariahSummary.compliant_percent).toFixed(1)}% of portfolio
                 value is Shariah compliant
               </span>
             </div>
@@ -415,9 +416,10 @@ function SummaryCard({
   emptyLabel?: string;
 }) {
   const formatValue = (v: number) => {
-    if (format === 'percent') return v.toFixed(1) + '%';
-    const prefix = format === 'pnl' ? (v >= 0 ? '+' : '') : '';
-    return prefix + 'LKR ' + v.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    const n = safeNum(v);
+    if (format === 'percent') return n.toFixed(1) + '%';
+    const prefix = format === 'pnl' ? (n >= 0 ? '+' : '') : '';
+    return prefix + 'LKR ' + n.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
   };
 
   const colorClass =
@@ -449,7 +451,7 @@ function SummaryCard({
                 className={`text-xs ${percent >= 0 ? 'text-green-500' : 'text-red-500'}`}
               >
                 {percent >= 0 ? '+' : ''}
-                {percent.toFixed(2)}%
+                {safeNum(percent).toFixed(2)}%
               </p>
             )}
           </div>
@@ -471,7 +473,7 @@ function PnLValue({
   return (
     <span className={color}>
       {value > 0 ? '+' : ''}
-      {value.toFixed(2)}
+      {safeNum(value).toFixed(2)}
       {suffix}
     </span>
   );
@@ -536,7 +538,7 @@ function AllocationCard({
               key={item.label}
               className={`${colors[i % colors.length]}`}
               style={{ width: `${item.percent}%` }}
-              title={`${item.label}: ${item.percent.toFixed(1)}%`}
+              title={`${item.label}: ${safeNum(item.percent).toFixed(1)}%`}
             />
           ))}
         </div>
@@ -551,7 +553,7 @@ function AllocationCard({
                 <span className="truncate max-w-[150px]">{item.label}</span>
               </div>
               <span className="text-muted-foreground">
-                {item.percent.toFixed(1)}%
+                {safeNum(item.percent).toFixed(1)}%
               </span>
             </div>
           ))}
@@ -701,7 +703,7 @@ function PurificationSection({
   const startEdit = (h: PortfolioHolding) => {
     setEditingSymbol(h.symbol);
     setDividends(String(h.dividends_received));
-    setRate(String((h.purification_rate * 100).toFixed(2)));
+    setRate(String((safeNum(h.purification_rate) * 100).toFixed(2)));
   };
 
   const handleSave = async (holdingId: number) => {
@@ -739,7 +741,7 @@ function PurificationSection({
             </p>
             <p className="text-2xl font-bold text-pink-500">
               LKR{' '}
-              {totalPurification.toLocaleString('en-US', {
+              {safeNum(totalPurification).toLocaleString('en-US', {
                 minimumFractionDigits: 2,
                 maximumFractionDigits: 2,
               })}
@@ -748,7 +750,7 @@ function PurificationSection({
           <div className="text-right text-sm text-muted-foreground">
             <p>
               Total Dividends: LKR{' '}
-              {(purification?.total_dividends ?? 0).toLocaleString('en-US', {
+              {safeNum(purification?.total_dividends).toLocaleString('en-US', {
                 minimumFractionDigits: 2,
                 maximumFractionDigits: 2,
               })}
@@ -819,7 +821,7 @@ function PurificationSection({
                     )}
                   </TableCell>
                   <TableCell className="text-right text-pink-500">
-                    {purAmount.toFixed(2)}
+                    {safeNum(purAmount).toFixed(2)}
                   </TableCell>
                   <TableCell className="text-right">
                     {isEditing ? (

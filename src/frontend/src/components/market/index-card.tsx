@@ -3,6 +3,7 @@
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { TrendingUp, TrendingDown, Minus } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { safeNum, fmt2 } from '@/lib/format';
 
 interface IndexCardProps {
   title: string;
@@ -27,8 +28,8 @@ export function IndexCard({ title, value, change, changePercent, loading }: Inde
     );
   }
 
-  const isPositive = (change ?? 0) > 0;
-  const isNeutral = (change ?? 0) === 0;
+  const isPositive = safeNum(change) > 0;
+  const isNeutral = safeNum(change) === 0;
 
   return (
     <Card>
@@ -37,15 +38,15 @@ export function IndexCard({ title, value, change, changePercent, loading }: Inde
       </CardHeader>
       <CardContent>
         <div className="text-2xl font-bold">
-          {value?.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) ?? '\u2014'}
+          {value != null ? safeNum(value).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '\u2014'}
         </div>
         <div className={cn(
           'flex items-center gap-1 text-sm',
           isPositive ? 'text-green-600' : isNeutral ? 'text-muted-foreground' : 'text-red-600'
         )}>
           {isPositive ? <TrendingUp className="h-3 w-3" /> : isNeutral ? <Minus className="h-3 w-3" /> : <TrendingDown className="h-3 w-3" />}
-          <span>{isPositive ? '+' : ''}{change?.toFixed(2) ?? '0.00'}</span>
-          <span>({isPositive ? '+' : ''}{changePercent?.toFixed(2) ?? '0.00'}%)</span>
+          <span>{isPositive ? '+' : ''}{fmt2(change)}</span>
+          <span>({isPositive ? '+' : ''}{fmt2(changePercent)}%)</span>
         </div>
       </CardContent>
     </Card>

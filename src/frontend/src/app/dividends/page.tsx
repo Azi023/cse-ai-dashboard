@@ -10,6 +10,7 @@ import {
   type PortfolioDividendIncome,
 } from '@/lib/api';
 import { CalendarDays, DollarSign, Plus, Trash2 } from 'lucide-react';
+import { safeNum } from '@/lib/format';
 
 function formatDate(dateStr: string | null): string {
   if (!dateStr) return '--';
@@ -269,7 +270,7 @@ export default function DividendsPage() {
                 <CardTitle className="text-sm">Portfolio Dividend Income</CardTitle>
                 {portfolioIncome && (
                   <Badge variant="outline" className="text-sm">
-                    Total: Rs. {portfolioIncome.total_portfolio_income.toLocaleString()}
+                    Total: Rs. {safeNum(portfolioIncome.total_portfolio_income).toLocaleString()}
                   </Badge>
                 )}
               </div>
@@ -288,7 +289,7 @@ export default function DividendsPage() {
                       <div className="flex items-center justify-between mb-2">
                         <span className="font-medium text-sm">{h.symbol}</span>
                         <span className="text-sm font-medium text-green-500">
-                          Rs. {h.total_income.toLocaleString()}
+                          Rs. {safeNum(h.total_income).toLocaleString()}
                         </span>
                       </div>
                       <div className="text-xs text-muted-foreground">

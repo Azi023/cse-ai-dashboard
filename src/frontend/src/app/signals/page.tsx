@@ -18,6 +18,7 @@ import Link from 'next/link';
 import { format } from 'date-fns';
 import { useDisplayMode } from '@/contexts/display-mode-context';
 import { getSimpleLabel } from '@/lib/simple-mode-constants';
+import { safeNum } from '@/lib/format';
 
 const directionConfig = {
   BUY: { icon: TrendingUp, color: 'text-green-500', bg: 'bg-green-500/10', label: 'Buy Signal' },
@@ -206,7 +207,7 @@ export default function SignalsPage() {
                     </div>
                     <div className="text-right">
                       <div className="font-semibold">
-                        LKR {signal.currentPrice.toFixed(2)}
+                        LKR {safeNum(signal.currentPrice).toFixed(2)}
                       </div>
                       <Badge variant="outline" className={cfg.color}>
                         {cfg.label}

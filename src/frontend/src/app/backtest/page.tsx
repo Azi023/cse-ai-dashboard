@@ -10,6 +10,7 @@ import {
 } from '@/lib/api';
 import { FlaskConical, TrendingUp, TrendingDown, Loader2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { safeNum } from '@/lib/format';
 
 function StatBox({
   label,
@@ -217,7 +218,7 @@ export default function BacktestPage() {
           <div className="grid gap-3 grid-cols-2 sm:grid-cols-3 lg:grid-cols-6">
             <StatBox
               label="Final Capital"
-              value={`LKR ${result.finalCapital.toLocaleString()}`}
+              value={`LKR ${safeNum(result.finalCapital).toLocaleString()}`}
               color={result.totalReturn >= 0 ? 'text-green-500' : 'text-red-500'}
             />
             <StatBox
@@ -340,7 +341,7 @@ export default function BacktestPage() {
                             </Badge>
                           </td>
                           <td className="px-3 py-2 text-right font-mono">
-                            {trade.price.toFixed(2)}
+                            {safeNum(trade.price).toFixed(2)}
                           </td>
                           <td className="px-3 py-2 text-right">{trade.quantity}</td>
                           <td className="px-3 py-2 text-xs text-muted-foreground max-w-[300px] truncate">

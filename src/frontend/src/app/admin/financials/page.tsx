@@ -33,6 +33,7 @@ import {
   TrendingUp,
   X,
 } from 'lucide-react';
+import { safeNum } from '@/lib/format';
 
 const QUARTERS = ['Q1', 'Q2', 'Q3', 'Q4', 'ANNUAL'] as const;
 
@@ -374,7 +375,7 @@ export default function AdminFinancialsPage() {
               <Skeleton className="h-8 w-16" />
             ) : (
               <div className="text-2xl font-bold text-blue-500">
-                {(coverage?.coverage_percent ?? 0).toFixed(1)}%
+                {safeNum(coverage?.coverage_percent).toFixed(1)}%
               </div>
             )}
           </CardContent>
@@ -899,7 +900,7 @@ function FinancialField({
 
 function formatNum(value: number | null): string {
   if (value == null) return '--';
-  const num = Number(value);
+  const num = safeNum(value);
   if (Math.abs(num) >= 1_000_000_000) {
     return (num / 1_000_000_000).toFixed(2) + 'B';
   }

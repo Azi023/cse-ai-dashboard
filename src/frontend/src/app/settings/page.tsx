@@ -19,6 +19,7 @@ import {
 } from 'lucide-react';
 import { atradApi, aiApi, type ATradSyncStatus, type AiStatus } from '@/lib/api';
 import { useDisplayMode } from '@/contexts/display-mode-context';
+import { safeNum } from '@/lib/format';
 
 const PROFILE_KEY = 'cse_investment_profile';
 
@@ -162,7 +163,7 @@ export default function SettingsPage() {
 
             <p className="text-sm text-muted-foreground">
               Holdings: {atradStatus.holdingsCount} stocks &middot; Buying Power: LKR{' '}
-              {atradStatus.buyingPower.toLocaleString()}
+              {safeNum(atradStatus.buyingPower).toLocaleString()}
             </p>
 
             <p className="text-sm text-muted-foreground">
@@ -425,7 +426,7 @@ export default function SettingsPage() {
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-sm">
             <div className="rounded-lg bg-muted/30 p-3">
               <p className="text-xs text-muted-foreground">Monthly Contribution</p>
-              <p className="font-medium mt-0.5">LKR {profile.monthlyContribution.toLocaleString()}</p>
+              <p className="font-medium mt-0.5">LKR {safeNum(profile.monthlyContribution).toLocaleString()}</p>
             </div>
             <div className="rounded-lg bg-muted/30 p-3">
               <p className="text-xs text-muted-foreground">Strategy</p>

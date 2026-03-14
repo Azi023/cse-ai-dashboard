@@ -31,6 +31,7 @@ import Link from 'next/link';
 import ReactMarkdown from 'react-markdown';
 import { cn } from '@/lib/utils';
 import { format } from 'date-fns';
+import { safeNum } from '@/lib/format';
 
 const PERIODS = [
   { label: '1W', days: 7 },
@@ -192,7 +193,7 @@ export default function StockDetailPage() {
         </div>
         <div className="text-right">
           <div className="text-3xl font-bold">
-            LKR {price ? price.toFixed(2) : '\u2014'}
+            LKR {price ? safeNum(price).toFixed(2) : '\u2014'}
           </div>
           <div
             className={cn(
@@ -201,7 +202,7 @@ export default function StockDetailPage() {
             )}
           >
             {isPositive ? '+' : ''}
-            {change.toFixed(2)}%
+            {safeNum(change).toFixed(2)}%
           </div>
         </div>
       </div>
@@ -211,15 +212,15 @@ export default function StockDetailPage() {
       {/* Key Metrics Grid */}
       <div className="grid gap-3 grid-cols-2 sm:grid-cols-3 lg:grid-cols-6">
         {[
-          { label: 'Price', value: price ? `LKR ${price.toFixed(2)}` : '\u2014' },
+          { label: 'Price', value: price ? `LKR ${safeNum(price).toFixed(2)}` : '\u2014' },
           {
             label: 'Change %',
-            value: `${change > 0 ? '+' : ''}${change.toFixed(2)}%`,
-            color: change > 0 ? 'text-green-500' : change < 0 ? 'text-red-500' : undefined,
+            value: `${safeNum(change) > 0 ? '+' : ''}${safeNum(change).toFixed(2)}%`,
+            color: safeNum(change) > 0 ? 'text-green-500' : safeNum(change) < 0 ? 'text-red-500' : undefined,
           },
           {
             label: 'Market Cap',
-            value: mcap > 0 ? `LKR ${(mcap / 1_000_000_000).toFixed(2)}B` : '\u2014',
+            value: safeNum(mcap) > 0 ? `LKR ${(safeNum(mcap) / 1_000_000_000).toFixed(2)}B` : '\u2014',
           },
           { label: 'Beta', value: stock.beta ? Number(stock.beta).toFixed(2) : '\u2014' },
           { label: 'Sector', value: stock.sector ?? '\u2014' },
@@ -457,8 +458,8 @@ export default function StockDetailPage() {
               <div className="flex justify-between">
                 <span className="text-muted-foreground">Market Cap</span>
                 <span>
-                  {mcap > 0
-                    ? `LKR ${(mcap / 1_000_000_000).toFixed(2)}B`
+                  {safeNum(mcap) > 0
+                    ? `LKR ${(safeNum(mcap) / 1_000_000_000).toFixed(2)}B`
                     : '\u2014'}
                 </span>
               </div>

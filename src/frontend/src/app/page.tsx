@@ -41,6 +41,7 @@ import {
 import Link from 'next/link';
 import { useDisplayMode } from '@/contexts/display-mode-context';
 import { getSimpleLabel } from '@/lib/simple-mode-constants';
+import { safeNum } from '@/lib/format';
 
 function useWatchlist() {
   const [watchlist, setWatchlist] = useState<string[]>([]);
@@ -398,7 +399,7 @@ export default function DashboardPage() {
                                 change > 0 ? 'text-green-500' : change < 0 ? 'text-red-500' : 'text-muted-foreground'
                               }`}
                             >
-                              {change > 0 ? '+' : ''}{change.toFixed(2)}%
+                              {change > 0 ? '+' : ''}{safeNum(change).toFixed(2)}%
                             </span>
                           </div>
                         </div>
@@ -532,7 +533,7 @@ export default function DashboardPage() {
                         pct > 0 ? 'text-green-500' : pct < 0 ? 'text-red-500' : 'text-muted-foreground'
                       }`}
                     >
-                      {pct > 0 ? '+' : ''}{sector.percentage?.toFixed(2)}%
+                      {pct > 0 ? '+' : ''}{safeNum(sector.percentage).toFixed(2)}%
                     </span>
                   </div>
                 );
