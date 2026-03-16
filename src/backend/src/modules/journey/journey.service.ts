@@ -242,9 +242,7 @@ export class JourneyService {
     const monthsInvested = deposits.length;
 
     // Positive months
-    const positiveMonths = monthlyReturns.filter(
-      (m) => m.returnPct > 0,
-    ).length;
+    const positiveMonths = monthlyReturns.filter((m) => m.returnPct > 0).length;
 
     // Consecutive deposit streak (from most recent)
     const consecutiveDeposits = this.calculateDepositStreak(deposits);
@@ -295,8 +293,9 @@ export class JourneyService {
     Array<{
       id: number;
       label: string | null;
-      targetAmount: number;
-      targetDate: Date | null;
+      target_amount: number;
+      target_date: Date | null;
+      is_active: boolean;
       currentProgress: number;
       progressPercent: number;
       estimatedCompletionDate: string | null;
@@ -307,7 +306,6 @@ export class JourneyService {
         label: string;
         reached: boolean;
       }>;
-      createdAt: Date;
     }>
   > {
     const goals = await this.goalRepository.find({
@@ -385,15 +383,15 @@ export class JourneyService {
       return {
         id: goal.id,
         label: goal.label,
-        targetAmount,
-        targetDate: goal.target_date,
+        target_amount: targetAmount,
+        target_date: goal.target_date,
+        is_active: goal.is_active,
         currentProgress: currentValue,
         progressPercent,
         estimatedCompletionDate,
         monthlyDepositNeeded,
         onTrack,
         milestones,
-        createdAt: goal.created_at,
       };
     });
   }
@@ -529,8 +527,8 @@ export class JourneyService {
     const cached = await this.redisService.getJson<{
       reqTradeSummery?: Array<{
         symbol?: string;
-        lastTradedPrice?: number;
-        priceChange?: number;
+        price?: number;
+        change?: number;
       }>;
     }>('cse:trade_summary');
 
@@ -538,8 +536,8 @@ export class JourneyService {
     for (const t of trades) {
       if (t.symbol) {
         map.set(t.symbol, {
-          price: t.lastTradedPrice ?? 0,
-          change: t.priceChange ?? 0,
+          price: t.price ?? 0,
+          change: t.change ?? 0,
         });
       }
     }
@@ -586,9 +584,9 @@ export class JourneyService {
     if (deposits.length === 0) return 0;
 
     // Get unique months sorted descending
-    const months = [
-      ...new Set(deposits.map((d) => d.month)),
-    ].sort((a, b) => b.localeCompare(a));
+    const months = [...new Set(deposits.map((d) => d.month))].sort((a, b) =>
+      b.localeCompare(a),
+    );
 
     let streak = 0;
     const now = new Date();
@@ -802,10 +800,7 @@ export class JourneyService {
       const price = trade?.price ?? Number(h.buy_price);
       const value = Number(h.quantity) * price;
       totalValue += value;
-      valueBySymbol.set(
-        h.symbol,
-        (valueBySymbol.get(h.symbol) ?? 0) + value,
-      );
+      valueBySymbol.set(h.symbol, (valueBySymbol.get(h.symbol) ?? 0) + value);
     }
 
     let hhi = 0;

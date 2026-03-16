@@ -53,3 +53,4 @@ data/cbsl-macro/*.xlsx
 data/cse-historical/*.csv
 data/ai-generated/
 data/atrad-sync/
+data/tracking/

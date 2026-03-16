@@ -51,24 +51,25 @@ export interface TradingSignal {
 // Redis cache keys
 const CACHE_KEYS = {
   DAILY_BRIEF: 'ai:daily-brief:cache',
-  stockAnalysis: (symbol: string) => `ai:stock-analysis:${symbol.toUpperCase()}`,
+  stockAnalysis: (symbol: string) =>
+    `ai:stock-analysis:${symbol.toUpperCase()}`,
   SIGNALS: 'ai:signals:cache',
 };
 
 // Cache TTLs in seconds
 const TTL = {
-  DAILY_BRIEF: 4 * 3600,    // 4 hours
+  DAILY_BRIEF: 4 * 3600, // 4 hours
   STOCK_ANALYSIS: 2 * 3600, // 2 hours
-  SIGNALS: 20 * 3600,        // 20 hours — generated once at EOD (2:30 PM), valid until next EOD
+  SIGNALS: 20 * 3600, // 20 hours — generated once at EOD (2:30 PM), valid until next EOD
 };
 
 // Rate limits: max calls per hour (after cache miss)
 // daily-brief is low because the 4h Redis cache handles repeated requests
 const RATE_LIMITS: Record<string, number> = {
   'daily-brief': 1,
-  'analyze': 20,
-  'chat': 30,
-  'signals': 6,
+  analyze: 20,
+  chat: 30,
+  signals: 6,
 };
 
 const MAX_CHAT_HISTORY = 10;
@@ -89,8 +90,16 @@ export class AiEngineService {
   ) {
     const apiKey = this.configService.get<string>('ANTHROPIC_API_KEY');
     this.isLive = !!apiKey && apiKey.length > 0;
-    this.aiContentDir = path.resolve(process.cwd(), '..', '..', 'data', 'ai-generated');
-    this.logger.log(`AI Engine initialized in ${this.isLive ? 'LIVE' : 'MOCK'} mode`);
+    this.aiContentDir = path.resolve(
+      process.cwd(),
+      '..',
+      '..',
+      'data',
+      'ai-generated',
+    );
+    this.logger.log(
+      `AI Engine initialized in ${this.isLive ? 'LIVE' : 'MOCK'} mode`,
+    );
     this.logger.log(`AI content directory: ${this.aiContentDir}`);
   }
 
@@ -106,7 +115,9 @@ export class AiEngineService {
 
     if (recent.length >= maxCalls) {
       this.rateLimiter.set(endpoint, recent);
-      this.logger.warn(`Rate limit reached for ${endpoint}: ${recent.length}/${maxCalls} calls/hr`);
+      this.logger.warn(
+        `Rate limit reached for ${endpoint}: ${recent.length}/${maxCalls} calls/hr`,
+      );
       return true; // rate limited
     }
 
@@ -147,12 +158,16 @@ export class AiEngineService {
   async getDailyBrief(forceRefresh = false): Promise<DailyBrief> {
     // 1. Check file-based pre-generated content (always takes priority)
     const dateStr = this.getTodayDateStr();
-    const saved = this.loadSavedContent<DailyBrief>(`daily-brief-${dateStr}.json`);
+    const saved = this.loadSavedContent<DailyBrief>(
+      `daily-brief-${dateStr}.json`,
+    );
     if (saved && !forceRefresh) return saved;
 
     // 2. Check Redis cache (skip if forceRefresh)
     if (!forceRefresh) {
-      const cached = await this.redisService.getJson<DailyBrief>(CACHE_KEYS.DAILY_BRIEF);
+      const cached = await this.redisService.getJson<DailyBrief>(
+        CACHE_KEYS.DAILY_BRIEF,
+      );
       if (cached) {
         this.logger.log('Daily brief served from Redis cache');
         return cached;
@@ -161,7 +176,9 @@ export class AiEngineService {
 
     // 3. Rate limit check — if rate limited, return stale cache or mock
     if (this.isLive && this.checkRateLimit('daily-brief')) {
-      const stale = await this.redisService.getJson<DailyBrief>(CACHE_KEYS.DAILY_BRIEF);
+      const stale = await this.redisService.getJson<DailyBrief>(
+        CACHE_KEYS.DAILY_BRIEF,
+      );
       if (stale) {
         this.logger.log('Rate limited — serving stale daily brief cache');
         return stale;
@@ -178,7 +195,11 @@ export class AiEngineService {
     }
 
     // 5. Cache in Redis
-    await this.redisService.setJson(CACHE_KEYS.DAILY_BRIEF, brief, TTL.DAILY_BRIEF);
+    await this.redisService.setJson(
+      CACHE_KEYS.DAILY_BRIEF,
+      brief,
+      TTL.DAILY_BRIEF,
+    );
     this.logger.log(`Daily brief cached for ${TTL.DAILY_BRIEF / 3600}h`);
 
     return brief;
@@ -186,12 +207,19 @@ export class AiEngineService {
 
   // --- Stock Analysis ---
 
-  async analyzeStock(symbol: string, forceRefresh = false): Promise<StockAnalysis> {
+  async analyzeStock(
+    symbol: string,
+    forceRefresh = false,
+  ): Promise<StockAnalysis> {
     // 1. Check file-based pre-generated content
     const dateStr = this.getTodayDateStr();
-    const saved = this.loadSavedContent<StockAnalysis[]>(`stock-analyses-${dateStr}.json`);
+    const saved = this.loadSavedContent<StockAnalysis[]>(
+      `stock-analyses-${dateStr}.json`,
+    );
     if (saved && !forceRefresh) {
-      const match = saved.find((a) => a.symbol.toUpperCase() === symbol.toUpperCase());
+      const match = saved.find(
+        (a) => a.symbol.toUpperCase() === symbol.toUpperCase(),
+      );
       if (match) return match;
     }
 
@@ -225,7 +253,9 @@ export class AiEngineService {
 
     // 5. Cache in Redis
     await this.redisService.setJson(cacheKey, analysis, TTL.STOCK_ANALYSIS);
-    this.logger.log(`Stock analysis for ${symbol} cached for ${TTL.STOCK_ANALYSIS / 3600}h`);
+    this.logger.log(
+      `Stock analysis for ${symbol} cached for ${TTL.STOCK_ANALYSIS / 3600}h`,
+    );
 
     return analysis;
   }
@@ -265,7 +295,9 @@ export class AiEngineService {
   async getSignals(forceRefresh = false): Promise<TradingSignal[]> {
     // 1. Check Redis cache
     if (!forceRefresh) {
-      const cached = await this.redisService.getJson<TradingSignal[]>(CACHE_KEYS.SIGNALS);
+      const cached = await this.redisService.getJson<TradingSignal[]>(
+        CACHE_KEYS.SIGNALS,
+      );
       if (cached && cached.length > 0) {
         this.logger.log('Signals served from Redis cache');
         return cached;
@@ -274,7 +306,9 @@ export class AiEngineService {
 
     // 2. Rate limit check
     if (this.isLive && this.checkRateLimit('signals')) {
-      const stale = await this.redisService.getJson<TradingSignal[]>(CACHE_KEYS.SIGNALS);
+      const stale = await this.redisService.getJson<TradingSignal[]>(
+        CACHE_KEYS.SIGNALS,
+      );
       if (stale && stale.length > 0) {
         this.logger.log('Signals rate limited — serving stale cache');
         return stale;
@@ -328,7 +362,8 @@ export class AiEngineService {
         ],
       });
 
-      const text = response.content[0].type === 'text' ? response.content[0].text : '';
+      const text =
+        response.content[0].type === 'text' ? response.content[0].text : '';
       const aspiPercent = marketData.aspiPercent ?? 0;
       const sentiment =
         aspiPercent > 1
@@ -349,7 +384,9 @@ export class AiEngineService {
         generatedAt: new Date(),
       };
     } catch (error) {
-      this.logger.error(`Live daily brief failed, falling back to mock: ${error}`);
+      this.logger.error(
+        `Live daily brief failed, falling back to mock: ${error}`,
+      );
       return this.mockGenerator.generateDailyBrief();
     }
   }
@@ -376,11 +413,14 @@ export class AiEngineService {
         ],
       });
 
-      const text = response.content[0].type === 'text' ? response.content[0].text : '';
+      const text =
+        response.content[0].type === 'text' ? response.content[0].text : '';
 
       return { ...mockResult, analysis: text };
     } catch (error) {
-      this.logger.error(`Live stock analysis failed, falling back to mock: ${error}`);
+      this.logger.error(
+        `Live stock analysis failed, falling back to mock: ${error}`,
+      );
       return this.mockGenerator.generateStockAnalysis(symbol);
     }
   }
@@ -428,7 +468,9 @@ export class AiEngineService {
   private async getLiveSignals(forceRefresh = false): Promise<TradingSignal[]> {
     // HARD CHECK: never call Claude if valid cache exists
     if (!forceRefresh) {
-      const cached = await this.redisService.getJson<TradingSignal[]>(CACHE_KEYS.SIGNALS);
+      const cached = await this.redisService.getJson<TradingSignal[]>(
+        CACHE_KEYS.SIGNALS,
+      );
       if (cached && cached.length > 0) {
         this.logger.log('CACHE HIT — skipping Claude call for signals');
         return cached;
@@ -455,12 +497,18 @@ export class AiEngineService {
         ],
       });
 
-      const text = response.content[0].type === 'text' ? response.content[0].text : '[]';
+      const text =
+        response.content[0].type === 'text' ? response.content[0].text : '[]';
 
       // Extract JSON array from the response (strip any surrounding text)
       const jsonMatch = text.match(/\[[\s\S]*\]/);
       if (!jsonMatch) {
-        this.logger.warn('Signals response contained no JSON array, falling back to mock');
+        this.logger.warn(
+          'Signals response contained no JSON array, falling back to mock',
+        );
+        this.logger.warn(
+          `Claude signals raw response (first 800 chars): ${text.substring(0, 800)}`,
+        );
         return this.mockGenerator.generateSignals();
       }
 
@@ -488,17 +536,21 @@ export class AiEngineService {
           currentPrice: s.currentPrice ?? 0,
           direction: s.direction as TradingSignal['direction'],
           reasoning: s.reasoning ?? '',
-          rationale_simple: s.rationale_simple ?? 'Research recommended before investing.',
+          rationale_simple:
+            s.rationale_simple ?? 'Research recommended before investing.',
           confidence: validConfidences.has(s.confidence ?? '')
             ? (s.confidence as TradingSignal['confidence'])
             : 'MEDIUM',
           shariahStatus: s.shariahStatus ?? 'pending_review',
-          suggested_holding_period: s.suggested_holding_period ?? 'Duration: Research recommended',
+          suggested_holding_period:
+            s.suggested_holding_period ?? 'Duration: Research recommended',
           generatedAt: now,
         }));
 
       if (signals.length === 0) {
-        this.logger.warn('No valid signals parsed from Claude response, using mock');
+        this.logger.warn(
+          'No valid signals parsed from Claude response, using mock',
+        );
         return this.mockGenerator.generateSignals();
       }
 

@@ -133,49 +133,68 @@ export class CseDataService implements OnModuleInit {
   }
 
   /**
-   * Check if current time is within CSE market hours.
-   * Market hours: Mon-Fri 9:30 AM - 2:30 PM SLT (UTC+5:30)
+   * Three-state market status for CSE (UTC+5:30):
+   *   MARKET_OPEN  — Mon-Fri 9:30–14:30 SLT  → full 5-min polling
+   *   POST_CLOSE   — Mon-Fri 14:30–15:00 SLT  → single final snapshot, then stop
+   *   OFF_HOURS    — everything else           → zero external API calls
    */
-  isMarketHours(): boolean {
+  getMarketState(): 'MARKET_OPEN' | 'POST_CLOSE' | 'OFF_HOURS' {
     const now = new Date();
-
-    // Convert to Sri Lanka Time (UTC+5:30)
     const sltOffset = 5.5 * 60; // minutes
-    const utcMinutes =
-      now.getUTCHours() * 60 + now.getUTCMinutes();
+    const utcMinutes = now.getUTCHours() * 60 + now.getUTCMinutes();
     const sltMinutes = utcMinutes + sltOffset;
-
     const sltHours = Math.floor(sltMinutes / 60) % 24;
     const sltMins = sltMinutes % 60;
-
     const dayOfWeek = now.getUTCDay();
-    // Adjust day of week for SLT timezone
-    const sltDay =
-      sltMinutes >= 24 * 60
-        ? (dayOfWeek + 1) % 7
-        : dayOfWeek;
+    const sltDay = sltMinutes >= 24 * 60 ? (dayOfWeek + 1) % 7 : dayOfWeek;
 
-    // Monday = 1, Friday = 5
-    if (sltDay === 0 || sltDay === 6) return false;
+    if (sltDay === 0 || sltDay === 6) return 'OFF_HOURS';
 
-    const currentTimeInMinutes = sltHours * 60 + sltMins;
-    const marketOpen = 9 * 60 + 30; // 9:30 AM
-    const marketClose = 14 * 60 + 30; // 2:30 PM
+    const t = sltHours * 60 + sltMins;
+    if (t >= 9 * 60 + 30 && t < 14 * 60 + 30) return 'MARKET_OPEN';
+    if (t >= 14 * 60 + 30 && t < 15 * 60) return 'POST_CLOSE';
+    return 'OFF_HOURS';
+  }
 
-    return (
-      currentTimeInMinutes >= marketOpen &&
-      currentTimeInMinutes <= marketClose
-    );
+  /** Convenience wrapper — true only during active trading session. */
+  isMarketHours(): boolean {
+    return this.getMarketState() === 'MARKET_OPEN';
   }
 
   /**
-   * Poll market data every 60 seconds during market hours.
+   * Poll market data every 5 minutes during market hours (9:30–14:30 SLT Mon-Fri).
    * Fetches market summary, ASPI, S&P SL20, sectors, gainers, losers, most active.
    */
-  @Cron('*/60 * * * * *')
+  @Cron('0 */5 * * * *')
   async pollMarketData(): Promise<void> {
     if (!this.isMarketHours()) return;
     await this.fetchAndCacheMarketData();
+  }
+
+  /**
+   * Pre-market warmup at 9:25 AM SLT Mon-Fri (3:55 AM UTC).
+   * Refreshes cache 5 minutes before market open so the dashboard is ready.
+   */
+  @Cron('55 3 * * 1-5')
+  async preMarketWarmup(): Promise<void> {
+    this.logger.log('Pre-market warmup at 9:25 AM SLT...');
+    await Promise.all([
+      this.fetchAndCacheMarketData(),
+      this.fetchAndCacheTradeSummary(),
+    ]);
+  }
+
+  /**
+   * Post-close snapshot at 2:35 PM SLT Mon-Fri (9:05 AM UTC).
+   * Single final sync after market close — no more polling until next pre-market warmup.
+   */
+  @Cron('5 9 * * 1-5')
+  async postCloseSnapshot(): Promise<void> {
+    this.logger.log('Post-close snapshot at 2:35 PM SLT...');
+    await Promise.all([
+      this.fetchAndCacheMarketData(),
+      this.fetchAndCacheTradeSummary(),
+    ]);
   }
 
   /**
@@ -208,25 +227,55 @@ export class CseDataService implements OnModuleInit {
       const cacheOps: Promise<void>[] = [];
 
       if (marketSummary) {
-        cacheOps.push(this.redisService.setJson(CACHE_KEYS.MARKET_SUMMARY, marketSummary, cacheTtl));
+        cacheOps.push(
+          this.redisService.setJson(
+            CACHE_KEYS.MARKET_SUMMARY,
+            marketSummary,
+            cacheTtl,
+          ),
+        );
       }
       if (aspiData) {
-        cacheOps.push(this.redisService.setJson(CACHE_KEYS.ASPI_DATA, aspiData, cacheTtl));
+        cacheOps.push(
+          this.redisService.setJson(CACHE_KEYS.ASPI_DATA, aspiData, cacheTtl),
+        );
       }
       if (snpData) {
-        cacheOps.push(this.redisService.setJson(CACHE_KEYS.SNP_DATA, snpData, cacheTtl));
+        cacheOps.push(
+          this.redisService.setJson(CACHE_KEYS.SNP_DATA, snpData, cacheTtl),
+        );
       }
       if (topGainers) {
-        cacheOps.push(this.redisService.setJson(CACHE_KEYS.TOP_GAINERS, topGainers, cacheTtl));
+        cacheOps.push(
+          this.redisService.setJson(
+            CACHE_KEYS.TOP_GAINERS,
+            topGainers,
+            cacheTtl,
+          ),
+        );
       }
       if (topLosers) {
-        cacheOps.push(this.redisService.setJson(CACHE_KEYS.TOP_LOSERS, topLosers, cacheTtl));
+        cacheOps.push(
+          this.redisService.setJson(CACHE_KEYS.TOP_LOSERS, topLosers, cacheTtl),
+        );
       }
       if (mostActive) {
-        cacheOps.push(this.redisService.setJson(CACHE_KEYS.MOST_ACTIVE, mostActive, cacheTtl));
+        cacheOps.push(
+          this.redisService.setJson(
+            CACHE_KEYS.MOST_ACTIVE,
+            mostActive,
+            cacheTtl,
+          ),
+        );
       }
       if (allSectors) {
-        cacheOps.push(this.redisService.setJson(CACHE_KEYS.ALL_SECTORS, allSectors, cacheTtl));
+        cacheOps.push(
+          this.redisService.setJson(
+            CACHE_KEYS.ALL_SECTORS,
+            allSectors,
+            cacheTtl,
+          ),
+        );
       }
 
       await Promise.all(cacheOps);
@@ -237,10 +286,10 @@ export class CseDataService implements OnModuleInit {
   }
 
   /**
-   * Poll trade summary every 30 seconds during market hours.
+   * Poll trade summary every 5 minutes during market hours (9:30–14:30 SLT Mon-Fri).
    * Fetches per-stock trade data and syncs stock list.
    */
-  @Cron('*/30 * * * * *')
+  @Cron('0 */5 * * * *')
   async pollTradeSummary(): Promise<void> {
     if (!this.isMarketHours()) return;
     await this.fetchAndCacheTradeSummary();
@@ -266,25 +315,40 @@ export class CseDataService implements OnModuleInit {
         await this.syncStocksList(tradeSummary);
       }
     } catch (error) {
-      this.logger.error(
-        `Error fetching trade summary: ${String(error)}`,
-      );
+      this.logger.error(`Error fetching trade summary: ${String(error)}`);
     }
   }
 
+  /** Poll announcements every 15 minutes during market hours (9:30–14:30 SLT Mon-Fri). */
+  @Cron('0 */15 * * * *')
+  private async scheduleAnnouncementsMarketHours(): Promise<void> {
+    if (!this.isMarketHours()) return;
+    await this.pollAnnouncements();
+  }
+
   /**
-   * Poll announcements every 30 minutes (runs during and outside market hours).
+   * After-hours announcement check at 6:00 PM SLT Mon-Fri (12:30 PM UTC).
+   * Single run to capture any late filings posted after market close.
    */
-  @Cron('0 */30 * * * *')
+  @Cron('30 12 * * 1-5')
+  private async afterHoursAnnouncements(): Promise<void> {
+    this.logger.log('After-hours announcements check at 6:00 PM SLT...');
+    await this.pollAnnouncements();
+  }
+
+  /**
+   * Fetch and cache announcements. Called by scheduled crons and onModuleInit.
+   */
   async pollAnnouncements(): Promise<void> {
     this.logger.log('Polling announcements...');
 
     try {
-      const [financialAnnouncements, approvedAnnouncements] =
-        await Promise.all([
+      const [financialAnnouncements, approvedAnnouncements] = await Promise.all(
+        [
           this.cseApiService.getFinancialAnnouncements(),
           this.cseApiService.getApprovedAnnouncements(),
-        ]);
+        ],
+      );
 
       if (financialAnnouncements) {
         await this.redisService.setJson(
@@ -294,10 +358,7 @@ export class CseDataService implements OnModuleInit {
         );
 
         // Persist financial announcements
-        await this.saveAnnouncements(
-          financialAnnouncements,
-          'financial',
-        );
+        await this.saveAnnouncements(financialAnnouncements, 'financial');
       }
 
       if (approvedAnnouncements) {
@@ -308,17 +369,12 @@ export class CseDataService implements OnModuleInit {
         );
 
         // Persist approved announcements
-        await this.saveAnnouncements(
-          approvedAnnouncements,
-          'approved',
-        );
+        await this.saveAnnouncements(approvedAnnouncements, 'approved');
       }
 
       this.logger.log('Announcements updated successfully');
     } catch (error) {
-      this.logger.error(
-        `Error polling announcements: ${String(error)}`,
-      );
+      this.logger.error(`Error polling announcements: ${String(error)}`);
     }
   }
 
@@ -338,9 +394,7 @@ export class CseDataService implements OnModuleInit {
       await this.saveDailyPrices();
       this.logger.log('Mid-day price snapshot saved successfully');
     } catch (error) {
-      this.logger.error(
-        `Error saving mid-day prices: ${String(error)}`,
-      );
+      this.logger.error(`Error saving mid-day prices: ${String(error)}`);
     }
   }
 
@@ -353,9 +407,12 @@ export class CseDataService implements OnModuleInit {
     this.logger.log('Saving daily market summary...');
 
     try {
-      const marketRaw = await this.cseApiService.getMarketSummary() as MarketSummaryRaw | null;
-      const aspiRaw = await this.cseApiService.getAspiData() as IndexData | null;
-      const snpRaw = await this.cseApiService.getSnpData() as IndexData | null;
+      const marketRaw =
+        (await this.cseApiService.getMarketSummary()) as MarketSummaryRaw | null;
+      const aspiRaw =
+        (await this.cseApiService.getAspiData()) as IndexData | null;
+      const snpRaw =
+        (await this.cseApiService.getSnpData()) as IndexData | null;
 
       const today = new Date();
       const summaryDate = today.toISOString().split('T')[0];
@@ -406,9 +463,7 @@ export class CseDataService implements OnModuleInit {
 
       this.logger.log('Daily market summary saved successfully');
     } catch (error) {
-      this.logger.error(
-        `Error saving daily market summary: ${String(error)}`,
-      );
+      this.logger.error(`Error saving daily market summary: ${String(error)}`);
     }
   }
 
@@ -460,9 +515,7 @@ export class CseDataService implements OnModuleInit {
 
       this.logger.log(`Synced ${items.length} stocks to database`);
     } catch (error) {
-      this.logger.error(
-        `Error syncing stocks list: ${String(error)}`,
-      );
+      this.logger.error(`Error syncing stocks list: ${String(error)}`);
     }
   }
 
@@ -471,10 +524,9 @@ export class CseDataService implements OnModuleInit {
    */
   private async saveDailyPrices(): Promise<void> {
     try {
-      const cached =
-        await this.redisService.getJson<TradeSummaryResponse>(
-          CACHE_KEYS.TRADE_SUMMARY,
-        );
+      const cached = await this.redisService.getJson<TradeSummaryResponse>(
+        CACHE_KEYS.TRADE_SUMMARY,
+      );
 
       const items = cached?.reqTradeSummery ?? [];
       if (items.length === 0) return;
@@ -509,8 +561,7 @@ export class CseDataService implements OnModuleInit {
             item.previousClose ?? existing.previous_close;
           existing.volume = item.sharevolume ?? existing.volume;
           existing.turnover = item.turnover ?? existing.turnover;
-          existing.trades_count =
-            item.tradevolume ?? existing.trades_count;
+          existing.trades_count = item.tradevolume ?? existing.trades_count;
           await this.dailyPriceRepository.save(existing);
         } else {
           const dailyPrice = new DailyPrice();
@@ -530,9 +581,7 @@ export class CseDataService implements OnModuleInit {
 
       this.logger.log(`Saved daily prices for ${items.length} stocks`);
     } catch (error) {
-      this.logger.error(
-        `Error saving daily prices: ${String(error)}`,
-      );
+      this.logger.error(`Error saving daily prices: ${String(error)}`);
     }
   }
 
@@ -587,7 +636,8 @@ export class CseDataService implements OnModuleInit {
       .map((w) => {
         const lower = w.toLowerCase();
         // Keep short conjunctions lowercase
-        if (['&', 'and', 'of', 'the'].includes(lower)) return lower === '&' ? '&' : lower;
+        if (['&', 'and', 'of', 'the'].includes(lower))
+          return lower === '&' ? '&' : lower;
         return w.charAt(0).toUpperCase() + w.slice(1).toLowerCase();
       })
       .join(' ');
@@ -609,8 +659,8 @@ export class CseDataService implements OnModuleInit {
       'Real Estate': 'Real Estate Management & Development',
       'Investment Banking & Brokerage': 'Diversified Financials',
       'Consumer Finance': 'Diversified Financials',
-      'Services': 'Consumer Services',
-      'Trading': 'Consumer Services',
+      Services: 'Consumer Services',
+      Trading: 'Consumer Services',
     };
     return aliases[s] ?? s;
   }
@@ -632,9 +682,7 @@ export class CseDataService implements OnModuleInit {
       return;
     }
 
-    this.logger.log(
-      `Syncing sectors for ${stocks.length} stocks...`,
-    );
+    this.logger.log(`Syncing sectors for ${stocks.length} stocks...`);
     let updated = 0;
 
     for (const stock of stocks) {
@@ -661,7 +709,9 @@ export class CseDataService implements OnModuleInit {
       }
     }
 
-    this.logger.log(`Sector sync complete: ${updated}/${stocks.length} updated`);
+    this.logger.log(
+      `Sector sync complete: ${updated}/${stocks.length} updated`,
+    );
   }
 
   /**
@@ -691,10 +741,7 @@ export class CseDataService implements OnModuleInit {
   /**
    * Save announcements to the database, avoiding duplicates by title.
    */
-  private async saveAnnouncements(
-    data: unknown,
-    type: string,
-  ): Promise<void> {
+  private async saveAnnouncements(data: unknown, type: string): Promise<void> {
     try {
       // CSE wraps announcements in keys like reqFinancialAnnouncemnets, reqApprovedAnnouncemnets
       const raw = data as AnnouncementResponse;
@@ -738,9 +785,7 @@ export class CseDataService implements OnModuleInit {
 
       this.logger.log(`Saved ${type} announcements (${items.length} checked)`);
     } catch (error) {
-      this.logger.error(
-        `Error saving ${type} announcements: ${String(error)}`,
-      );
+      this.logger.error(`Error saving ${type} announcements: ${String(error)}`);
     }
   }
 }

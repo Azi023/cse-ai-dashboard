@@ -81,9 +81,26 @@ export class NewsService {
     });
   }
 
-  // Fetch RSS feeds every 30 minutes
+  /**
+   * True only on Mon-Fri between 8:00 AM and 8:00 PM SLT (UTC+5:30).
+   * Zero RSS polling on weekends or late at night.
+   */
+  private isNewsHours(): boolean {
+    const now = new Date();
+    const sltOffset = 5.5 * 60;
+    const utcMinutes = now.getUTCHours() * 60 + now.getUTCMinutes();
+    const sltTotalMinutes = utcMinutes + sltOffset;
+    const sltHours = Math.floor(sltTotalMinutes / 60) % 24;
+    const dayOfWeek = now.getUTCDay();
+    const sltDay = sltTotalMinutes >= 24 * 60 ? (dayOfWeek + 1) % 7 : dayOfWeek;
+    if (sltDay === 0 || sltDay === 6) return false;
+    return sltHours >= 8 && sltHours < 20;
+  }
+
+  // Fetch RSS feeds every 30 minutes — weekdays 8 AM–8 PM SLT only.
   @Cron('0 */30 * * * *')
   async fetchAllFeeds(): Promise<{ fetched: number; errors: string[] }> {
+    if (!this.isNewsHours()) return { fetched: 0, errors: [] };
     this.logger.log('Starting RSS feed fetch...');
     let totalFetched = 0;
     const errors: string[] = [];
@@ -101,7 +118,9 @@ export class NewsService {
       await new Promise((r) => setTimeout(r, 1000));
     }
 
-    this.logger.log(`RSS fetch complete: ${totalFetched} new items, ${errors.length} errors`);
+    this.logger.log(
+      `RSS fetch complete: ${totalFetched} new items, ${errors.length} errors`,
+    );
     return { fetched: totalFetched, errors };
   }
 
@@ -132,7 +151,8 @@ export class NewsService {
 
       const newsItem = this.newsRepo.create({
         title: (item.title || 'Untitled').slice(0, 500),
-        summary: (item.contentSnippet || item.content || '').slice(0, 2000) || null,
+        summary:
+          (item.contentSnippet || item.content || '').slice(0, 2000) || null,
         source: feed.name,
         url: item.link || null,
         published_at: item.pubDate ? new Date(item.pubDate) : new Date(),
@@ -140,8 +160,14 @@ export class NewsService {
         category: this.categorizeNews(item.title || '', feed.category),
         impact_level: this.assessImpact(item.title || ''),
         impact_direction: 'MIXED',
-        affected_symbols: this.extractSymbols(item.title || '', item.contentSnippet || ''),
-        affected_sectors: this.extractSectors(item.title || '', item.contentSnippet || ''),
+        affected_symbols: this.extractSymbols(
+          item.title || '',
+          item.contentSnippet || '',
+        ),
+        affected_sectors: this.extractSectors(
+          item.title || '',
+          item.contentSnippet || '',
+        ),
       });
 
       try {
@@ -195,9 +221,17 @@ export class NewsService {
       lower.includes('global')
     )
       return 'GLOBAL';
-    if (lower.includes('election') || lower.includes('political') || lower.includes('parliament'))
+    if (
+      lower.includes('election') ||
+      lower.includes('political') ||
+      lower.includes('parliament')
+    )
       return 'POLITICAL';
-    if (lower.includes('sector') || lower.includes('industry') || lower.includes('regulatory'))
+    if (
+      lower.includes('sector') ||
+      lower.includes('industry') ||
+      lower.includes('regulatory')
+    )
       return 'SECTOR';
     return feedCategory === 'GLOBAL' ? 'GLOBAL' : 'SECTOR';
   }
@@ -248,9 +282,9 @@ export class NewsService {
       sampath: 'SAMP.N0000',
       'sri lanka telecom': 'SLTL.N0000',
       'ceylon tobacco': 'CTC.N0000',
-      'hayleys': 'HAYL.N0000',
+      hayleys: 'HAYL.N0000',
       'expo lanka': 'EXPO.N0000',
-      'cargills': 'CARG.N0000',
+      cargills: 'CARG.N0000',
       'tokyo cement': 'TKYO.N0000',
     };
 
@@ -340,7 +374,9 @@ export class NewsService {
     return this.newsRepo.findOne({ where: { id } });
   }
 
-  async getSources(): Promise<Array<{ name: string; label: string; count: number }>> {
+  async getSources(): Promise<
+    Array<{ name: string; label: string; count: number }>
+  > {
     const results = await this.newsRepo
       .createQueryBuilder('n')
       .select('n.source', 'name')

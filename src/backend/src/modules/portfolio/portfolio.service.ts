@@ -490,8 +490,8 @@ export class PortfolioService {
     const cached = await this.redisService.getJson<{
       reqTradeSummery?: Array<{
         symbol?: string;
-        lastTradedPrice?: number;
-        priceChange?: number;
+        price?: number;
+        change?: number;
       }>;
     }>('cse:trade_summary');
 
@@ -499,8 +499,8 @@ export class PortfolioService {
     for (const t of trades) {
       if (t.symbol) {
         map.set(t.symbol, {
-          price: t.lastTradedPrice ?? 0,
-          change: t.priceChange ?? 0,
+          price: t.price ?? 0,
+          change: t.change ?? 0,
         });
       }
     }
