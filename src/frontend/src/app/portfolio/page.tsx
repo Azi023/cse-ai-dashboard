@@ -246,9 +246,16 @@ export default function PortfolioPage() {
               ))}
             </div>
           ) : holdings.length === 0 ? (
-            <p className="text-sm text-muted-foreground text-center py-8">
-              No holdings yet. Click &ldquo;Add Holding&rdquo; to get started.
-            </p>
+            <div className="text-center py-8 space-y-2">
+              <p className="text-sm text-muted-foreground">
+                No holdings yet. Click &ldquo;Add Holding&rdquo; to get started.
+              </p>
+              {atradStatus?.syncSuccess && (atradStatus.holdingsCount ?? 0) === 0 && (
+                <p className="text-xs text-blue-400/80">
+                  Your AEL.N0000 purchase (200 shares) will appear here after T+2 settlement — approx. Tuesday 18 March.
+                </p>
+              )}
+            </div>
           ) : (
             <div className="overflow-x-auto">
               <Table>
@@ -597,8 +604,12 @@ function AddHoldingForm({
         notes: notes.trim() || undefined,
       });
       onSuccess();
-    } catch (err) {
-      setFormError('Failed to add holding');
+    } catch (err: unknown) {
+      const axiosErr = err as { response?: { data?: { message?: string } } };
+      const msg =
+        axiosErr?.response?.data?.message ??
+        'Failed to add holding. Use full CSE symbol format (e.g. JKH.N0000).';
+      setFormError(msg);
       console.error(err);
     } finally {
       setSubmitting(false);
@@ -611,7 +622,7 @@ function AddHoldingForm({
         <CardTitle className="text-base">Add New Holding</CardTitle>
       </CardHeader>
       <CardContent>
-        <form onSubmit={handleSubmit} className="grid gap-4 md:grid-cols-6">
+        <form onSubmit={handleSubmit} className="grid gap-4 sm:grid-cols-2 md:grid-cols-6">
           <div>
             <label className="text-xs text-muted-foreground">
               Symbol
@@ -914,7 +925,7 @@ function EditHoldingForm({
         </CardTitle>
       </CardHeader>
       <CardContent>
-        <form onSubmit={handleSubmit} className="grid gap-4 md:grid-cols-5">
+        <form onSubmit={handleSubmit} className="grid gap-4 sm:grid-cols-2 md:grid-cols-5">
           <div>
             <label className="text-xs text-muted-foreground">
               Quantity

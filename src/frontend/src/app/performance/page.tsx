@@ -165,7 +165,7 @@ export default function PerformancePage() {
             <CardTitle className="text-sm">Performance by Confidence Level</CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="grid gap-4 grid-cols-3">
+            <div className="grid gap-4 grid-cols-1 sm:grid-cols-3">
               {(['HIGH', 'MEDIUM', 'LOW'] as const).map((conf) => {
                 const data = stats.byConfidence[conf];
                 return (

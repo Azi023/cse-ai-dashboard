@@ -263,8 +263,14 @@ export default function JourneyPage() {
                 Portfolio Value <Tooltip tipKey="portfolioValue" />
               </p>
               <p className="text-xl font-bold mt-1">
-                {formatLKR(kpis.currentPortfolioValue)}
-                {kpis.totalProfitLoss > 0 && <span className="ml-1 text-yellow-400">✨</span>}
+                {kpis.currentPortfolioValue > 0 ? (
+                  <>
+                    {formatLKR(kpis.currentPortfolioValue)}
+                    {kpis.totalProfitLoss > 0 && <span className="ml-1 text-yellow-400">✨</span>}
+                  </>
+                ) : (
+                  <span className="text-sm text-muted-foreground">Add holdings to track</span>
+                )}
               </p>
             </div>
 
@@ -273,14 +279,20 @@ export default function JourneyPage() {
               <p className="text-xs text-muted-foreground flex items-center justify-center gap-1">
                 Your Profit <Tooltip tipKey="profitLoss" />
               </p>
-              <p
-                className={`text-xl font-bold mt-1 ${
-                  kpis.totalProfitLoss >= 0 ? 'text-green-400' : 'text-red-400'
-                }`}
-              >
-                {kpis.totalProfitLoss >= 0 ? '+' : ''}
-                {formatLKR(kpis.totalProfitLoss)} ({formatPct(kpis.totalProfitLossPct)})
-              </p>
+              {kpis.currentPortfolioValue > 0 ? (
+                <p
+                  className={`text-xl font-bold mt-1 ${
+                    kpis.totalProfitLoss >= 0 ? 'text-green-400' : 'text-red-400'
+                  }`}
+                >
+                  {kpis.totalProfitLoss >= 0 ? '+' : ''}
+                  {formatLKR(kpis.totalProfitLoss)} ({formatPct(kpis.totalProfitLossPct)})
+                </p>
+              ) : (
+                <p className="text-sm text-muted-foreground mt-2">
+                  Go to Portfolio → Add Holding
+                </p>
+              )}
             </div>
           </div>
 
@@ -323,7 +335,7 @@ export default function JourneyPage() {
                 🔥 {kpis.consecutiveDeposits}-month deposit streak
               </span>
             )}
-            {kpis.thisMonthReturn !== 0 && (
+            {kpis.thisMonthReturn !== 0 && kpis.currentPortfolioValue > 0 && (
               <span
                 className={`rounded-full border px-3 py-1 ${
                   kpis.thisMonthReturn >= 0
@@ -332,6 +344,11 @@ export default function JourneyPage() {
                 }`}
               >
                 This month: {formatPct(kpis.thisMonthReturnPct)}
+              </span>
+            )}
+            {kpis.currentPortfolioValue === 0 && kpis.totalDeposited > 0 && (
+              <span className="rounded-full border border-blue-500/30 bg-blue-500/10 px-3 py-1 text-blue-400">
+                First trade pending settlement (T+2)
               </span>
             )}
             {kpis.positiveMonths > 0 && kpis.monthsInvested > 0 && (
@@ -448,8 +465,8 @@ export default function JourneyPage() {
         </div>
       )}
 
-      {/* You vs The Market */}
-      {kpis && kpis.monthsInvested > 0 && (
+      {/* You vs The Market — only shown when portfolio has settled holdings */}
+      {kpis && kpis.monthsInvested > 0 && kpis.currentPortfolioValue > 0 && (
         <div className="rounded-xl border bg-card p-5 space-y-4">
           <h2 className="text-lg font-semibold flex items-center gap-2">
             📊 You vs The Market
@@ -481,6 +498,15 @@ export default function JourneyPage() {
                 Keep investing consistently — long-term strategy matters more than short-term returns.
               </span>
             )}
+          </p>
+        </div>
+      )}
+      {/* Placeholder when holdings haven't settled yet */}
+      {kpis && kpis.monthsInvested > 0 && kpis.currentPortfolioValue === 0 && (
+        <div className="rounded-xl border border-blue-500/20 bg-blue-500/5 p-5 text-center space-y-1">
+          <p className="text-sm font-medium text-blue-300">📊 You vs The Market</p>
+          <p className="text-xs text-muted-foreground">
+            Performance comparison will appear once your holdings settle (T+2).
           </p>
         </div>
       )}
