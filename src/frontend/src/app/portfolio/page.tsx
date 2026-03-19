@@ -18,11 +18,14 @@ import { Skeleton } from '@/components/ui/skeleton';
 import {
   portfolioApi,
   atradApi,
+  analysisApi,
   type PortfolioHolding,
   type PortfolioSummary,
   type PortfolioShariahSummary,
   type PurificationSummary,
   type ATradSyncStatus,
+  type PositionRiskData,
+  type PortfolioRiskSummary,
 } from '@/lib/api';
 import {
   Wallet,
@@ -33,10 +36,12 @@ import {
   Trash2,
   X,
   ShieldCheck,
+  ShieldAlert,
   PieChart,
   Heart,
   RefreshCw,
   Loader2,
+  AlertTriangle,
 } from 'lucide-react';
 import { safeNum } from '@/lib/format';
 
@@ -51,17 +56,19 @@ export default function PortfolioPage() {
   const [error, setError] = useState<string | null>(null);
   const [showAddForm, setShowAddForm] = useState(false);
   const [editingId, setEditingId] = useState<number | null>(null);
+  const [riskData, setRiskData] = useState<PortfolioRiskSummary | null>(null);
   const [atradStatus, setAtradStatus] = useState<ATradSyncStatus | null>(null);
   const [syncing, setSyncing] = useState(false);
 
   const fetchData = useCallback(async () => {
     try {
-      const [holdingsRes, summaryRes, shariahRes, purificationRes] =
+      const [holdingsRes, summaryRes, shariahRes, purificationRes, riskRes] =
         await Promise.allSettled([
           portfolioApi.getAll(),
           portfolioApi.getSummary(),
           portfolioApi.getShariah(),
           portfolioApi.getPurification(),
+          analysisApi.getPortfolioRisk(),
         ]);
 
       if (holdingsRes.status === 'fulfilled')
@@ -72,6 +79,8 @@ export default function PortfolioPage() {
         setShariahSummary(shariahRes.value.data);
       if (purificationRes.status === 'fulfilled')
         setPurification(purificationRes.value.data);
+      if (riskRes.status === 'fulfilled')
+        setRiskData(riskRes.value.data);
     } catch (err) {
       setError('Failed to load portfolio data');
       console.error(err);
@@ -337,6 +346,11 @@ export default function PortfolioPage() {
           )}
         </CardContent>
       </Card>
+
+      {/* Risk Management */}
+      {riskData && riskData.positions.length > 0 && (
+        <RiskManagementCard riskData={riskData} />
+      )}
 
       {/* Allocation Charts */}
       {summary && summary.holdings_count > 0 && (
@@ -885,6 +899,148 @@ function PurificationSection({
           non-compliant income ratio. Click the edit icon to enter actual
           dividends received and adjust the purification rate per stock. Consult
           a qualified Shariah scholar for exact calculations.
+        </p>
+      </CardContent>
+    </Card>
+  );
+}
+
+function RiskManagementCard({ riskData }: { riskData: PortfolioRiskSummary }) {
+  const heatStatus = riskData.risk_status ?? 'SAFE';
+  const heatPct = safeNum(riskData.total_heat_pct);
+
+  const statusColor =
+    heatStatus === 'DANGER'
+      ? 'text-red-500 border-red-500/30 bg-red-500/5'
+      : heatStatus === 'CAUTION'
+      ? 'text-yellow-500 border-yellow-500/30 bg-yellow-500/5'
+      : 'text-emerald-500 border-emerald-500/30 bg-emerald-500/5';
+
+  const barColor =
+    heatStatus === 'DANGER'
+      ? 'bg-red-500'
+      : heatStatus === 'CAUTION'
+      ? 'bg-yellow-500'
+      : 'bg-emerald-500';
+
+  return (
+    <Card>
+      <CardHeader>
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <ShieldAlert className="h-4 w-4" />
+            <CardTitle className="text-base">Risk Management</CardTitle>
+          </div>
+          <div className={`flex items-center gap-2 rounded-lg border px-3 py-1 text-xs font-semibold ${statusColor}`}>
+            {heatStatus === 'DANGER' ? (
+              <AlertTriangle className="h-3.5 w-3.5" />
+            ) : (
+              <ShieldCheck className="h-3.5 w-3.5" />
+            )}
+            Portfolio Heat: {heatPct.toFixed(1)}% — {heatStatus}
+          </div>
+        </div>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        {/* Heat bar */}
+        <div>
+          <div className="mb-1 flex justify-between text-xs text-muted-foreground">
+            <span>Portfolio Heat (% of capital at risk)</span>
+            <span>{heatPct.toFixed(2)}%</span>
+          </div>
+          <div className="h-2 w-full overflow-hidden rounded-full bg-muted">
+            <div
+              className={`h-full rounded-full transition-all ${barColor}`}
+              style={{ width: `${Math.min(heatPct * 5, 100)}%` }}
+            />
+          </div>
+          <div className="mt-1 flex justify-between text-xs text-muted-foreground/60">
+            <span>0% Safe</span>
+            <span>10% Caution</span>
+            <span>20%+ Danger</span>
+          </div>
+        </div>
+
+        {/* Per-position risk table */}
+        <div className="overflow-x-auto">
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Symbol</TableHead>
+                <TableHead className="text-right">Entry</TableHead>
+                <TableHead className="text-right">Current</TableHead>
+                <TableHead className="text-right">Stop-Loss</TableHead>
+                <TableHead className="text-right">Take-Profit</TableHead>
+                <TableHead className="text-right">R:R</TableHead>
+                <TableHead className="text-right">Distance</TableHead>
+                <TableHead>Status</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {riskData.positions.map((pos) => {
+                const distPct = safeNum(pos.distance_to_stop_pct);
+                const nearStop = distPct < 5 && distPct >= 0;
+                const rr = safeNum(pos.risk_reward_ratio);
+                return (
+                  <TableRow key={pos.symbol}>
+                    <TableCell className="font-medium">
+                      <div className="flex items-center gap-1.5">
+                        {nearStop && (
+                          <AlertTriangle className="h-3.5 w-3.5 text-red-500" />
+                        )}
+                        {pos.symbol}
+                      </div>
+                    </TableCell>
+                    <TableCell className="text-right num">
+                      {Number(pos.entry_price).toFixed(2)}
+                    </TableCell>
+                    <TableCell className="text-right num">
+                      {Number(pos.current_price).toFixed(2)}
+                    </TableCell>
+                    <TableCell className="text-right">
+                      <span className={`num font-medium ${nearStop ? 'text-red-500' : 'text-red-400'}`}>
+                        {Number(pos.recommended_stop).toFixed(2)}
+                      </span>
+                    </TableCell>
+                    <TableCell className="text-right">
+                      <span className="num font-medium text-emerald-500">
+                        {Number(pos.take_profit).toFixed(2)}
+                      </span>
+                    </TableCell>
+                    <TableCell className="text-right">
+                      <span className={`num text-xs font-semibold ${rr >= 2 ? 'text-emerald-500' : rr >= 1 ? 'text-yellow-500' : 'text-red-500'}`}>
+                        1:{rr.toFixed(1)}
+                      </span>
+                    </TableCell>
+                    <TableCell className="text-right">
+                      <span className={`num text-xs ${nearStop ? 'text-red-500 font-semibold' : 'text-muted-foreground'}`}>
+                        {distPct.toFixed(1)}%
+                      </span>
+                    </TableCell>
+                    <TableCell>
+                      <Badge
+                        variant="outline"
+                        className={
+                          pos.risk_status === 'DANGER'
+                            ? 'border-red-500 text-red-500 text-xs'
+                            : pos.risk_status === 'CAUTION'
+                            ? 'border-yellow-500 text-yellow-500 text-xs'
+                            : 'border-emerald-500 text-emerald-500 text-xs'
+                        }
+                      >
+                        {pos.risk_status ?? 'SAFE'}
+                      </Badge>
+                    </TableCell>
+                  </TableRow>
+                );
+              })}
+            </TableBody>
+          </Table>
+        </div>
+
+        <p className="text-xs text-muted-foreground italic">
+          Stop-loss: ATR-based (entry − 2×ATR) or support-buffered, whichever is tighter.
+          Take-profit: minimum 1:2 risk-reward. Runs daily at 2:43 PM SLT.
         </p>
       </CardContent>
     </Card>

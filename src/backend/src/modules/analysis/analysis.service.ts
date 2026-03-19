@@ -21,6 +21,9 @@ import {
   HoldingWithPnL,
 } from '../portfolio/portfolio.service';
 import { CseApiService } from '../cse-data/cse-api.service';
+import { TechnicalService } from './technical.service';
+import { RiskService } from './risk.service';
+import { LearningService } from './learning.service';
 
 // ---------------------------------------------------------------------------
 // Internal types
@@ -92,6 +95,9 @@ export class AnalysisService {
     private readonly portfolioService: PortfolioService,
     private readonly configService: ConfigService,
     private readonly cseApiService: CseApiService,
+    private readonly technicalService: TechnicalService,
+    private readonly riskService: RiskService,
+    private readonly learningService: LearningService,
   ) {}
 
   // ---------------------------------------------------------------------------
@@ -120,10 +126,14 @@ export class AnalysisService {
         // Throttle: 200ms between requests to be polite to the CSE API
         await new Promise((r) => setTimeout(r, 200));
       } catch (err) {
-        this.logger.warn(`Profile sync failed for ${stock.symbol}: ${String(err)}`);
+        this.logger.warn(
+          `Profile sync failed for ${stock.symbol}: ${String(err)}`,
+        );
       }
     }
-    this.logger.log(`Company profile sync complete: ${synced}/${stocks.length} stocks updated`);
+    this.logger.log(
+      `Company profile sync complete: ${synced}/${stocks.length} stocks updated`,
+    );
   }
 
   private async syncOneCompanyProfile(stock: Stock): Promise<void> {
@@ -163,7 +173,11 @@ export class AnalysisService {
     // Upsert CompanyFinancial for current year with valuation ratios
     const currentYear = String(new Date().getFullYear());
     const existing = await this.companyFinancialRepo.findOne({
-      where: { symbol: stock.symbol, fiscal_year: currentYear, quarter: 'ANNUAL' },
+      where: {
+        symbol: stock.symbol,
+        fiscal_year: currentYear,
+        quarter: 'ANNUAL',
+      },
     });
 
     const financialData = {
@@ -191,7 +205,9 @@ export class AnalysisService {
           symbol: stock.symbol,
           fiscal_year: currentYear,
           quarter: 'ANNUAL',
-          ...Object.fromEntries(Object.entries(financialData).filter(([, v]) => v !== null)),
+          ...Object.fromEntries(
+            Object.entries(financialData).filter(([, v]) => v !== null),
+          ),
           source: 'CSE_PROFILE',
           report_date: new Date(),
         }),
@@ -250,15 +266,23 @@ export class AnalysisService {
         where: { date: weekEnd },
       });
 
-      const aspiStart = monSnapshot?.aspi_close ? Number(monSnapshot.aspi_close) : null;
-      const aspiEnd = friSnapshot?.aspi_close ? Number(friSnapshot.aspi_close) : null;
+      const aspiStart = monSnapshot?.aspi_close
+        ? Number(monSnapshot.aspi_close)
+        : null;
+      const aspiEnd = friSnapshot?.aspi_close
+        ? Number(friSnapshot.aspi_close)
+        : null;
       const aspiReturnPct =
         aspiStart && aspiEnd && aspiStart > 0
           ? ((aspiEnd - aspiStart) / aspiStart) * 100
           : null;
 
-      const portStart = monPortfolio?.total_value ? Number(monPortfolio.total_value) : null;
-      const portEnd = friPortfolio?.total_value ? Number(friPortfolio.total_value) : null;
+      const portStart = monPortfolio?.total_value
+        ? Number(monPortfolio.total_value)
+        : null;
+      const portEnd = friPortfolio?.total_value
+        ? Number(friPortfolio.total_value)
+        : null;
       const portReturnPct =
         portStart && portEnd && portStart > 0
           ? ((portEnd - portStart) / portStart) * 100
@@ -338,56 +362,91 @@ export class AnalysisService {
       }
 
       // Gather all inputs in parallel
-      const [weekSnaps, scores, holdings] = await Promise.all([
+      const [weekSnaps, scores, holdings, modelPerf] = await Promise.all([
         this.marketSnapshotRepo.find({ order: { date: 'ASC' }, take: 5 }),
         this.stockScoreRepo.find({
           where: { date: this.todayStr() },
           order: { composite_score: 'DESC' },
           take: 10,
         }),
-        this.portfolioService.getAllHoldings().catch((): HoldingWithPnL[] => []),
+        this.portfolioService
+          .getAllHoldings()
+          .catch((): HoldingWithPnL[] => []),
+        this.learningService.getModelPerformance().catch(() => null),
       ]);
 
       if (scores.length === 0) {
-        this.logger.warn('No stock scores available — insufficient data for recommendation');
+        this.logger.warn(
+          'No stock scores available — insufficient data for recommendation',
+        );
         return;
       }
 
-      // Fetch recent news mentioning top-scored stocks
-      const topSymbols = scores.map((s) => s.symbol.split('.')[0]);
-      const recentNews = await this.fetchRelevantNews(topSymbols);
-
-      // Fetch financial data for top 10 stocks
-      const scoredWithFinancials = await this.enrichScoresWithFinancials(scores);
+      // Fetch tech signals and risk data in parallel
+      const topSymbols = scores.map((s) => s.symbol);
+      const [
+        techSignals,
+        positionRisks,
+        recentNews,
+        scoredWithFinancials,
+        portfolioRisk,
+        portfolioSummary,
+      ] = await Promise.all([
+        this.technicalService.getSignalsForSymbols(topSymbols),
+        this.riskService.getPositionRisks(),
+        this.fetchRelevantNews(topSymbols.map((s) => s.split('.')[0])),
+        this.enrichScoresWithFinancials(scores),
+        this.riskService.getPortfolioRiskSummary().catch(() => null),
+        this.portfolioService.getSummary().catch(() => null),
+      ]);
 
       // Pick model (budget guard)
       const month = new Date().toISOString().slice(0, 7);
-      const rawTokens = await this.redisService.get(`${TOKEN_BUDGET_KEY}:${month}`);
+      const rawTokens = await this.redisService.get(
+        `${TOKEN_BUDGET_KEY}:${month}`,
+      );
       const tokensUsed = rawTokens ? parseInt(rawTokens, 10) : 0;
       const model =
-        tokensUsed >= MONTHLY_TOKEN_LIMIT ? 'claude-haiku-4-5-20251001' : 'claude-sonnet-4-6';
+        tokensUsed >= MONTHLY_TOKEN_LIMIT
+          ? 'claude-haiku-4-5-20251001'
+          : 'claude-sonnet-4-6';
 
       const totalInvested = holdings.reduce((s, h) => s + h.invested_value, 0);
-      const totalCurrent = holdings.reduce((s, h) => s + (h.current_value ?? 0), 0);
+      const totalCurrent = holdings.reduce(
+        (s, h) => s + (h.current_value ?? 0),
+        0,
+      );
       const portfolioReturnPct =
-        totalInvested > 0 ? (((totalCurrent - totalInvested) / totalInvested) * 100).toFixed(1) : '0';
+        totalInvested > 0
+          ? (((totalCurrent - totalInvested) / totalInvested) * 100).toFixed(1)
+          : '0';
+      const availableCash = portfolioSummary?.cash_balance ?? 0;
+      const totalPortfolioValue = portfolioSummary?.total_value ?? totalCurrent;
 
       // ASPI trend
       const aspiTrend = weekSnaps
-        .map((s) => `${s.date}: ASPI ${s.aspi_close ?? '?'} (${s.aspi_change_pct != null ? (Number(s.aspi_change_pct) > 0 ? '+' : '') + Number(s.aspi_change_pct).toFixed(2) + '%' : '?'})`)
+        .map(
+          (s) =>
+            `${s.date}: ASPI ${s.aspi_close ?? '?'} (${s.aspi_change_pct != null ? (Number(s.aspi_change_pct) > 0 ? '+' : '') + Number(s.aspi_change_pct).toFixed(2) + '%' : '?'})`,
+        )
         .join(', ');
 
-      // Top 10 stocks section
+      // Top 10 stocks section with technical overlays
       const top10Section = scoredWithFinancials
         .map((item) => {
           const s = item.score;
           const fin = item.financial;
+          const tech = techSignals.get(s.symbol);
+          const techLine = tech
+            ? `  Technical signals: ${tech.overall_signal} (score ${tech.signal_score}) | RSI ${tech.rsi_14?.toFixed(1) ?? 'N/A'} (${tech.rsi_signal ?? 'N/A'}) | SMA trend: ${tech.sma_trend ?? 'N/A'} | MACD: ${tech.macd_crossover ?? 'N/A'} | Vol: ${tech.volume_trend ?? 'N/A'} | ATR: ${tech.atr_14?.toFixed(2) ?? 'N/A'} | Support: ${tech.support_20d?.toFixed(2) ?? 'N/A'} | Resistance: ${tech.resistance_20d?.toFixed(2) ?? 'N/A'}${tech.candlestick_pattern ? ` | Pattern: ${tech.candlestick_pattern}` : ''}`
+            : '  Technical signals: Insufficient data for chart indicators';
           return [
             `${s.symbol}: Composite ${Number(s.composite_score).toFixed(1)}/100`,
             `  Fundamentals: EPS Growth=${Number(s.earnings_growth_score).toFixed(0)} Debt=${Number(s.debt_health_score).toFixed(0)} ROE=${Number(s.roe_score).toFixed(0)} RevTrend=${Number(s.revenue_trend_score).toFixed(0)}`,
             `  Valuation: PE=${Number(s.pe_score).toFixed(0)} PB=${Number(s.pb_score).toFixed(0)} DivYield=${Number(s.dividend_score).toFixed(0)}`,
-            `  Technical: Momentum=${Number(s.momentum_score).toFixed(0)} Volume=${Number(s.volume_score).toFixed(0)} 52wPos=${Number(s.week52_position_score).toFixed(0)} Volatility=${Number(s.volatility_score).toFixed(0)}`,
+            `  Scoring tech: Momentum=${Number(s.momentum_score).toFixed(0)} Volume=${Number(s.volume_score).toFixed(0)} 52wPos=${Number(s.week52_position_score).toFixed(0)} Volatility=${Number(s.volatility_score).toFixed(0)}`,
             `  Market: SectorStrength=${Number(s.sector_score).toFixed(0)} Liquidity=${Number(s.liquidity_score).toFixed(0)}`,
+            techLine,
             fin
               ? `  Raw data: PE=${fin.pe_ratio ?? '?'} PB=${fin.pb_ratio ?? '?'} DivYield=${fin.dividend_yield != null ? fin.dividend_yield + '%' : '?'} ROE=${fin.return_on_equity != null ? fin.return_on_equity + '%' : '?'} D/E=${fin.debt_to_equity ?? '?'}`
               : '  Raw data: No financial data on record',
@@ -395,24 +454,53 @@ export class AnalysisService {
         })
         .join('\n\n');
 
-      // Portfolio section
+      // Portfolio section with risk overlay
       const portfolioSection =
         holdings.length > 0
           ? holdings
-              .map(
-                (h) =>
-                  `${h.symbol}: ${h.quantity} shares @ LKR ${Number(h.buy_price).toFixed(2)} cost | Current: LKR ${Number(h.current_price ?? 0).toFixed(2)} | P&L: ${Number(h.pnl_percent ?? 0).toFixed(1)}%`,
-              )
+              .map((h) => {
+                const risk = positionRisks.find((r) => r.symbol === h.symbol);
+                const riskLine = risk
+                  ? ` | Stop: LKR ${Number(risk.recommended_stop).toFixed(2)} | TP: LKR ${Number(risk.take_profit).toFixed(2)} | R:R ${Number(risk.risk_reward_ratio).toFixed(1)} | Heat: ${Number(risk.position_heat_pct).toFixed(1)}%`
+                  : '';
+                return `${h.symbol}: ${h.quantity} shares @ LKR ${Number(h.buy_price).toFixed(2)} cost | Current: LKR ${Number(h.current_price ?? 0).toFixed(2)} | P&L: ${Number(h.pnl_percent ?? 0).toFixed(1)}%${riskLine}`;
+              })
               .join('\n')
           : 'No holdings yet (accumulating cash for first/next purchase)';
+
+      // Position sizing context
+      const maxRiskPerTrade = Math.round(totalPortfolioValue * 0.01);
+      const sizingContext = `Available cash: LKR ${Math.round(availableCash).toLocaleString()}. Max risk per trade (1% rule): LKR ${maxRiskPerTrade.toLocaleString()}. Portfolio total: LKR ${Math.round(totalPortfolioValue).toLocaleString()}.`;
 
       // News section
       const newsSection =
         recentNews.length > 0
           ? recentNews
-              .map((n) => `- [${n.impact_level}] ${n.title} (${n.source}, ${new Date(n.published_at).toLocaleDateString('en-GB')})`)
+              .map(
+                (n) =>
+                  `- [${n.impact_level}] ${n.title} (${n.source}, ${new Date(n.published_at).toLocaleDateString('en-GB')})`,
+              )
               .join('\n')
           : 'No stock-specific news this week';
+
+      // Model performance (past track record)
+      const perfSection =
+        modelPerf && modelPerf.outcomes_tracked > 0
+          ? `${modelPerf.total_recommendations} recommendations made, ${modelPerf.outcomes_tracked} outcomes tracked. ` +
+            (modelPerf.win_rate_1m !== null
+              ? `1-month win rate: ${(modelPerf.win_rate_1m * 100).toFixed(0)}%. `
+              : '') +
+            (modelPerf.avg_return_1m !== null
+              ? `Avg 1M return: ${modelPerf.avg_return_1m.toFixed(1)}%. `
+              : '') +
+            (modelPerf.best_pick
+              ? `Best pick: ${modelPerf.best_pick.symbol} (+${modelPerf.best_pick.return_1m.toFixed(1)}%). `
+              : '') +
+            (modelPerf.worst_pick
+              ? `Worst pick: ${modelPerf.worst_pick.symbol} (${modelPerf.worst_pick.return_1m.toFixed(1)}%). `
+              : '') +
+            'Use this track record to calibrate confidence levels.'
+          : 'No recommendation history yet — this is the first or early recommendation.';
 
       const prompt =
         `You are a senior equity research analyst with 20 years of experience on the Colombo Stock Exchange. ` +
@@ -421,22 +509,34 @@ export class AnalysisService {
         `You are advising a Shariah-compliant retail investor using Rupee Cost Averaging (LKR 10,000/month).\n` +
         `Risk tolerance: Conservative (capital preservation first)\n` +
         `Strategy: Long-term wealth building via dividends + capital appreciation\n` +
-        `Constraints: Shariah-compliant only (AAOIFI standards)\n\n` +
+        `Constraints: Shariah-compliant only (AAOIFI standards)\n` +
+        `Order type: Always LIMIT orders (never market orders on CSE)\n\n` +
         `PORTFOLIO STATUS:\n` +
         `Invested: LKR ${Math.round(totalInvested).toLocaleString()}, Current: LKR ${Math.round(totalCurrent).toLocaleString()}, P&L: ${portfolioReturnPct}%\n` +
-        `Holdings:\n${portfolioSection}\n\n` +
-        `MARKET OVERVIEW (week of ${weekStart}):\n${aspiTrend}\n\n` +
+        `Holdings:\n${portfolioSection}\n` +
+        (portfolioRisk
+          ? `Portfolio heat: ${portfolioRisk.total_heat_pct.toFixed(1)}% (${portfolioRisk.risk_status})\n`
+          : '') +
+        `\nMARKET OVERVIEW (week of ${weekStart}):\n${aspiTrend}\n\n` +
         `TOP 10 SHARIAH-COMPLIANT STOCKS BY COMPOSITE SCORE:\n` +
-        `(Scores 0-100 per factor; 50 = neutral/no data)\n\n` +
+        `(12-factor scores 0-100; 50 = neutral/no data. Technical indicators appended below each stock)\n\n` +
         `${top10Section}\n\n` +
+        `POSITION SIZING (1% RISK RULE):\n${sizingContext}\n` +
+        `To calculate suggested_shares: (entry_price - stop_loss) × shares = LKR ${maxRiskPerTrade.toLocaleString()}\n\n` +
         `STOCK-SPECIFIC NEWS THIS WEEK:\n${newsSection}\n\n` +
+        `YOUR PAST TRACK RECORD:\n${perfSection}\n\n` +
         `UPCOMING EVENTS:\nCBSL rate decision March 25 2026; watch Q1 2026 earnings releases; IMF quarterly review\n\n` +
-        `Based on ALL of this data, provide your recommendation as a senior CSE broker.\n\n` +
+        `Based on ALL of this data, provide your recommendation.\n` +
+        `For suggested_entry_price: use the nearest support level or current price if oversold.\n` +
+        `For suggested_stop_loss: use ATR-based stop or support minus buffer — must be below entry.\n` +
+        `For suggested_take_profit: at minimum 2:1 risk-reward ratio above entry.\n` +
+        `For suggested_shares: use the 1% rule calculation above.\n\n` +
         `Output as valid JSON (no markdown, no explanation outside JSON) matching this exact schema:\n` +
         `{\n` +
         `  "recommended_stock": "SYMBOL.N0000",\n` +
         `  "confidence": "HIGH" | "MEDIUM" | "LOW",\n` +
         `  "reasoning": "Exactly 3 paragraphs: (1) Why this stock fundamentals+valuation (2) Why now: technical+market context (3) Risk factors and what would change your mind",\n` +
+        `  "technical_summary": "1-2 sentences on current chart picture and timing",\n` +
         `  "price_outlook_3m": {\n` +
         `    "bear": {"price": <number>, "scenario": "<string>"},\n` +
         `    "base": {"price": <number>, "scenario": "<string>"},\n` +
@@ -445,10 +545,19 @@ export class AnalysisService {
         `  "risk_flags": ["<string>", ...],\n` +
         `  "alternative_stock": "SYMBOL.N0000",\n` +
         `  "portfolio_action": "BUY" | "HOLD" | "WAIT",\n` +
-        `  "suggested_allocation_lkr": <number>\n` +
+        `  "suggested_allocation_lkr": <number>,\n` +
+        `  "suggested_entry_price": <number>,\n` +
+        `  "suggested_stop_loss": <number>,\n` +
+        `  "suggested_take_profit": <number>,\n` +
+        `  "suggested_shares": <integer>,\n` +
+        `  "order_type": "LIMIT"\n` +
         `}`;
 
-      const { text, tokensConsumed } = await this.callClaude(model, prompt, 1200);
+      const { text, tokensConsumed } = await this.callClaude(
+        model,
+        prompt,
+        1500,
+      );
       await this.trackTokens(tokensConsumed);
 
       if (!text) {
@@ -460,12 +569,18 @@ export class AnalysisService {
         recommended_stock?: string;
         confidence?: string;
         reasoning?: string;
+        technical_summary?: string;
         price_outlook_3m?: unknown;
         risk_flags?: string[];
         alternative_stock?: string;
         alternative?: string;
         portfolio_action?: string;
         suggested_allocation_lkr?: number;
+        suggested_entry_price?: number;
+        suggested_stop_loss?: number;
+        suggested_take_profit?: number;
+        suggested_shares?: number;
+        order_type?: string;
       };
       try {
         const clean = text.replace(/^```json\s*/i, '').replace(/\s*```$/i, '');
@@ -491,16 +606,30 @@ export class AnalysisService {
         alternative: parsed.alternative_stock ?? parsed.alternative ?? null,
         portfolio_action: parsed.portfolio_action ?? null,
         suggested_allocation_lkr: parsed.suggested_allocation_lkr ?? null,
+        suggested_entry_price: parsed.suggested_entry_price ?? null,
+        suggested_stop_loss: parsed.suggested_stop_loss ?? null,
+        suggested_take_profit: parsed.suggested_take_profit ?? null,
+        suggested_shares: parsed.suggested_shares ?? null,
+        order_type: parsed.order_type ?? 'LIMIT',
+        technical_summary: parsed.technical_summary ?? null,
         model_used: model,
         tokens_used: tokensConsumed,
       });
       await this.aiRecommendationRepo.save(rec);
 
+      // Build actionable alert
       const confidenceEmoji =
-        rec.confidence === 'HIGH' ? '🟢' : rec.confidence === 'LOW' ? '🔴' : '🟡';
+        rec.confidence === 'HIGH'
+          ? '🟢'
+          : rec.confidence === 'LOW'
+            ? '🔴'
+            : '🟡';
+      const tradeParams = rec.suggested_entry_price
+        ? ` | Entry: LKR ${Number(rec.suggested_entry_price).toFixed(2)} | Stop: LKR ${Number(rec.suggested_stop_loss ?? 0).toFixed(2)} | TP: LKR ${Number(rec.suggested_take_profit ?? 0).toFixed(2)} | ${rec.suggested_shares ?? '?'} shares`
+        : '';
       await this.createAlert(
         'ai_recommendation',
-        `${confidenceEmoji} Weekly Pick: ${rec.recommended_stock} (${rec.confidence} confidence) — ${rec.portfolio_action ?? 'BUY'}`,
+        `${confidenceEmoji} Weekly Pick: ${rec.recommended_stock} (${rec.confidence})${tradeParams}`,
         rec.reasoning,
       );
 
@@ -597,12 +726,13 @@ export class AnalysisService {
   // ---------------------------------------------------------------------------
 
   private async saveMarketSnapshot(date: string): Promise<void> {
-    const [marketSummary, topGainers, topLosers, allSectors] = await Promise.all([
-      this.redisService.getJson<MarketSummaryCache>('cse:market_summary'),
-      this.redisService.getJson<TradeItem[]>('cse:top_gainers'),
-      this.redisService.getJson<TradeItem[]>('cse:top_losers'),
-      this.redisService.getJson<unknown[]>('cse:all_sectors'),
-    ]);
+    const [marketSummary, topGainers, topLosers, allSectors] =
+      await Promise.all([
+        this.redisService.getJson<MarketSummaryCache>('cse:market_summary'),
+        this.redisService.getJson<TradeItem[]>('cse:top_gainers'),
+        this.redisService.getJson<TradeItem[]>('cse:top_losers'),
+        this.redisService.getJson<unknown[]>('cse:all_sectors'),
+      ]);
 
     if (!marketSummary) {
       this.logger.warn(`No market summary in Redis for ${date} — skipping`);
@@ -656,12 +786,16 @@ export class AnalysisService {
       })),
     };
 
-    const existing = await this.portfolioSnapshotRepo.findOne({ where: { date } });
+    const existing = await this.portfolioSnapshotRepo.findOne({
+      where: { date },
+    });
     if (existing) {
       Object.assign(existing, snap);
       await this.portfolioSnapshotRepo.save(existing);
     } else {
-      await this.portfolioSnapshotRepo.save(this.portfolioSnapshotRepo.create(snap));
+      await this.portfolioSnapshotRepo.save(
+        this.portfolioSnapshotRepo.create(snap),
+      );
     }
     this.logger.log(`Portfolio snapshot saved for ${date}`);
   }
@@ -696,19 +830,27 @@ export class AnalysisService {
    */
   private async scoreAllCompliantStocks(date: string): Promise<number> {
     const stocks = await this.stockRepo.find({
-      where: [{ shariah_status: 'compliant' }, { shariah_status: 'pending_review' }],
+      where: [
+        { shariah_status: 'compliant' },
+        { shariah_status: 'pending_review' },
+      ],
     });
 
     if (stocks.length === 0) return 0;
 
     const allSectors =
-      (await this.redisService.getJson<Array<{ sector?: string; change?: number }>>('cse:all_sectors')) ?? [];
+      (await this.redisService.getJson<
+        Array<{ sector?: string; change?: number }>
+      >('cse:all_sectors')) ?? [];
     const sectorScoreMap = this.buildSectorScoreMap(allSectors);
 
     const tradeSummary = await this.redisService.getJson<{
       reqTradeSummery?: TradeItem[];
     }>('cse:trade_summary');
-    const tradeMap = new Map<string, { price: number; volume: number; turnover: number }>();
+    const tradeMap = new Map<
+      string,
+      { price: number; volume: number; turnover: number }
+    >();
     for (const t of tradeSummary?.reqTradeSummery ?? []) {
       if (t.symbol) {
         tradeMap.set(t.symbol, {
@@ -764,7 +906,11 @@ export class AnalysisService {
           await this.stockScoreRepo.save(existing);
         } else {
           await this.stockScoreRepo.save(
-            this.stockScoreRepo.create({ date, symbol: stock.symbol, ...scoreResult }),
+            this.stockScoreRepo.create({
+              date,
+              symbol: stock.symbol,
+              ...scoreResult,
+            }),
           );
         }
         scored++;
@@ -786,7 +932,16 @@ export class AnalysisService {
     latestFin: CompanyFinancial | null;
     priorFin: CompanyFinancial | null;
   }): Partial<StockScore> {
-    const { stock, prices, tradeMap, sectorScoreMap, dataDays, isPlaceholder, latestFin, priorFin } = input;
+    const {
+      stock,
+      prices,
+      tradeMap,
+      sectorScoreMap,
+      dataDays,
+      isPlaceholder,
+      latestFin,
+      priorFin,
+    } = input;
 
     if (isPlaceholder) {
       const sectorScore = sectorScoreMap.get(stock.sector ?? '') ?? NEUTRAL;
@@ -829,34 +984,41 @@ export class AnalysisService {
     // ── CATEGORY 3: Technical/Momentum (25%) ──────────────────────────────
 
     // Price Momentum (8%): current vs 20-day SMA
-    const momentumRaw = avg20Close > 0 ? (currentPrice - avg20Close) / avg20Close : 0;
+    const momentumRaw =
+      avg20Close > 0 ? (currentPrice - avg20Close) / avg20Close : 0;
     const momentumPct = momentumRaw * 100;
     const momentumScore =
-      momentumPct > 5 ? 90 :
-      momentumPct > 0 ? 70 :
-      momentumPct > -5 ? 50 : 30;
+      momentumPct > 5 ? 90 : momentumPct > 0 ? 70 : momentumPct > -5 ? 50 : 30;
 
     // Volume Trend (5%): today vs 20-day avg
     const todayVolume = trade?.volume ?? volumes[0] ?? 0;
-    const volumeRatio = avg20Volume > 0 ? (todayVolume / avg20Volume) * 100 : 100;
+    const volumeRatio =
+      avg20Volume > 0 ? (todayVolume / avg20Volume) * 100 : 100;
     const volumeScore =
-      volumeRatio > 150 ? 90 :
-      volumeRatio > 100 ? 70 :
-      volumeRatio > 50 ? 50 : 30;
+      volumeRatio > 150
+        ? 90
+        : volumeRatio > 100
+          ? 70
+          : volumeRatio > 50
+            ? 50
+            : 30;
 
     // 52-Week Position (7%)
     const w52High = stock.week52_high ? Number(stock.week52_high) : null;
     const w52Low = stock.week52_low ? Number(stock.week52_low) : null;
     let week52PositionScore = NEUTRAL;
     let week52PositionPct: number | null = null;
-    if (w52High !== null && w52Low !== null && w52High > w52Low && currentPrice > 0) {
+    if (
+      w52High !== null &&
+      w52Low !== null &&
+      w52High > w52Low &&
+      currentPrice > 0
+    ) {
       const range = w52High - w52Low;
       const posInRange = ((currentPrice - w52Low) / range) * 100;
       week52PositionPct = posInRange;
       // Near low = value opportunity, near high = potentially extended
-      week52PositionScore =
-        posInRange < 20 ? 80 :
-        posInRange <= 80 ? 60 : 40;
+      week52PositionScore = posInRange < 20 ? 80 : posInRange <= 80 ? 60 : 40;
     }
 
     // Volatility (5%): inverse std dev of daily returns — lower vol = higher score
@@ -869,9 +1031,13 @@ export class AnalysisService {
     const volatilityStdDev = stdDev(returns);
     const volatilityPct = volatilityStdDev * 100;
     const volatilityScore =
-      volatilityPct < 2 ? 90 :
-      volatilityPct < 3 ? 70 :
-      volatilityPct < 5 ? 50 : 30;
+      volatilityPct < 2
+        ? 90
+        : volatilityPct < 3
+          ? 70
+          : volatilityPct < 5
+            ? 50
+            : 30;
 
     // ── CATEGORY 4: Market Context (15%) ─────────────────────────────────
 
@@ -892,14 +1058,14 @@ export class AnalysisService {
     // ── Composite (weighted sum) ──────────────────────────────────────────
     const composite =
       // Fundamentals 35%
-      fundamentals.earnings_growth_score * 0.10 +
-      fundamentals.debt_health_score * 0.10 +
+      fundamentals.earnings_growth_score * 0.1 +
+      fundamentals.debt_health_score * 0.1 +
       fundamentals.roe_score * 0.08 +
       fundamentals.revenue_trend_score * 0.07 +
       // Valuation 25%
-      fundamentals.pe_score * 0.10 +
+      fundamentals.pe_score * 0.1 +
       fundamentals.pb_score * 0.05 +
-      fundamentals.dividend_score * 0.10 +
+      fundamentals.dividend_score * 0.1 +
       // Technical 25%
       momentumScore * 0.08 +
       volumeScore * 0.05 +
@@ -938,7 +1104,8 @@ export class AnalysisService {
         volatility_pct: Math.round(volatilityPct * 100) / 100,
         momentum_pct: Math.round(momentumPct * 100) / 100,
         volume_ratio_pct: Math.round(volumeRatio),
-        week52_position_pct: week52PositionPct !== null ? Math.round(week52PositionPct) : null,
+        week52_position_pct:
+          week52PositionPct !== null ? Math.round(week52PositionPct) : null,
         week52_high: w52High,
         week52_low: w52Low,
         pe_ratio: latestFin?.pe_ratio ?? null,
@@ -978,50 +1145,64 @@ export class AnalysisService {
     if (!latest) return result;
 
     // Earnings Growth (10%): compare EPS year-over-year
-    const latestEps = latest.earnings_per_share != null ? Number(latest.earnings_per_share) : null;
-    const priorEps = prior?.earnings_per_share != null ? Number(prior.earnings_per_share) : null;
+    const latestEps =
+      latest.earnings_per_share != null
+        ? Number(latest.earnings_per_share)
+        : null;
+    const priorEps =
+      prior?.earnings_per_share != null
+        ? Number(prior.earnings_per_share)
+        : null;
     if (latestEps !== null && priorEps !== null && priorEps !== 0) {
       const growthPct = ((latestEps - priorEps) / Math.abs(priorEps)) * 100;
       result.earnings_growth_score =
-        growthPct > 30 ? 100 :
-        growthPct > 15 ? 85 :
-        growthPct > 5 ? 70 :
-        growthPct > 0 ? 60 :
-        growthPct > -10 ? 40 : 20;
+        growthPct > 30
+          ? 100
+          : growthPct > 15
+            ? 85
+            : growthPct > 5
+              ? 70
+              : growthPct > 0
+                ? 60
+                : growthPct > -10
+                  ? 40
+                  : 20;
     } else if (latestEps !== null) {
       // Only one year of data — positive EPS is mildly good
       result.earnings_growth_score = latestEps > 0 ? 65 : 35;
     }
 
     // Debt Health (10%)
-    const de = latest.debt_to_equity != null ? Number(latest.debt_to_equity) : null;
+    const de =
+      latest.debt_to_equity != null ? Number(latest.debt_to_equity) : null;
     if (de !== null) {
       result.debt_health_score =
-        de < 0.3 ? 100 :
-        de < 0.5 ? 80 :
-        de < 1.0 ? 60 :
-        de < 2.0 ? 30 : 10;
+        de < 0.3 ? 100 : de < 0.5 ? 80 : de < 1.0 ? 60 : de < 2.0 ? 30 : 10;
     }
 
     // ROE Quality (8%)
-    const roe = latest.return_on_equity != null ? Number(latest.return_on_equity) : null;
+    const roe =
+      latest.return_on_equity != null ? Number(latest.return_on_equity) : null;
     if (roe !== null) {
       result.roe_score =
-        roe > 20 ? 100 :
-        roe > 15 ? 85 :
-        roe > 10 ? 70 :
-        roe > 5 ? 50 : 30;
+        roe > 20 ? 100 : roe > 15 ? 85 : roe > 10 ? 70 : roe > 5 ? 50 : 30;
     }
 
     // Revenue Trend (7%)
-    const latestRev = latest.total_revenue != null ? Number(latest.total_revenue) : null;
-    const priorRev = prior?.total_revenue != null ? Number(prior.total_revenue) : null;
+    const latestRev =
+      latest.total_revenue != null ? Number(latest.total_revenue) : null;
+    const priorRev =
+      prior?.total_revenue != null ? Number(prior.total_revenue) : null;
     if (latestRev !== null && priorRev !== null && priorRev > 0) {
       const revGrowthPct = ((latestRev - priorRev) / priorRev) * 100;
       result.revenue_trend_score =
-        revGrowthPct > 20 ? 100 :
-        revGrowthPct > 10 ? 80 :
-        revGrowthPct > 0 ? 60 : 30;
+        revGrowthPct > 20
+          ? 100
+          : revGrowthPct > 10
+            ? 80
+            : revGrowthPct > 0
+              ? 60
+              : 30;
     }
 
     // P/E Value (10%)
@@ -1031,32 +1212,42 @@ export class AnalysisService {
         result.pe_score = 10; // Negative earnings
       } else {
         result.pe_score =
-          pe < 5 ? 95 :
-          pe < 10 ? 90 :
-          pe < 15 ? 75 :
-          pe < 20 ? 60 :
-          pe < 30 ? 40 : 20;
+          pe < 5
+            ? 95
+            : pe < 10
+              ? 90
+              : pe < 15
+                ? 75
+                : pe < 20
+                  ? 60
+                  : pe < 30
+                    ? 40
+                    : 20;
       }
     }
 
     // P/B Value (5%)
     const pb = latest.pb_ratio != null ? Number(latest.pb_ratio) : null;
     if (pb !== null && pb > 0) {
-      result.pb_score =
-        pb < 1.0 ? 90 :
-        pb < 2.0 ? 75 :
-        pb < 3.0 ? 60 : 40;
+      result.pb_score = pb < 1.0 ? 90 : pb < 2.0 ? 75 : pb < 3.0 ? 60 : 40;
     }
 
     // Dividend Yield (10%)
-    const divYield = latest.dividend_yield != null ? Number(latest.dividend_yield) : null;
+    const divYield =
+      latest.dividend_yield != null ? Number(latest.dividend_yield) : null;
     if (divYield !== null) {
       result.dividend_score =
-        divYield > 8 ? 100 :
-        divYield > 5 ? 85 :
-        divYield > 3 ? 70 :
-        divYield > 1 ? 50 :
-        divYield > 0 ? 30 : 20;
+        divYield > 8
+          ? 100
+          : divYield > 5
+            ? 85
+            : divYield > 3
+              ? 70
+              : divYield > 1
+                ? 50
+                : divYield > 0
+                  ? 30
+                  : 20;
     }
 
     return result;
@@ -1070,10 +1261,7 @@ export class AnalysisService {
       if (!s.sector) continue;
       const change = s.change ?? 0;
       // Sector strength vs ASPI: +2% above = 90, -2% below = 30
-      const score =
-        change > 2 ? 90 :
-        change > 0 ? 70 :
-        change > -2 ? 50 : 30;
+      const score = change > 2 ? 90 : change > 0 ? 70 : change > -2 ? 50 : 30;
       map.set(s.sector, score);
     }
     return map;
@@ -1109,7 +1297,9 @@ export class AnalysisService {
       });
 
       // Return top 10 relevant items, falling back to top 5 recent news if none match
-      return relevant.length > 0 ? relevant.slice(0, 10) : allRecent.slice(0, 5);
+      return relevant.length > 0
+        ? relevant.slice(0, 10)
+        : allRecent.slice(0, 5);
     } catch {
       return [];
     }
@@ -1158,7 +1348,8 @@ export class AnalysisService {
     const first = response.content?.[0];
     const text: string = first?.type === 'text' ? (first.text as string) : '';
     const tokensConsumed: number =
-      (response.usage?.input_tokens ?? 0) + (response.usage?.output_tokens ?? 0);
+      (response.usage?.input_tokens ?? 0) +
+      (response.usage?.output_tokens ?? 0);
     return { text, tokensConsumed };
   }
 
@@ -1180,7 +1371,8 @@ export class AnalysisService {
     alert.symbol = null;
     alert.alert_type = alertType;
     alert.title = title;
-    alert.message = content.length > 490 ? content.slice(0, 487) + '...' : content;
+    alert.message =
+      content.length > 490 ? content.slice(0, 487) + '...' : content;
     alert.is_triggered = true;
     alert.triggered_at = new Date();
     alert.is_active = false;

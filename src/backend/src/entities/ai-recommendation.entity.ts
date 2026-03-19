@@ -40,6 +40,25 @@ export class AiRecommendation {
   @Column({ type: 'decimal', precision: 12, scale: 2, nullable: true })
   suggested_allocation_lkr: number | null;
 
+  // Trade execution parameters (added Phase 3)
+  @Column({ type: 'decimal', precision: 10, scale: 2, nullable: true })
+  suggested_entry_price: number | null;
+
+  @Column({ type: 'decimal', precision: 10, scale: 2, nullable: true })
+  suggested_stop_loss: number | null;
+
+  @Column({ type: 'decimal', precision: 10, scale: 2, nullable: true })
+  suggested_take_profit: number | null;
+
+  @Column({ type: 'int', nullable: true })
+  suggested_shares: number | null;
+
+  @Column({ type: 'varchar', length: 10, nullable: true })
+  order_type: string | null;
+
+  @Column({ type: 'text', nullable: true })
+  technical_summary: string | null;
+
   @Column({ type: 'varchar', length: 50, default: 'claude-sonnet-4-6' })
   model_used: string;
 

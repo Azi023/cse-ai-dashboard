@@ -877,8 +877,85 @@ export interface AiRecommendationData {
   alternative: string | null;
   portfolio_action: 'BUY' | 'HOLD' | 'WAIT' | null;
   suggested_allocation_lkr: number | null;
+  // Phase 3: trade execution parameters
+  suggested_entry_price: number | null;
+  suggested_stop_loss: number | null;
+  suggested_take_profit: number | null;
+  suggested_shares: number | null;
+  order_type: string | null;
+  technical_summary: string | null;
   model_used: string;
   created_at: string;
+}
+
+export interface TechnicalSignalData {
+  id: number;
+  date: string;
+  symbol: string;
+  close_price: number | null;
+  sma_20: number | null;
+  sma_50: number | null;
+  sma_trend: string | null;
+  rsi_14: number | null;
+  rsi_signal: string | null;
+  macd_line: number | null;
+  macd_signal_line: number | null;
+  macd_histogram: number | null;
+  macd_crossover: string | null;
+  support_20d: number | null;
+  resistance_20d: number | null;
+  atr_14: number | null;
+  volume_avg_20d: number | null;
+  volume_ratio: number | null;
+  volume_trend: string | null;
+  candlestick_pattern: string | null;
+  overall_signal: string;
+  signal_score: number;
+  signal_summary: string | null;
+  created_at: string;
+}
+
+export interface PositionRiskData {
+  id: number;
+  date: string;
+  symbol: string;
+  entry_price: number;
+  current_price: number;
+  shares_held: number;
+  stop_loss_atr: number | null;
+  stop_loss_support: number | null;
+  recommended_stop: number;
+  take_profit: number;
+  risk_per_share: number;
+  reward_per_share: number;
+  risk_reward_ratio: number;
+  max_loss_lkr: number;
+  max_gain_lkr: number;
+  distance_to_stop_pct: number;
+  position_heat_pct: number;
+  portfolio_heat_pct: number | null;
+  risk_status: string;
+  created_at: string;
+}
+
+export interface PortfolioRiskSummary {
+  positions: PositionRiskData[];
+  total_heat_pct: number;
+  risk_status: string;
+  max_loss_lkr: number;
+  max_gain_lkr: number;
+}
+
+export interface ModelPerformanceData {
+  total_recommendations: number;
+  outcomes_tracked: number;
+  win_rate_1w: number | null;
+  win_rate_1m: number | null;
+  avg_return_1w: number | null;
+  avg_return_1m: number | null;
+  best_pick: { symbol: string; return_1m: number } | null;
+  worst_pick: { symbol: string; return_1m: number } | null;
+  last_updated: string;
 }
 
 export interface DataStatusData {
@@ -896,6 +973,18 @@ export const analysisApi = {
   getScores: (limit = 10) => api.get<StockScoreData[]>(`/analysis/scores?limit=${limit}`),
   getRecommendation: () => api.get<AiRecommendationData | null>('/analysis/recommendation'),
   getDataStatus: () => api.get<DataStatusData>('/analysis/data-status'),
+  // Phase 3: Technical Analysis
+  getTechnicals: (limit = 20) => api.get<TechnicalSignalData[]>(`/analysis/technicals?limit=${limit}`),
+  getTechnicalForSymbol: (symbol: string) => api.get<TechnicalSignalData | null>(`/analysis/technicals/${symbol}`),
+  runTechnicals: () => api.post<{ message: string }>('/analysis/run-technicals'),
+  // Phase 3: Risk Management
+  getRisk: () => api.get<PositionRiskData[]>('/analysis/risk'),
+  getPortfolioRisk: () => api.get<PortfolioRiskSummary>('/analysis/risk/portfolio'),
+  getRiskForSymbol: (symbol: string) => api.get<PositionRiskData | null>(`/analysis/risk/${symbol}`),
+  runRisk: () => api.post<{ message: string }>('/analysis/run-risk'),
+  // Phase 3: Model Performance
+  getModelPerformance: () => api.get<ModelPerformanceData>('/analysis/model-performance'),
+  getOutcomes: () => api.get('/analysis/outcomes'),
 };
 
 export default api;

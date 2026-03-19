@@ -17,6 +17,7 @@ import {
   type AiStatus,
   type Announcement,
   type StockScoreData,
+  type TechnicalSignalData,
 } from '@/lib/api';
 import {
   ArrowLeft,
@@ -62,6 +63,9 @@ export default function StockDetailPage() {
 
   // Stock score state
   const [stockScore, setStockScore] = useState<StockScoreData | null>(null);
+
+  // Technical signal state
+  const [techSignal, setTechSignal] = useState<TechnicalSignalData | null>(null);
 
   useEffect(() => {
     const fetchData = async () => {
@@ -126,6 +130,13 @@ export default function StockDetailPage() {
     analysisApi.getScores(200).then((res) => {
       const found = res.data.find((s) => s.symbol === symbol);
       if (found) setStockScore(found);
+    }).catch(() => {});
+  }, [symbol]);
+
+  // Fetch technical signal
+  useEffect(() => {
+    analysisApi.getTechnicalForSymbol(symbol).then((res) => {
+      if (res.data) setTechSignal(res.data);
     }).catch(() => {});
   }, [symbol]);
 
@@ -280,6 +291,147 @@ export default function StockDetailPage() {
           )}
         </CardContent>
       </Card>
+
+      {/* Technical Analysis Card */}
+      {techSignal && (
+        <Card>
+          <CardHeader className="pb-3">
+            <div className="flex items-center justify-between flex-wrap gap-2">
+              <CardTitle className="text-sm">Technical Analysis</CardTitle>
+              <div className="flex items-center gap-2">
+                <span className={`rounded px-2 py-0.5 text-xs font-bold ${
+                  techSignal.overall_signal === 'STRONG_BUY' ? 'bg-green-500/20 text-green-400' :
+                  techSignal.overall_signal === 'BUY' ? 'bg-emerald-500/15 text-emerald-400' :
+                  techSignal.overall_signal === 'SELL' ? 'bg-orange-500/15 text-orange-400' :
+                  techSignal.overall_signal === 'STRONG_SELL' ? 'bg-red-500/20 text-red-400' :
+                  'bg-muted text-muted-foreground'
+                }`}>
+                  {techSignal.overall_signal.replace('_', ' ')}
+                </span>
+                <span className="text-xs text-muted-foreground">score {techSignal.signal_score}</span>
+              </div>
+            </div>
+            {techSignal.signal_summary && (
+              <p className="text-xs text-muted-foreground mt-1">{techSignal.signal_summary}</p>
+            )}
+          </CardHeader>
+          <CardContent>
+            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+              {/* SMA */}
+              <div className="rounded-lg border p-3 space-y-1.5">
+                <p className="text-xs text-muted-foreground font-medium">Moving Averages</p>
+                <div className="flex justify-between text-xs">
+                  <span className="text-muted-foreground">SMA 20</span>
+                  <span>{techSignal.sma_20 != null ? `LKR ${Number(techSignal.sma_20).toFixed(2)}` : '—'}</span>
+                </div>
+                <div className="flex justify-between text-xs">
+                  <span className="text-muted-foreground">SMA 50</span>
+                  <span>{techSignal.sma_50 != null ? `LKR ${Number(techSignal.sma_50).toFixed(2)}` : '—'}</span>
+                </div>
+                {techSignal.sma_trend && (
+                  <span className={`inline-block rounded px-1.5 py-0.5 text-[10px] font-medium ${
+                    techSignal.sma_trend.includes('BULLISH') || techSignal.sma_trend === 'GOLDEN_CROSS' ? 'bg-green-500/15 text-green-400' :
+                    techSignal.sma_trend.includes('BEARISH') || techSignal.sma_trend === 'DEATH_CROSS' ? 'bg-red-500/15 text-red-400' :
+                    'bg-muted text-muted-foreground'
+                  }`}>
+                    {techSignal.sma_trend.replace('_', ' ')}
+                  </span>
+                )}
+              </div>
+              {/* RSI */}
+              <div className="rounded-lg border p-3 space-y-1.5">
+                <p className="text-xs text-muted-foreground font-medium">RSI (14)</p>
+                {techSignal.rsi_14 != null ? (
+                  <>
+                    <div className="text-lg font-bold font-mono">{Number(techSignal.rsi_14).toFixed(1)}</div>
+                    <div className="h-2 rounded-full bg-muted overflow-hidden">
+                      <div
+                        className={`h-full rounded-full transition-all ${
+                          Number(techSignal.rsi_14) < 30 ? 'bg-green-500' :
+                          Number(techSignal.rsi_14) > 70 ? 'bg-red-500' : 'bg-yellow-500'
+                        }`}
+                        style={{ width: `${Math.min(Number(techSignal.rsi_14), 100)}%` }}
+                      />
+                    </div>
+                    {techSignal.rsi_signal && (
+                      <span className={`inline-block rounded px-1.5 py-0.5 text-[10px] font-medium ${
+                        techSignal.rsi_signal === 'OVERSOLD' ? 'bg-green-500/15 text-green-400' :
+                        techSignal.rsi_signal === 'OVERBOUGHT' ? 'bg-red-500/15 text-red-400' :
+                        'bg-muted text-muted-foreground'
+                      }`}>
+                        {techSignal.rsi_signal}
+                      </span>
+                    )}
+                  </>
+                ) : (
+                  <p className="text-xs text-muted-foreground">Insufficient data</p>
+                )}
+              </div>
+              {/* MACD */}
+              <div className="rounded-lg border p-3 space-y-1.5">
+                <p className="text-xs text-muted-foreground font-medium">MACD (12,26,9)</p>
+                {techSignal.macd_line != null ? (
+                  <>
+                    <div className="flex justify-between text-xs">
+                      <span className="text-muted-foreground">MACD</span>
+                      <span className={Number(techSignal.macd_line) > 0 ? 'text-green-400' : 'text-red-400'}>
+                        {Number(techSignal.macd_line).toFixed(4)}
+                      </span>
+                    </div>
+                    <div className="flex justify-between text-xs">
+                      <span className="text-muted-foreground">Signal</span>
+                      <span>{Number(techSignal.macd_signal_line).toFixed(4)}</span>
+                    </div>
+                    {techSignal.macd_crossover && (
+                      <span className={`inline-block rounded px-1.5 py-0.5 text-[10px] font-medium ${
+                        techSignal.macd_crossover === 'BULLISH' ? 'bg-green-500/15 text-green-400' :
+                        techSignal.macd_crossover === 'BEARISH' ? 'bg-red-500/15 text-red-400' :
+                        techSignal.macd_crossover === 'POSITIVE' ? 'bg-emerald-500/10 text-emerald-400' :
+                        'bg-muted text-muted-foreground'
+                      }`}>
+                        {techSignal.macd_crossover}
+                      </span>
+                    )}
+                  </>
+                ) : (
+                  <p className="text-xs text-muted-foreground">Insufficient data</p>
+                )}
+              </div>
+              {/* Support/Resistance + ATR + Volume */}
+              <div className="rounded-lg border p-3 space-y-1.5">
+                <p className="text-xs text-muted-foreground font-medium">S/R & Volatility</p>
+                <div className="flex justify-between text-xs">
+                  <span className="text-muted-foreground">Support</span>
+                  <span className="text-green-400">{techSignal.support_20d != null ? `LKR ${Number(techSignal.support_20d).toFixed(2)}` : '—'}</span>
+                </div>
+                <div className="flex justify-between text-xs">
+                  <span className="text-muted-foreground">Resistance</span>
+                  <span className="text-red-400">{techSignal.resistance_20d != null ? `LKR ${Number(techSignal.resistance_20d).toFixed(2)}` : '—'}</span>
+                </div>
+                <div className="flex justify-between text-xs">
+                  <span className="text-muted-foreground">ATR 14</span>
+                  <span>{techSignal.atr_14 != null ? Number(techSignal.atr_14).toFixed(2) : '—'}</span>
+                </div>
+                {techSignal.volume_trend && (
+                  <span className={`inline-block rounded px-1.5 py-0.5 text-[10px] font-medium ${
+                    techSignal.volume_trend === 'ACCUMULATION' ? 'bg-green-500/15 text-green-400' :
+                    techSignal.volume_trend === 'DISTRIBUTION' ? 'bg-red-500/15 text-red-400' :
+                    'bg-muted text-muted-foreground'
+                  }`}>
+                    Vol: {techSignal.volume_trend}
+                    {techSignal.volume_ratio != null ? ` (${(Number(techSignal.volume_ratio) * 100).toFixed(0)}%)` : ''}
+                  </span>
+                )}
+                {techSignal.candlestick_pattern && (
+                  <span className="inline-block rounded px-1.5 py-0.5 text-[10px] font-medium bg-blue-500/10 text-blue-400">
+                    {techSignal.candlestick_pattern.replace('_', ' ')}
+                  </span>
+                )}
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       {/* AI Analysis + Shariah Card side by side */}
       <div className="grid gap-4 lg:grid-cols-3">

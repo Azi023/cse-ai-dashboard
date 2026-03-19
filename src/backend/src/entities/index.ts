@@ -19,3 +19,6 @@ export { PortfolioSnapshot } from './portfolio-snapshot.entity';
 export { WeeklyMetric } from './weekly-metric.entity';
 export { StockScore } from './stock-score.entity';
 export { AiRecommendation } from './ai-recommendation.entity';
+export { TechnicalSignal } from './technical-signal.entity';
+export { PositionRisk } from './position-risk.entity';
+export { RecommendationOutcome } from './recommendation-outcome.entity';
