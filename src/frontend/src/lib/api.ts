@@ -796,6 +796,49 @@ export const atradApi = {
   testConnection: () => api.post<{ success: boolean; message: string }>('/atrad/test'),
 };
 
+// Pending Orders Types
+export interface PendingOrder {
+  id: number;
+  symbol: string;
+  order_type: string; // 'STOP_LOSS' | 'TAKE_PROFIT' | 'LIMIT_BUY'
+  action: string;     // 'BUY' | 'SELL'
+  quantity: number;
+  trigger_price: number;
+  limit_price: number | null;
+  status: string;     // 'PENDING' | 'APPROVED' | 'EXECUTING' | 'EXECUTED' | 'FAILED' | 'CANCELLED'
+  source: string | null;
+  reason: string | null;
+  risk_data: Record<string, unknown> | null;
+  approved_at: string | null;
+  executed_at: string | null;
+  atrad_order_id: string | null;
+  execution_screenshot: string | null;
+  error_message: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface CreateOrderPayload {
+  symbol: string;
+  order_type: string;
+  action: string;
+  quantity: number;
+  trigger_price: number;
+  limit_price?: number;
+  reason?: string;
+}
+
+export const ordersApi = {
+  list: (status?: string) =>
+    api.get<PendingOrder[]>('/atrad/orders', { params: status ? { status } : {} }),
+  getActive: () => api.get<PendingOrder[]>('/atrad/orders/active'),
+  getById: (id: number) => api.get<PendingOrder>(`/atrad/orders/${id}`),
+  create: (payload: CreateOrderPayload) => api.post<PendingOrder>('/atrad/orders', payload),
+  approve: (id: number) => api.post<PendingOrder>(`/atrad/orders/${id}/approve`),
+  execute: (id: number) => api.post<PendingOrder>(`/atrad/orders/${id}/execute`),
+  cancel: (id: number) => api.post<PendingOrder>(`/atrad/orders/${id}/cancel`),
+};
+
 // Insights Types
 export interface DynamicInsight {
   id: string;

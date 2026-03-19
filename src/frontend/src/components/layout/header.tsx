@@ -28,6 +28,7 @@ import {
   Settings,
   Sun,
   Moon,
+  ClipboardList,
 } from 'lucide-react';
 import { marketApi, alertsApi } from '@/lib/api';
 import { useDisplayMode } from '@/contexts/display-mode-context';
@@ -67,6 +68,7 @@ const topLinks: NavLink[] = [
   { href: '/stocks', label: 'Stocks', icon: BarChart3 },
   { href: '/portfolio', label: 'Portfolio', icon: Wallet },
   { href: '/signals', label: 'Signals', icon: Zap },
+  { href: '/orders', label: 'Orders', icon: ClipboardList },
 ];
 
 const analysisGroup: NavGroup = {
