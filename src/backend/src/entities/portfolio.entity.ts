@@ -38,6 +38,15 @@ export class Portfolio {
   @Column({ type: 'decimal', precision: 5, scale: 4, default: 0.03 })
   purification_rate: number;
 
+  @Column({
+    type: 'decimal',
+    precision: 10,
+    scale: 2,
+    nullable: true,
+    default: 0,
+  })
+  fees: number;
+
   @Column({ type: 'text', nullable: true })
   notes: string | null;
 

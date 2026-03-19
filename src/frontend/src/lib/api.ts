@@ -156,6 +156,8 @@ export interface PortfolioHolding {
   sector: string | null;
   quantity: number;
   buy_price: number;
+  fees: number;
+  effective_buy_price: number;
   buy_date: string;
   current_price: number | null;
   invested_value: number;
@@ -229,6 +231,7 @@ export const portfolioApi = {
     quantity: number;
     buy_price: number;
     buy_date: string;
+    fees?: number;
     notes?: string;
     dividends_received?: number;
     purification_rate?: number;
@@ -239,6 +242,7 @@ export const portfolioApi = {
       quantity?: number;
       buy_price?: number;
       buy_date?: string;
+      fees?: number;
       notes?: string;
       dividends_received?: number;
       purification_rate?: number;

@@ -195,9 +195,11 @@ export class JourneyService {
     const lastMonth = `${lastMonthDate.getFullYear()}-${String(lastMonthDate.getMonth() + 1).padStart(2, '0')}`;
 
     const lastMonthDeposit = deposits.find((d) => d.month === lastMonth);
+    // When no prior month deposit exists (e.g., first month investing),
+    // use 0 so we don't double-count this month's deposits in the baseline.
     const lastMonthPortfolioValue = lastMonthDeposit
       ? Number(lastMonthDeposit.portfolio_value_at_deposit)
-      : totalDeposited;
+      : 0;
 
     // This month's deposits
     const thisMonthDepositAmount = deposits

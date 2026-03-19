@@ -21,13 +21,13 @@ import { getSimpleLabel } from '@/lib/simple-mode-constants';
 import { safeNum } from '@/lib/format';
 
 const directionConfig = {
-  BUY: { icon: TrendingUp, color: 'text-green-500', bg: 'bg-green-500/10', label: 'Buy Signal' },
+  BUY: { icon: TrendingUp, color: 'text-emerald-500', bg: 'bg-emerald-500/10', label: 'Buy Signal' },
   HOLD: { icon: Minus, color: 'text-yellow-500', bg: 'bg-yellow-500/10', label: 'Hold' },
   SELL: { icon: TrendingDown, color: 'text-red-500', bg: 'bg-red-500/10', label: 'Sell Signal' },
 };
 
 const confidenceColor = {
-  HIGH: 'bg-green-600/20 text-green-500 border-green-600/30',
+  HIGH: 'bg-emerald-600/20 text-emerald-500 border-emerald-600/30',
   MEDIUM: 'bg-yellow-600/20 text-yellow-500 border-yellow-600/30',
   LOW: 'bg-gray-600/20 text-gray-400 border-gray-600/30',
 };
@@ -163,7 +163,7 @@ export default function SignalsPage() {
           onClick={() => setShariahOnly(!shariahOnly)}
           className={`flex items-center gap-1.5 rounded-md px-2.5 py-1 text-xs font-medium transition-colors ${
             shariahOnly
-              ? 'bg-green-500/10 text-green-500 border border-green-500/30'
+              ? 'bg-emerald-500/10 text-emerald-500 border border-emerald-500/30'
               : 'text-muted-foreground hover:bg-muted/50'
           }`}
         >
@@ -186,7 +186,7 @@ export default function SignalsPage() {
             const Icon = cfg.icon;
 
             return (
-              <Card key={`${signal.symbol}-${i}`}>
+              <Card key={`${signal.symbol}-${i}`} hover>
                 <CardContent className="pt-5 space-y-3">
                   <div className="flex items-start justify-between">
                     <div className="flex items-center gap-3">
@@ -206,7 +206,7 @@ export default function SignalsPage() {
                       </div>
                     </div>
                     <div className="text-right">
-                      <div className="font-semibold">
+                      <div className="font-semibold num">
                         LKR {safeNum(signal.currentPrice).toFixed(2)}
                       </div>
                       <Badge variant="outline" className={cfg.color}>
@@ -232,6 +232,25 @@ export default function SignalsPage() {
                     </div>
                   )}
 
+                  {/* Confidence bar */}
+                  <div className="space-y-1">
+                    <div className="flex items-center justify-between text-[10px] text-muted-foreground">
+                      <span>Confidence</span>
+                      <span className={confidenceColor[signal.confidence].split(' ')[1]}>{signal.confidence}</span>
+                    </div>
+                    <div className="h-1 w-full rounded-full bg-muted overflow-hidden">
+                      <div
+                        className={`h-full rounded-full transition-all ${
+                          signal.confidence === 'HIGH'
+                            ? 'w-full bg-emerald-500'
+                            : signal.confidence === 'MEDIUM'
+                            ? 'w-2/3 bg-yellow-500'
+                            : 'w-1/3 bg-gray-500'
+                        }`}
+                      />
+                    </div>
+                  </div>
+
                   <div className="flex items-center justify-between pt-1">
                     <div className="flex items-center gap-2">
                       <Badge variant="outline" className={confidenceColor[signal.confidence]}>
@@ -240,7 +259,7 @@ export default function SignalsPage() {
                       {signal.shariahStatus === 'compliant' && (
                         <Badge
                           variant="outline"
-                          className="border-green-600/30 text-green-500"
+                          className="border-emerald-600/30 text-emerald-500"
                         >
                           <Shield className="h-3 w-3 mr-1" />
                           Shariah

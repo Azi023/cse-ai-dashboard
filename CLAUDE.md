@@ -128,29 +128,32 @@ src/
 - News Intelligence (RSS from EconomyNext, Google News CSE)
 - Announcements (financial + approved, from CSE API)
 - ATrad Playwright login + Account Summary scraping (buyingPower, cashBalance confirmed)
-- Daily Digest notifications (Haiku, 2:45 PM)
-- Weekly Brief (Sonnet, Friday 3:00 PM)
+- Daily Digest notifications (Haiku, 2:45 PM) — includes crash alerts, portfolio P&L
+- Weekly Brief (Sonnet, Friday 3:00 PM) — includes AI recommendation + top 5 scores
 - Token budget guard (500K/month, auto-downgrades Sonnet → Haiku)
 - Shariah screening (twice-weekly, skips if recent)
 - Journey page with deposit tracking, T+2 pending state display
-- Portfolio page with manual Add Holding + ATrad sync banner
-- Responsive UI fixes, font readability improvements
+- Portfolio page with manual Add Holding (with broker fees field) + ATrad sync banner
+- Premium UI redesign (Bloomberg Terminal dark theme, Inter + JetBrains Mono fonts)
+- AEL.N0000 holding added (200 shares @ 69.50 + LKR 155.69 fees = LKR 70.28/share effective)
+- **Shariah data seeded**: 11 compliant, 34 non-compliant, remainder pending review
+- **Phase 2 AI Analysis Pipeline**: snapshot accumulation started (day 1), scoring ready after 20 market days
+- **All 55 backend endpoints tested**: all HTTP 200 (QA pass March 19, 2026)
+- **PM2 ecosystem.config.js**: created for persistent process management
+- ATrad cron timezone bug fixed (market-hours sync now fires correctly 9:30-2:30 PM SLT)
+- Journey thisMonthReturn calculation bug fixed (was double-counting deposits)
+- ATrad post-close sync at 2:38 PM SLT (before portfolio snapshot at 2:40 PM)
 
 ### What's Pending / Broken ⚠️
-- **ATrad Stock Holding scraping returns 0 holdings** — T+2 settlement cleared March 18, need to re-test. The `#gridContainer4` table headers are a multi-column market watch, not the holdings grid. The `getStockHolding` API returns `portfolios: []` pre-settlement. Need to confirm post-settlement data shape.
-- **Account Value from ATrad reads implausible numbers** (128229050000) — account number being misread from adjacent field. Needs selector fix.
-- **Portfolio page shows LKR 5,944.32 as Total Value** — this is cash balance, not portfolio value. Once ATrad holdings sync works, this corrects automatically.
-- **Backtester module** — `/api/backtester/symbols` returns 404. Controller registered but handler likely missing.
-- **Shariah screening shows 0 compliant, 24 non-compliant, 272 pending** — needs Almas whitelist data import.
+- **ATrad Stock Holding scraping returns 0 holdings** — T+2 settlement cleared March 18, need to trigger a manual sync and verify post-settlement `portfolios` array shape. Account Value selector still reads implausible numbers (account number in adjacent field).
+- **Stock scoring engine needs 20 market days** — accumulating since March 19. Scoring will be meaningful around April 16, 2026.
+- **Shariah Tier 2 screening** — requires quarterly financial ratio data import. Most stocks remain PENDING_REVIEW until that data is available.
+- **Backtester `/api/backtester/symbols`** — returns 404. Controller registered but handler route mismatch. Low priority.
 
 ### What Needs Building 🔨
-- **Phase 2: AI Analysis Pipeline** (see Tasks section below)
-- **PM2 process management** for persistent running
-- **Stock scoring engine** (deterministic, no AI needed)
-- **AI recommendation system** (weekly, Sonnet)
-- **Market snapshot accumulation** (daily close data → DB)
-- **Portfolio snapshot tracking** (daily portfolio value → DB)
-- **ATrad holdings integration** into portfolio sync service
+- **ATrad holdings selector fix** — post-settlement verification + Account Value field selector repair
+- **Shariah Tier 2 financial data** — import quarterly reports to enable ratio screening
+- **Historical accuracy tracking** — did past AI recommendations perform? Track in `ai_recommendations` table
 
 ---
 

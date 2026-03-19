@@ -102,6 +102,7 @@ export default function DashboardPage() {
   const [nonCompliantSymbols, setNonCompliantSymbols] = useState<Set<string>>(new Set());
   const [recentNews, setRecentNews] = useState<NewsItemData[]>([]);
   const [recentAlerts, setRecentAlerts] = useState<AlertRecord[]>([]);
+  const [moversTab, setMoversTab] = useState<'gainers' | 'losers' | 'active'>('gainers');
 
   const { watchlist, toggle: toggleWatch, has: inWatchlist } = useWatchlist();
   const [watchlistStocks, setWatchlistStocks] = useState<Stock[]>([]);
@@ -200,7 +201,7 @@ export default function DashboardPage() {
               variant="outline"
               className={
                 (summary.aspi_change_percent ?? 0) > 0
-                  ? 'border-green-500/30 text-green-500'
+                  ? 'border-emerald-500/30 text-emerald-500'
                   : (summary.aspi_change_percent ?? 0) < 0
                     ? 'border-red-500/30 text-red-500'
                     : ''
@@ -395,8 +396,8 @@ export default function DashboardPage() {
                               {stock.last_price ? Number(stock.last_price).toFixed(2) : '\u2014'}
                             </span>
                             <span
-                              className={`text-xs font-medium ${
-                                change > 0 ? 'text-green-500' : change < 0 ? 'text-red-500' : 'text-muted-foreground'
+                              className={`text-xs font-medium num ${
+                                change > 0 ? 'text-emerald-500' : change < 0 ? 'text-red-500' : 'text-muted-foreground'
                               }`}
                             >
                               {change > 0 ? '+' : ''}{safeNum(change).toFixed(2)}%
@@ -459,14 +460,33 @@ export default function DashboardPage() {
 
       {/* Row 5: Top Stocks Tabs */}
       <Card>
-        <CardHeader className="pb-3">
+        <CardHeader className="pb-0">
           <div className="flex items-center justify-between flex-wrap gap-2">
-            <CardTitle className="text-sm">Market Movers</CardTitle>
+            <div className="flex items-center gap-1 border-b border-transparent">
+              {([
+                { key: 'gainers', label: isSimple ? 'Winners' : 'Top Gainers', icon: TrendingUp, color: 'text-emerald-500' },
+                { key: 'losers', label: isSimple ? 'Losers' : 'Top Losers', icon: TrendingDown, color: 'text-red-500' },
+                { key: 'active', label: isSimple ? 'Most Traded' : 'Most Active', icon: Activity, color: 'text-primary' },
+              ] as const).map(({ key, label, icon: Icon, color }) => (
+                <button
+                  key={key}
+                  onClick={() => setMoversTab(key)}
+                  className={`flex items-center gap-1.5 px-3 py-2 text-xs font-medium border-b-2 transition-colors ${
+                    moversTab === key
+                      ? `border-current ${color}`
+                      : 'border-transparent text-muted-foreground hover:text-foreground'
+                  }`}
+                >
+                  <Icon className="h-3 w-3" />
+                  {label}
+                </button>
+              ))}
+            </div>
             <button
               onClick={() => setShariahFilter((prev) => !prev)}
               className={`flex items-center gap-1.5 rounded-md border px-3 py-1.5 text-xs font-medium transition-colors ${
                 shariahFilter
-                  ? 'border-green-500 bg-green-500/10 text-green-500'
+                  ? 'border-emerald-500 bg-emerald-500/10 text-emerald-500'
                   : 'border-muted-foreground/30 text-muted-foreground hover:border-muted-foreground/50'
               }`}
             >
@@ -475,27 +495,10 @@ export default function DashboardPage() {
             </button>
           </div>
         </CardHeader>
-        <CardContent>
-          <div className="grid gap-4 lg:grid-cols-3">
-            <div>
-              <h4 className="text-xs font-medium text-green-500 mb-2 flex items-center gap-1">
-                <TrendingUp className="h-3 w-3" /> {isSimple ? 'Biggest Winners Today' : 'Top Gainers'}
-              </h4>
-              <TopStocksTable stocks={filterStocks(gainers)} loading={loading} type="gainers" />
-            </div>
-            <div>
-              <h4 className="text-xs font-medium text-red-500 mb-2 flex items-center gap-1">
-                <TrendingDown className="h-3 w-3" /> {isSimple ? 'Biggest Losers Today' : 'Top Losers'}
-              </h4>
-              <TopStocksTable stocks={filterStocks(losers)} loading={loading} type="losers" />
-            </div>
-            <div>
-              <h4 className="text-xs font-medium text-blue-500 mb-2 flex items-center gap-1">
-                <Activity className="h-3 w-3" /> {isSimple ? 'Most Traded Today' : 'Most Active'}
-              </h4>
-              <TopStocksTable stocks={filterStocks(active)} loading={loading} type="active" />
-            </div>
-          </div>
+        <CardContent className="pt-3">
+          {moversTab === 'gainers' && <TopStocksTable stocks={filterStocks(gainers)} loading={loading} type="gainers" />}
+          {moversTab === 'losers' && <TopStocksTable stocks={filterStocks(losers)} loading={loading} type="losers" />}
+          {moversTab === 'active' && <TopStocksTable stocks={filterStocks(active)} loading={loading} type="active" />}
         </CardContent>
       </Card>
 
@@ -530,7 +533,7 @@ export default function DashboardPage() {
                     </span>
                     <span
                       className={`text-xs font-medium whitespace-nowrap ${
-                        pct > 0 ? 'text-green-500' : pct < 0 ? 'text-red-500' : 'text-muted-foreground'
+                        pct > 0 ? 'text-emerald-500' : pct < 0 ? 'text-red-500' : 'text-muted-foreground'
                       }`}
                     >
                       {pct > 0 ? '+' : ''}{safeNum(sector.percentage).toFixed(2)}%

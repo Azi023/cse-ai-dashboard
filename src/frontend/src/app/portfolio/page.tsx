@@ -114,9 +114,9 @@ export default function PortfolioPage() {
     <div className="space-y-6">
       {/* ATrad sync banner */}
       {atradStatus?.configured && (
-        <div className={`flex items-center gap-2 rounded-lg border px-4 py-2 text-sm ${atradStatus.syncSuccess ? 'border-green-500/20 bg-green-500/5' : 'border-yellow-500/20 bg-yellow-500/5'}`}>
-          <RefreshCw className={`h-3.5 w-3.5 ${atradStatus.syncSuccess ? 'text-green-500' : 'text-yellow-500'}`} />
-          <span className={atradStatus.syncSuccess ? 'text-green-400' : 'text-yellow-400'}>
+        <div className={`flex items-center gap-2 rounded-lg border px-4 py-2 text-sm ${atradStatus.syncSuccess ? 'border-emerald-500/20 bg-emerald-500/5' : 'border-yellow-500/20 bg-yellow-500/5'}`}>
+          <RefreshCw className={`h-3.5 w-3.5 ${atradStatus.syncSuccess ? 'text-emerald-500' : 'text-yellow-500'}`} />
+          <span className={atradStatus.syncSuccess ? 'text-emerald-400' : 'text-yellow-400'}>
             {atradStatus.syncSuccess
               ? `Last synced from ATrad: ${atradStatus.lastSynced ? new Date(atradStatus.lastSynced).toLocaleTimeString() : 'recently'}`
               : 'ATrad sync not yet connected'}
@@ -215,7 +215,7 @@ export default function PortfolioPage() {
           loading={loading}
           icon={
             (summary?.total_pnl ?? 0) >= 0 ? (
-              <TrendingUp className="h-4 w-4 text-green-500" />
+              <TrendingUp className="h-4 w-4 text-emerald-500" />
             ) : (
               <TrendingDown className="h-4 w-4 text-red-500" />
             )
@@ -373,7 +373,7 @@ export default function PortfolioPage() {
           </CardHeader>
           <CardContent>
             <div className="flex items-center gap-6 text-sm mb-4">
-              <span className="text-green-500">
+              <span className="text-emerald-500">
                 {shariahSummary.compliant_count} Compliant
               </span>
               <span className="text-red-500">
@@ -432,31 +432,29 @@ function SummaryCard({
   const colorClass =
     format === 'pnl' && value != null
       ? value >= 0
-        ? 'text-green-500'
+        ? 'text-emerald-500'
         : 'text-red-500'
       : '';
 
   return (
-    <Card>
+    <Card hover>
       <CardHeader className="flex flex-row items-center justify-between pb-2">
-        <CardTitle className="text-sm font-medium">{title}</CardTitle>
+        <CardTitle className="text-xs font-medium text-muted-foreground uppercase tracking-wider">{title}</CardTitle>
         {icon}
       </CardHeader>
       <CardContent>
         {loading ? (
-          <Skeleton className="h-8 w-24" />
+          <div className="h-8 w-24 skeleton-shimmer rounded" />
         ) : (
           <div>
-            <div className={`text-2xl font-bold ${colorClass}`}>
+            <div className={`text-2xl font-bold num ${colorClass}`}>
               {value != null ? formatValue(value) : '—'}
             </div>
             {value == null && emptyLabel && (
               <p className="text-xs text-muted-foreground mt-1">{emptyLabel}</p>
             )}
             {percent != null && (
-              <p
-                className={`text-xs ${percent >= 0 ? 'text-green-500' : 'text-red-500'}`}
-              >
+              <p className={`text-xs num font-medium ${percent >= 0 ? 'text-emerald-500' : 'text-red-500'}`}>
                 {percent >= 0 ? '+' : ''}
                 {safeNum(percent).toFixed(2)}%
               </p>
@@ -476,9 +474,9 @@ function PnLValue({
   suffix?: string;
 }) {
   if (value == null) return <span>—</span>;
-  const color = value > 0 ? 'text-green-500' : value < 0 ? 'text-red-500' : '';
+  const color = value > 0 ? 'text-emerald-500' : value < 0 ? 'text-red-500' : '';
   return (
-    <span className={color}>
+    <span className={`${color} num font-medium`}>
       {value > 0 ? '+' : ''}
       {safeNum(value).toFixed(2)}
       {suffix}
@@ -490,7 +488,7 @@ function ShariahBadge({ status }: { status: string }) {
   switch (status) {
     case 'compliant':
       return (
-        <Badge variant="outline" className="border-green-500 text-green-500 text-xs">
+        <Badge variant="outline" className="border-emerald-500 text-emerald-500 text-xs">
           Compliant
         </Badge>
       );
@@ -580,6 +578,7 @@ function AddHoldingForm({
   const [symbol, setSymbol] = useState('');
   const [quantity, setQuantity] = useState('');
   const [buyPrice, setBuyPrice] = useState('');
+  const [fees, setFees] = useState('');
   const [buyDate, setBuyDate] = useState(new Date().toISOString().split('T')[0]);
   const [notes, setNotes] = useState('');
   const [submitting, setSubmitting] = useState(false);
@@ -590,7 +589,7 @@ function AddHoldingForm({
     setFormError(null);
 
     if (!symbol.trim() || !quantity || !buyPrice || !buyDate) {
-      setFormError('All fields except notes are required');
+      setFormError('All fields except fees and notes are required');
       return;
     }
 
@@ -601,6 +600,7 @@ function AddHoldingForm({
         quantity: Number(quantity),
         buy_price: Number(buyPrice),
         buy_date: buyDate,
+        fees: fees ? Number(fees) : undefined,
         notes: notes.trim() || undefined,
       });
       onSuccess();
@@ -656,6 +656,19 @@ function AddHoldingForm({
               placeholder="150.00"
               value={buyPrice}
               onChange={(e) => setBuyPrice(e.target.value)}
+            />
+          </div>
+          <div>
+            <label className="text-xs text-muted-foreground">
+              Broker Fees, LKR (optional)
+            </label>
+            <Input
+              type="number"
+              step="0.01"
+              min="0"
+              placeholder="0.00"
+              value={fees}
+              onChange={(e) => setFees(e.target.value)}
             />
           </div>
           <div>

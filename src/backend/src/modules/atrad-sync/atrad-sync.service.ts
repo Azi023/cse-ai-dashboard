@@ -38,15 +38,16 @@ export class ATradSyncService {
   ) {}
 
   // ── Cron: Every 15 minutes during market hours (9:30 AM - 2:30 PM SLT, Mon-Fri) ──
-  // SLT is UTC+5:30, so 9:30 SLT = 04:00 UTC, 14:30 SLT = 09:00 UTC
+  // Hour range 4-8 is UTC: 04:00 UTC = 9:30 SLT, 09:00 UTC = 14:30 SLT
+  // No timeZone option — cron expression uses UTC hours directly.
   @Cron('0 */15 4-8 * * 1-5', {
     name: 'atrad-sync-market-hours',
-    timeZone: 'Asia/Colombo',
   })
   async handleMarketHoursSync(): Promise<void> {
     // Check if within market hours (9:30-14:30 SLT)
     const now = new Date();
-    const sltHour = now.getUTCHours() + 5 + (now.getUTCMinutes() + 30 >= 60 ? 1 : 0);
+    const sltHour =
+      now.getUTCHours() + 5 + (now.getUTCMinutes() + 30 >= 60 ? 1 : 0);
     const sltMinute = (now.getUTCMinutes() + 30) % 60;
     const sltTime = sltHour * 100 + sltMinute;
 
@@ -55,6 +56,16 @@ export class ATradSyncService {
     }
 
     this.logger.log('Cron: ATrad market hours sync triggered');
+    await this.triggerSync();
+  }
+
+  // ── Cron: Once at 2:38 PM SLT (post-close, before daily snapshot at 2:40 PM) ──
+  // 9:08 AM UTC = 2:38 PM SLT — ensures ATrad data is fresh for portfolio snapshot
+  @Cron('8 9 * * 1-5', {
+    name: 'atrad-sync-post-close',
+  })
+  async handlePostCloseSync(): Promise<void> {
+    this.logger.log('Cron: ATrad post-close sync triggered (2:38 PM SLT)');
     await this.triggerSync();
   }
 
@@ -74,15 +85,17 @@ export class ATradSyncService {
   async triggerSync(): Promise<ATradPortfolio> {
     if (this.isSyncing) {
       this.logger.warn('Sync already in progress, skipping...');
-      return this.lastSyncResult ?? {
-        holdings: [],
-        buyingPower: 0,
-        accountValue: 0,
-        cashBalance: 0,
-        lastSynced: new Date(),
-        syncSuccess: false,
-        error: 'Sync already in progress',
-      };
+      return (
+        this.lastSyncResult ?? {
+          holdings: [],
+          buyingPower: 0,
+          accountValue: 0,
+          cashBalance: 0,
+          lastSynced: new Date(),
+          syncSuccess: false,
+          error: 'Sync already in progress',
+        }
+      );
     }
 
     this.isSyncing = true;
@@ -95,7 +108,7 @@ export class ATradSyncService {
       if (result.syncSuccess) {
         this.logger.log(
           `Sync successful: ${result.holdings.length} holdings, ` +
-          `Buying Power: ${result.buyingPower}, Account Value: ${result.accountValue}`,
+            `Buying Power: ${result.buyingPower}, Account Value: ${result.accountValue}`,
         );
 
         // Compare with portfolio table and auto-update
@@ -105,10 +118,14 @@ export class ATradSyncService {
         await this.detectDeposit(result.buyingPower);
 
         // Cache the result in Redis (24 hour TTL — survives backend restarts)
-        await this.redisService.setJson('atrad:last_sync', {
-          ...result,
-          lastSynced: result.lastSynced.toISOString(),
-        }, 86400);
+        await this.redisService.setJson(
+          'atrad:last_sync',
+          {
+            ...result,
+            lastSynced: result.lastSynced.toISOString(),
+          },
+          86400,
+        );
 
         // Cache holdings separately for quick access
         await this.redisService.setJson('atrad:holdings', result.holdings, 300);
@@ -188,7 +205,9 @@ export class ATradSyncService {
       }>('atrad:last_sync');
 
       if (cached) {
-        this.logger.log(`Restored ATrad status from Redis cache (buying power: ${cached.buyingPower})`);
+        this.logger.log(
+          `Restored ATrad status from Redis cache (buying power: ${cached.buyingPower})`,
+        );
         this.lastSyncResult = {
           ...cached,
           lastSynced: new Date(cached.lastSynced),
@@ -204,7 +223,9 @@ export class ATradSyncService {
         };
       }
     } catch (err) {
-      this.logger.warn(`Could not restore ATrad status from Redis: ${String(err)}`);
+      this.logger.warn(
+        `Could not restore ATrad status from Redis: ${String(err)}`,
+      );
     }
 
     return {
@@ -226,7 +247,8 @@ export class ATradSyncService {
       return this.lastSyncResult.holdings;
     }
     try {
-      const cached = await this.redisService.getJson<ATradHolding[]>('atrad:holdings');
+      const cached =
+        await this.redisService.getJson<ATradHolding[]>('atrad:holdings');
       return cached ?? [];
     } catch {
       return [];
@@ -235,7 +257,9 @@ export class ATradSyncService {
 
   // ── Private: Reconcile ATrad holdings with portfolio table ────────────
 
-  private async reconcilePortfolio(atradHoldings: ATradHolding[]): Promise<void> {
+  private async reconcilePortfolio(
+    atradHoldings: ATradHolding[],
+  ): Promise<void> {
     if (atradHoldings.length === 0) {
       this.logger.log('No ATrad holdings to reconcile');
       return;
@@ -263,7 +287,10 @@ export class ATradSyncService {
         await this.addNewHolding(atradHolding);
       } else {
         // Check for quantity changes
-        const totalDbQty = dbEntries.reduce((sum, e) => sum + Number(e.quantity), 0);
+        const totalDbQty = dbEntries.reduce(
+          (sum, e) => sum + Number(e.quantity),
+          0,
+        );
         if (totalDbQty !== atradHolding.quantity) {
           this.logger.log(
             `Quantity mismatch for ${baseSymbol}: DB=${totalDbQty}, ATrad=${atradHolding.quantity}`,
@@ -358,7 +385,7 @@ export class ATradSyncService {
     if (diff > 1000) {
       this.logger.log(
         `Potential deposit detected: Buying power increased by LKR ${diff.toFixed(2)} ` +
-        `(${this.previousBuyingPower} -> ${currentBuyingPower})`,
+          `(${this.previousBuyingPower} -> ${currentBuyingPower})`,
       );
 
       // Check if we already recorded a deposit this month

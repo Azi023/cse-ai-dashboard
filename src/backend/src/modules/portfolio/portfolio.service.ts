@@ -14,6 +14,7 @@ interface CreateHoldingDto {
   quantity: number;
   buy_price: number;
   buy_date: string;
+  fees?: number;
   notes?: string;
   dividends_received?: number;
   purification_rate?: number;
@@ -23,6 +24,7 @@ interface UpdateHoldingDto {
   quantity?: number;
   buy_price?: number;
   buy_date?: string;
+  fees?: number;
   notes?: string;
   dividends_received?: number;
   purification_rate?: number;
@@ -35,6 +37,8 @@ export interface HoldingWithPnL {
   sector: string | null;
   quantity: number;
   buy_price: number;
+  fees: number;
+  effective_buy_price: number;
   buy_date: Date;
   current_price: number | null;
   invested_value: number;
@@ -104,7 +108,9 @@ export class PortfolioService {
       });
       const trade = tradeData.get(h.symbol);
       const currentPrice = trade?.price ?? stock?.last_price ?? null;
-      const investedValue = Number(h.quantity) * Number(h.buy_price);
+      const fees = Number(h.fees ?? 0);
+      const effectiveBuyPrice = Number(h.buy_price) + fees / Number(h.quantity);
+      const investedValue = Number(h.quantity) * effectiveBuyPrice;
       const currentValue =
         currentPrice != null ? Number(h.quantity) * Number(currentPrice) : null;
       const pnl = currentValue != null ? currentValue - investedValue : null;
@@ -126,6 +132,8 @@ export class PortfolioService {
         sector: stock?.sector ?? null,
         quantity: h.quantity,
         buy_price: Number(h.buy_price),
+        fees,
+        effective_buy_price: effectiveBuyPrice,
         buy_date: h.buy_date,
         current_price: currentPrice != null ? Number(currentPrice) : null,
         invested_value: investedValue,
@@ -173,6 +181,7 @@ export class PortfolioService {
       symbol,
       quantity: dto.quantity,
       buy_price: dto.buy_price,
+      fees: dto.fees ?? 0,
       buy_date: new Date(dto.buy_date),
       notes: dto.notes ?? null,
       dividends_received: dto.dividends_received ?? 0,
@@ -194,6 +203,7 @@ export class PortfolioService {
 
     if (dto.quantity !== undefined) holding.quantity = dto.quantity;
     if (dto.buy_price !== undefined) holding.buy_price = dto.buy_price;
+    if (dto.fees !== undefined) holding.fees = dto.fees;
     if (dto.buy_date !== undefined) holding.buy_date = new Date(dto.buy_date);
     if (dto.notes !== undefined) holding.notes = dto.notes;
     if (dto.dividends_received !== undefined)
@@ -257,7 +267,8 @@ export class PortfolioService {
       });
       const trade = tradeData.get(h.symbol);
       const currentPrice = trade?.price ?? stock?.last_price ?? null;
-      const invested = Number(h.quantity) * Number(h.buy_price);
+      const fees = Number(h.fees ?? 0);
+      const invested = Number(h.quantity) * Number(h.buy_price) + fees;
       totalInvested += invested;
 
       if (currentPrice != null) {

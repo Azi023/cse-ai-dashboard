@@ -84,12 +84,14 @@ export function DailyBriefCard() {
   const sentiment = sentimentConfig[brief.marketSentiment] ?? sentimentConfig.NEUTRAL;
 
   return (
-    <Card>
+    <Card className="ai-card-border">
       <CardHeader className="pb-3">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
-            <Sparkles className="h-4 w-4 text-primary" />
-            <CardTitle className="text-sm">
+            <div className="flex h-6 w-6 items-center justify-center rounded-md bg-primary/10">
+              <Sparkles className="h-3.5 w-3.5 text-primary" />
+            </div>
+            <CardTitle className="text-sm font-semibold">
               AI Market Brief — {format(new Date(), 'MMM d, yyyy')}
             </CardTitle>
           </div>

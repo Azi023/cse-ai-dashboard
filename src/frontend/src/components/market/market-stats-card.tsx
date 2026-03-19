@@ -1,7 +1,7 @@
 'use client';
 
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { BarChart3 } from 'lucide-react';
+import { Activity } from 'lucide-react';
 import { safeNum } from '@/lib/format';
 
 interface MarketStatsCardProps {
@@ -23,14 +23,17 @@ function formatNumber(num: number | null): string {
 export function MarketStatsCard({ volume, turnover, trades, loading }: MarketStatsCardProps) {
   if (loading) {
     return (
-      <Card>
+      <Card hover>
         <CardHeader className="pb-2">
-          <CardTitle className="text-sm font-medium text-muted-foreground">Market Activity</CardTitle>
+          <CardTitle className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Market Activity</CardTitle>
         </CardHeader>
         <CardContent>
-          <div className="space-y-2">
+          <div className="space-y-3">
             {[1, 2, 3].map((i) => (
-              <div key={i} className="h-4 w-full animate-pulse rounded bg-muted" />
+              <div key={i} className="flex justify-between items-center">
+                <div className="h-3 w-20 skeleton-shimmer rounded" />
+                <div className="h-5 w-16 skeleton-shimmer rounded" />
+              </div>
             ))}
           </div>
         </CardContent>
@@ -39,25 +42,25 @@ export function MarketStatsCard({ volume, turnover, trades, loading }: MarketSta
   }
 
   return (
-    <Card>
+    <Card hover>
       <CardHeader className="pb-2">
         <div className="flex items-center gap-2">
-          <BarChart3 className="h-4 w-4 text-muted-foreground" />
-          <CardTitle className="text-sm font-medium text-muted-foreground">Market Activity</CardTitle>
+          <Activity className="h-3.5 w-3.5 text-muted-foreground" />
+          <CardTitle className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Market Activity</CardTitle>
         </div>
       </CardHeader>
       <CardContent className="space-y-3">
-        <div className="flex justify-between">
-          <span className="text-sm text-muted-foreground">Volume</span>
-          <span className="text-sm font-medium">{formatNumber(volume)}</span>
+        <div className="flex justify-between items-baseline">
+          <span className="text-xs text-muted-foreground">Volume</span>
+          <span className="text-sm font-semibold num">{formatNumber(volume)}</span>
         </div>
-        <div className="flex justify-between">
-          <span className="text-sm text-muted-foreground">Turnover (LKR)</span>
-          <span className="text-sm font-medium">{formatNumber(turnover)}</span>
+        <div className="flex justify-between items-baseline">
+          <span className="text-xs text-muted-foreground">Turnover (LKR)</span>
+          <span className="text-sm font-semibold num">{formatNumber(turnover)}</span>
         </div>
-        <div className="flex justify-between">
-          <span className="text-sm text-muted-foreground">Trades</span>
-          <span className="text-sm font-medium">{formatNumber(trades)}</span>
+        <div className="flex justify-between items-baseline">
+          <span className="text-xs text-muted-foreground">Trades</span>
+          <span className="text-sm font-semibold num">{formatNumber(trades)}</span>
         </div>
       </CardContent>
     </Card>
