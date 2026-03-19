@@ -1,0 +1,38 @@
+module.exports = {
+  apps: [
+    {
+      name: 'cse-backend',
+      cwd: './src/backend',
+      script: 'npm',
+      args: 'run start:dev',
+      watch: false,
+      autorestart: true,
+      max_restarts: 10,
+      restart_delay: 5000,
+      env: {
+        NODE_ENV: 'development',
+        PORT: 3001,
+      },
+      out_file: '../../logs/backend-out.log',
+      error_file: '../../logs/backend-err.log',
+      log_date_format: 'YYYY-MM-DD HH:mm:ss',
+    },
+    {
+      name: 'cse-frontend',
+      cwd: './src/frontend',
+      script: 'npm',
+      args: 'run dev',
+      watch: false,
+      autorestart: true,
+      max_restarts: 10,
+      restart_delay: 5000,
+      env: {
+        NODE_ENV: 'development',
+        PORT: 3000,
+      },
+      out_file: '../../logs/frontend-out.log',
+      error_file: '../../logs/frontend-err.log',
+      log_date_format: 'YYYY-MM-DD HH:mm:ss',
+    },
+  ],
+};

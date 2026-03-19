@@ -23,6 +23,8 @@ import { BacktestModule } from './modules/backtest/backtest.module';
 import { ATradSyncModule } from './modules/atrad-sync/atrad-sync.module';
 import { JourneyModule } from './modules/journey/journey.module';
 import { InsightsModule } from './modules/insights/insights.module';
+import { NotificationsModule } from './modules/notifications/notifications.module';
+import { AnalysisModule } from './modules/analysis/analysis.module';
 
 @Module({
   imports: [
@@ -45,10 +47,7 @@ import { InsightsModule } from './modules/insights/insights.module';
           'DATABASE_PASSWORD',
           'cse_secure_2026',
         ),
-        database: configService.get<string>(
-          'DATABASE_NAME',
-          'cse_dashboard',
-        ),
+        database: configService.get<string>('DATABASE_NAME', 'cse_dashboard'),
         autoLoadEntities: true,
         synchronize:
           configService.get<string>('NODE_ENV', 'development') ===
@@ -92,6 +91,8 @@ import { InsightsModule } from './modules/insights/insights.module';
     ATradSyncModule,
     JourneyModule,
     InsightsModule,
+    NotificationsModule,
+    AnalysisModule,
   ],
   controllers: [AppController],
   providers: [AppService],

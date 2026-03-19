@@ -24,6 +24,7 @@ import {
   journeyApi,
   insightsApi,
   atradApi,
+  analysisApi,
   type InvestmentKPIs,
   type PortfolioHealthScore,
   type InvestmentGoalData,
@@ -31,6 +32,9 @@ import {
   type DynamicInsight,
   type MarketExplainer,
   type ATradSyncStatus,
+  type AiRecommendationData,
+  type StockScoreData,
+  type DataStatusData,
 } from '@/lib/api';
 import { formatLKR, formatPct, getGradeColor, TOOLTIPS } from '@/lib/simple-mode-constants';
 
@@ -75,6 +79,9 @@ export default function JourneyPage() {
   const [insights, setInsights] = useState<DynamicInsight[]>([]);
   const [explainer, setExplainer] = useState<MarketExplainer | null>(null);
   const [atradStatus, setAtradStatus] = useState<ATradSyncStatus | null>(null);
+  const [aiRec, setAiRec] = useState<AiRecommendationData | null>(null);
+  const [scores, setScores] = useState<StockScoreData[]>([]);
+  const [dataStatus, setDataStatus] = useState<DataStatusData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -96,7 +103,7 @@ export default function JourneyPage() {
     setLoading(true);
     setError(null);
     try {
-      const [kpiRes, healthRes, goalsRes, depositsRes, insightsRes, explainerRes, atradRes] =
+      const [kpiRes, healthRes, goalsRes, depositsRes, insightsRes, explainerRes, atradRes, recRes, scoresRes, statusRes] =
         await Promise.allSettled([
           journeyApi.getKPIs(),
           journeyApi.getHealth(),
@@ -105,6 +112,9 @@ export default function JourneyPage() {
           insightsApi.getCurrent(),
           insightsApi.getExplainer(),
           atradApi.getStatus(),
+          analysisApi.getRecommendation(),
+          analysisApi.getScores(5),
+          analysisApi.getDataStatus(),
         ]);
 
       if (kpiRes.status === 'fulfilled') setKpis(kpiRes.value.data);
@@ -114,6 +124,9 @@ export default function JourneyPage() {
       if (insightsRes.status === 'fulfilled') setInsights(insightsRes.value.data);
       if (explainerRes.status === 'fulfilled') setExplainer(explainerRes.value.data);
       if (atradRes.status === 'fulfilled') setAtradStatus(atradRes.value.data);
+      if (recRes.status === 'fulfilled') setAiRec(recRes.value.data);
+      if (scoresRes.status === 'fulfilled') setScores(scoresRes.value.data);
+      if (statusRes.status === 'fulfilled') setDataStatus(statusRes.value.data);
     } catch {
       setError('Unable to load journey data. Make sure the backend is running.');
     } finally {
@@ -374,6 +387,115 @@ export default function JourneyPage() {
           <p className="text-sm text-primary">{explainer.actionSuggestion}</p>
         </div>
       )}
+
+      {/* AI Advisor Card */}
+      <div className="rounded-xl border bg-card p-5 space-y-4">
+        <h2 className="text-lg font-semibold flex items-center gap-2">
+          <TrendingUp className="h-5 w-5 text-primary" />
+          AI Advisor
+        </h2>
+
+        {/* Data accumulation status */}
+        {dataStatus && (
+          <div className={`rounded-lg px-3 py-2 text-xs flex items-center gap-2 ${
+            dataStatus.scoring_ready
+              ? 'bg-green-500/10 text-green-400 border border-green-500/20'
+              : 'bg-muted/50 text-muted-foreground'
+          }`}>
+            {dataStatus.scoring_ready ? (
+              <><span className="text-green-400">✓</span> Scoring active — {dataStatus.market_snapshot_days} trading days accumulated</>
+            ) : (
+              <><Loader2 className="h-3 w-3 animate-spin" /> Accumulating data: {dataStatus.market_snapshot_days}/20 trading days ({dataStatus.days_until_scoring_ready} more needed for full scoring)</>
+            )}
+          </div>
+        )}
+
+        {/* Latest AI Recommendation */}
+        {aiRec ? (
+          <div className="rounded-lg border p-4 space-y-2">
+            <div className="flex items-center justify-between">
+              <span className="text-sm font-medium">
+                Weekly Pick: <span className="text-primary">{aiRec.recommended_stock}</span>
+              </span>
+              <span className={`text-xs font-medium rounded-full px-2 py-0.5 ${
+                aiRec.confidence === 'HIGH'
+                  ? 'bg-green-500/15 text-green-400 border border-green-500/30'
+                  : aiRec.confidence === 'LOW'
+                    ? 'bg-red-500/15 text-red-400 border border-red-500/30'
+                    : 'bg-yellow-500/15 text-yellow-400 border border-yellow-500/30'
+              }`}>
+                {aiRec.confidence} confidence
+              </span>
+            </div>
+            <p className="text-sm text-muted-foreground">{aiRec.reasoning}</p>
+            {aiRec.price_outlook_3m && (
+              <p className="text-xs text-muted-foreground border-t border-border/50 pt-2">
+                <span className="text-foreground font-medium">3m outlook:</span> {aiRec.price_outlook_3m}
+              </p>
+            )}
+            {aiRec.risk_flags && Array.isArray(aiRec.risk_flags) && aiRec.risk_flags.length > 0 && (
+              <div className="flex flex-wrap gap-1 pt-1">
+                {aiRec.risk_flags.map((flag, i) => (
+                  <span key={i} className="text-xs rounded-full bg-red-500/10 text-red-400 px-2 py-0.5">
+                    ⚠ {flag}
+                  </span>
+                ))}
+              </div>
+            )}
+            {aiRec.alternative && (
+              <p className="text-xs text-muted-foreground">
+                Alternative: <span className="text-foreground">{aiRec.alternative}</span>
+              </p>
+            )}
+            <p className="text-xs text-muted-foreground/50">
+              Week of {aiRec.week_start} · {aiRec.model_used.includes('sonnet') ? 'Claude Sonnet' : 'Claude Haiku'}
+            </p>
+          </div>
+        ) : (
+          <p className="text-sm text-muted-foreground">
+            No recommendation yet — generated every Friday at 2:55 PM SLT after market close.
+          </p>
+        )}
+
+        {/* Top 5 Stock Scores */}
+        {scores.length > 0 && (
+          <div className="space-y-2">
+            <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
+              Top Shariah Stocks by Score
+            </p>
+            <div className="space-y-1.5">
+              {scores.map((s, i) => (
+                <div key={s.symbol} className="flex items-center gap-3">
+                  <span className="text-xs text-muted-foreground w-4 text-right">{i + 1}.</span>
+                  <span className="text-sm font-medium flex-1">{s.symbol}</span>
+                  <div className="flex items-center gap-2">
+                    <div className="w-20 h-1.5 rounded-full bg-muted/50 overflow-hidden">
+                      <div
+                        className={`h-full rounded-full ${
+                          Number(s.composite_score) >= 60 ? 'bg-green-500' :
+                          Number(s.composite_score) >= 40 ? 'bg-yellow-500' : 'bg-red-500'
+                        }`}
+                        style={{ width: `${Math.min(100, Number(s.composite_score))}%` }}
+                      />
+                    </div>
+                    <span className={`text-xs font-medium w-8 text-right ${
+                      s.is_placeholder ? 'text-muted-foreground' : 'text-foreground'
+                    }`}>
+                      {Number(s.composite_score).toFixed(0)}
+                    </span>
+                    {s.is_placeholder && (
+                      <span className="text-[10px] text-muted-foreground/60">~</span>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+            {scores.some((s) => s.is_placeholder) && (
+              <p className="text-[11px] text-muted-foreground/60">~ = placeholder score (less than 20 days of data)</p>
+            )}
+          </div>
+        )}
+      </div>
 
       {/* Dynamic Insights */}
       {insights.length > 0 && (

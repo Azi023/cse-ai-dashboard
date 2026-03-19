@@ -1,8 +1,17 @@
 import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
+import { Cron } from '@nestjs/schedule';
 import { Stock, ShariahScreening } from '../../entities';
-import { getBlacklistedSymbols, isBlacklisted, getBlacklistEntries } from './blacklist';
+import {
+  getBlacklistedSymbols,
+  isBlacklisted,
+  getBlacklistEntries,
+} from './blacklist';
+import { RedisService } from '../cse-data/redis.service';
+
+const SHARIAH_LAST_SCREENED_KEY = 'shariah:last_screened';
+const SKIP_IF_WITHIN_HOURS = 70; // Mon→Thu gap is 72h; skip if screened within 70h
 
 export enum ShariahStatus {
   COMPLIANT = 'COMPLIANT',
@@ -12,10 +21,10 @@ export enum ShariahStatus {
 
 // Tier 2 financial ratio thresholds
 const TIER2_THRESHOLDS = {
-  interestIncomeRatio: 0.05,   // < 5%
-  debtRatio: 0.30,             // < 30%
-  interestDepositRatio: 0.30,  // < 30%
-  receivablesRatio: 0.50,      // < 50%
+  interestIncomeRatio: 0.05, // < 5%
+  debtRatio: 0.3, // < 30%
+  interestDepositRatio: 0.3, // < 30%
+  receivablesRatio: 0.5, // < 50%
 };
 
 @Injectable()
@@ -27,10 +36,31 @@ export class ShariahScreeningService implements OnModuleInit {
     private readonly stockRepository: Repository<Stock>,
     @InjectRepository(ShariahScreening)
     private readonly screeningRepository: Repository<ShariahScreening>,
+    private readonly redisService: RedisService,
   ) {}
 
   async onModuleInit() {
-    // Run initial screening on startup to update stock shariah_status fields
+    // Skip screening on startup if it ran within the last 70 hours
+    const lastScreened = await this.redisService.get(SHARIAH_LAST_SCREENED_KEY);
+    if (lastScreened) {
+      const hoursSince = (Date.now() - parseInt(lastScreened, 10)) / 3_600_000;
+      if (hoursSince < SKIP_IF_WITHIN_HOURS) {
+        this.logger.log(
+          `Shariah screening skipped on startup — last ran ${Math.round(hoursSince)}h ago`,
+        );
+        return;
+      }
+    }
+    await this.runScreening();
+  }
+
+  /**
+   * Scheduled Shariah screening: Monday and Thursday at 9:00 AM SLT (3:30 AM UTC).
+   * Runs before market open to refresh status using latest financial data.
+   */
+  @Cron('30 3 * * 1,4', { name: 'shariah-screening' })
+  async runScheduledScreening(): Promise<void> {
+    this.logger.log('Scheduled Shariah screening triggered (Mon/Thu)');
     await this.runScreening();
   }
 
@@ -38,7 +68,9 @@ export class ShariahScreeningService implements OnModuleInit {
    * Run Shariah screening for all stocks and update their shariah_status.
    */
   async runScreening(): Promise<void> {
-    const stocks = await this.stockRepository.find({ where: { is_active: true } });
+    const stocks = await this.stockRepository.find({
+      where: { is_active: true },
+    });
     if (stocks.length === 0) {
       this.logger.log('No stocks found, skipping Shariah screening');
       return;
@@ -94,7 +126,9 @@ export class ShariahScreeningService implements OnModuleInit {
             debt_ratio: latestScreening.debt_ratio,
             interest_deposit_ratio: latestScreening.interest_deposit_ratio,
             receivables_ratio: latestScreening.receivables_ratio,
-            notes: tier2Result.pass ? null : `Failed: ${tier2Result.failedRatios.join(', ')}`,
+            notes: tier2Result.pass
+              ? null
+              : `Failed: ${tier2Result.failedRatios.join(', ')}`,
           });
         } else {
           // No financial data — mark as pending review
@@ -114,6 +148,13 @@ export class ShariahScreeningService implements OnModuleInit {
     this.logger.log(
       `Shariah screening complete: ${compliant} compliant, ${nonCompliant} non-compliant, ${pending} pending review`,
     );
+
+    // Stamp last-screened timestamp (7-day TTL — well beyond the Mon/Thu schedule)
+    await this.redisService.set(
+      SHARIAH_LAST_SCREENED_KEY,
+      String(Date.now()),
+      7 * 24 * 3600,
+    );
   }
 
   /**
@@ -127,7 +168,8 @@ export class ShariahScreeningService implements OnModuleInit {
 
     if (
       screening.interest_income_ratio !== null &&
-      Number(screening.interest_income_ratio) >= TIER2_THRESHOLDS.interestIncomeRatio
+      Number(screening.interest_income_ratio) >=
+        TIER2_THRESHOLDS.interestIncomeRatio
     ) {
       failedRatios.push('Interest Income Ratio');
     }
@@ -139,7 +181,8 @@ export class ShariahScreeningService implements OnModuleInit {
     }
     if (
       screening.interest_deposit_ratio !== null &&
-      Number(screening.interest_deposit_ratio) >= TIER2_THRESHOLDS.interestDepositRatio
+      Number(screening.interest_deposit_ratio) >=
+        TIER2_THRESHOLDS.interestDepositRatio
     ) {
       failedRatios.push('Interest Deposit Ratio');
     }
@@ -352,7 +395,11 @@ export class ShariahScreeningService implements OnModuleInit {
     return {
       screened,
       total: stats.total,
-      lastUpdated: new Date().toLocaleTimeString('en-LK', { timeZone: 'Asia/Colombo', hour: '2-digit', minute: '2-digit' }),
+      lastUpdated: new Date().toLocaleTimeString('en-LK', {
+        timeZone: 'Asia/Colombo',
+        hour: '2-digit',
+        minute: '2-digit',
+      }),
       message: `${screened}/${stats.total} stocks screened`,
     };
   }

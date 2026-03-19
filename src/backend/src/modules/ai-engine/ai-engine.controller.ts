@@ -16,6 +16,11 @@ export class AiEngineController {
     return this.aiEngineService.getStatus();
   }
 
+  @Get('usage')
+  async getTokenUsage() {
+    return this.aiEngineService.getTokenUsage();
+  }
+
   @Get('daily-brief')
   async getDailyBrief(
     @Query('forceRefresh') forceRefresh?: string,
@@ -49,6 +54,9 @@ export class AiEngineController {
   @Post('signals/generate-eod')
   async generateEodSignals(): Promise<{ message: string; count: number }> {
     const signals = await this.aiEngineService.getSignals(true);
-    return { message: 'EOD signals generated and cached for 20 hours', count: signals.length };
+    return {
+      message: 'EOD signals generated and cached for 20 hours',
+      count: signals.length,
+    };
   }
 }

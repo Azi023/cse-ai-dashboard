@@ -821,4 +821,61 @@ export const insightsApi = {
   getTips: () => api.get<DynamicInsight[]>('/insights/tips'),
 };
 
+// Analysis / AI Pipeline Types
+export interface MarketSnapshotData {
+  id: number;
+  date: string;
+  aspi_close: number | null;
+  aspi_change_pct: number | null;
+  sp20_close: number | null;
+  total_turnover: number | null;
+  top_gainers: unknown;
+  top_losers: unknown;
+  created_at: string;
+}
+
+export interface StockScoreData {
+  id: number;
+  date: string;
+  symbol: string;
+  composite_score: number;
+  data_days: number;
+  is_placeholder: boolean;
+  momentum_score: number;
+  volume_score: number;
+  volatility_score: number;
+  sector_score: number;
+  liquidity_score: number;
+}
+
+export interface AiRecommendationData {
+  id: number;
+  week_start: string;
+  recommended_stock: string;
+  confidence: 'HIGH' | 'MEDIUM' | 'LOW';
+  reasoning: string;
+  price_outlook_3m: string | null;
+  risk_flags: string[] | null;
+  alternative: string | null;
+  model_used: string;
+  created_at: string;
+}
+
+export interface DataStatusData {
+  market_snapshot_days: number;
+  portfolio_snapshot_days: number;
+  scoring_ready: boolean;
+  days_until_scoring_ready: number;
+  last_snapshot_date: string | null;
+  last_scoring_date: string | null;
+}
+
+export const analysisApi = {
+  getLatestSnapshot: () => api.get<MarketSnapshotData | null>('/analysis/snapshot/latest'),
+  getSnapshots: (days = 30) => api.get<MarketSnapshotData[]>(`/analysis/snapshots?days=${days}`),
+  getScores: (limit = 10) => api.get<StockScoreData[]>(`/analysis/scores?limit=${limit}`),
+  getRecommendation: () => api.get<AiRecommendationData | null>('/analysis/recommendation'),
+  getDataStatus: () => api.get<DataStatusData>('/analysis/data-status'),
+};
+
 export default api;

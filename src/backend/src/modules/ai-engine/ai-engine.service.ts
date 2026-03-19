@@ -153,6 +153,24 @@ export class AiEngineService {
     };
   }
 
+  async getTokenUsage(): Promise<{
+    month: string;
+    tokens_used: number;
+    limit: number;
+    pct_used: number;
+  }> {
+    const month = new Date().toISOString().slice(0, 7);
+    const raw = await this.redisService.get(`ai:tokens:${month}`);
+    const tokensUsed = raw ? parseInt(raw, 10) : 0;
+    const limit = 500_000;
+    return {
+      month,
+      tokens_used: tokensUsed,
+      limit,
+      pct_used: Math.round((tokensUsed / limit) * 100),
+    };
+  }
+
   // --- Daily Brief ---
 
   async getDailyBrief(forceRefresh = false): Promise<DailyBrief> {
