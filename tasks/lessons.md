@@ -12,6 +12,16 @@
 **Rule:** `Between()` in TypeORM requires explicit `as unknown as T` cast for date columns.
 **Example:** `summary_date: Between(new Date(start), new Date(end)) as unknown as Date`
 
+### Nullable string columns MUST have explicit type:'varchar'
+**Rule:** Any `@Column` with a `string | null` TypeScript type MUST specify `type: 'varchar'` explicitly.
+**Wrong:** `@Column({ length: 50, nullable: true }) source: string | null;`
+**Right:** `@Column({ type: 'varchar', length: 50, nullable: true }) source: string | null;`
+**Why:** TypeORM with `emitDecoratorMetadata` emits `Object` at runtime for union types (`string | null`).
+Without explicit `type`, TypeORM sees `Object` and throws `DataTypeNotSupportedError` on startup —
+crashing the entire backend before any DB queries run. Data is safe but ALL endpoints return nothing.
+**Applies to:** Any nullable column: `string | null`, `number | null` without a clearly-inferrable type.
+Safe: `number | null` with `type: 'decimal'`, `Date | null` with `type: 'timestamp'`, `object | null` with `type: 'jsonb'`.
+
 ---
 
 ## ATrad Dojo UI Patterns
