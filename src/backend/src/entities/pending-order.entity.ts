@@ -16,18 +16,23 @@ export type OrderAction = (typeof ORDER_ACTIONS)[number];
 export type OrderStatus = (typeof ORDER_STATUSES)[number];
 export type OrderSource = (typeof ORDER_SOURCES)[number];
 
+// !! LESSON: All nullable string columns MUST have type: 'varchar' explicitly.
+// When emitDecoratorMetadata is on, TypeScript emits 'Object' for 'string | null'
+// union types at runtime, which TypeORM cannot map to a Postgres type.
+// Rule: nullable string → @Column({ type: 'varchar', length: N, nullable: true })
+
 @Entity('pending_orders')
 export class PendingOrder {
   @PrimaryGeneratedColumn()
   id: number;
 
-  @Column({ length: 20 })
+  @Column({ type: 'varchar', length: 20 })
   symbol: string;
 
-  @Column({ length: 20 })
+  @Column({ type: 'varchar', length: 20 })
   order_type: string; // 'STOP_LOSS' | 'TAKE_PROFIT' | 'LIMIT_BUY'
 
-  @Column({ length: 10 })
+  @Column({ type: 'varchar', length: 10 })
   action: string; // 'BUY' | 'SELL'
 
   @Column({ type: 'int' })
@@ -41,14 +46,15 @@ export class PendingOrder {
   @Column({ type: 'decimal', precision: 12, scale: 2, nullable: true })
   limit_price: number | null;
 
-  @Column({ length: 20, default: 'PENDING' })
+  @Column({ type: 'varchar', length: 20, default: 'PENDING' })
   status: string; // PENDING | APPROVED | EXECUTING | EXECUTED | FAILED | CANCELLED
 
-  @Column({ length: 50, nullable: true })
+  // MUST have type: 'varchar' — 'string | null' emits 'Object' via emitDecoratorMetadata
+  @Column({ type: 'varchar', length: 50, nullable: true })
   source: string | null; // 'RISK_SERVICE' | 'AI_RECOMMENDATION' | 'MANUAL'
 
   @Column({ type: 'text', nullable: true })
-  reason: string | null; // Why this order was suggested
+  reason: string | null;
 
   /** Snapshot of the PositionRisk data at time of order creation. */
   @Column({ type: 'jsonb', nullable: true })
@@ -61,11 +67,13 @@ export class PendingOrder {
   executed_at: Date | null;
 
   /** ATrad's internal order reference after execution. */
-  @Column({ length: 100, nullable: true })
+  // MUST have type: 'varchar' — 'string | null' emits 'Object' via emitDecoratorMetadata
+  @Column({ type: 'varchar', length: 100, nullable: true })
   atrad_order_id: string | null;
 
   /** Relative path to the screenshot taken at time of execution. */
-  @Column({ length: 500, nullable: true })
+  // MUST have type: 'varchar' — 'string | null' emits 'Object' via emitDecoratorMetadata
+  @Column({ type: 'varchar', length: 500, nullable: true })
   execution_screenshot: string | null;
 
   @Column({ type: 'text', nullable: true })
