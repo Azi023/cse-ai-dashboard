@@ -14,7 +14,7 @@ import {
   TableRow,
 } from '@/components/ui/table';
 import { Skeleton } from '@/components/ui/skeleton';
-import { stocksApi, shariahApi, type Stock } from '@/lib/api';
+import { stocksApi, shariahApi, analysisApi, type Stock, type StockScoreData } from '@/lib/api';
 import { Search, BarChart3, ShieldCheck } from 'lucide-react';
 import { useDisplayMode } from '@/contexts/display-mode-context';
 import { getSimpleLabel } from '@/lib/simple-mode-constants';
@@ -28,6 +28,7 @@ export default function StocksPage() {
   const [sectorFilter, setSectorFilter] = useState('');
   const [shariahFilter, setShariahFilter] = useState(false);
   const [shariahOverview, setShariahOverview] = useState<{ screened: number; total: number; lastUpdated: string } | null>(null);
+  const [scoreMap, setScoreMap] = useState<Map<string, StockScoreData>>(new Map());
 
   useEffect(() => {
     stocksApi
@@ -41,6 +42,13 @@ export default function StocksPage() {
 
     // Fetch Shariah overview for header status
     shariahApi.getOverview().then((res) => setShariahOverview(res.data)).catch(() => {});
+
+    // Fetch stock scores (all compliant stocks)
+    analysisApi.getScores(200).then((res) => {
+      const map = new Map<string, StockScoreData>();
+      for (const s of res.data) map.set(s.symbol, s);
+      setScoreMap(map);
+    }).catch(() => {});
   }, []);
 
   const sectors = useMemo(() => {
@@ -172,6 +180,7 @@ export default function StocksPage() {
                     <TableHead className="text-right">Price</TableHead>
                     <TableHead className="text-right">Change %</TableHead>
                     <TableHead>Shariah</TableHead>
+                    <TableHead className="text-right">Score</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -217,6 +226,9 @@ export default function StocksPage() {
                       <TableCell>
                         <ShariahBadge status={stock.shariah_status} simple={isSimple} />
                       </TableCell>
+                      <TableCell className="text-right">
+                        <ScoreBadge score={scoreMap.get(stock.symbol)} />
+                      </TableCell>
                     </TableRow>
                   ))}
                 </TableBody>
@@ -226,6 +238,27 @@ export default function StocksPage() {
         </CardContent>
       </Card>
     </div>
+  );
+}
+
+function ScoreBadge({ score }: { score: StockScoreData | undefined }) {
+  if (!score) return <span className="text-muted-foreground text-xs">—</span>;
+  const val = Number(score.composite_score);
+  if (score.is_placeholder) {
+    return (
+      <span className="inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-xs font-mono border border-muted-foreground/20 text-muted-foreground">
+        ~{val.toFixed(0)}
+      </span>
+    );
+  }
+  const colorClass =
+    val >= 70 ? 'border-green-500/40 bg-green-500/10 text-green-400' :
+    val >= 40 ? 'border-yellow-500/40 bg-yellow-500/10 text-yellow-400' :
+    'border-red-500/40 bg-red-500/10 text-red-400';
+  return (
+    <span className={`inline-flex items-center rounded px-1.5 py-0.5 text-xs font-mono border ${colorClass}`}>
+      {val.toFixed(0)}
+    </span>
   );
 }
 

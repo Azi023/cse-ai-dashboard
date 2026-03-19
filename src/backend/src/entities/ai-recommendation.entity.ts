@@ -34,6 +34,12 @@ export class AiRecommendation {
   @Column({ type: 'varchar', length: 20, nullable: true })
   alternative: string | null;
 
+  @Column({ type: 'varchar', length: 10, nullable: true })
+  portfolio_action: string | null;
+
+  @Column({ type: 'decimal', precision: 12, scale: 2, nullable: true })
+  suggested_allocation_lkr: number | null;
+
   @Column({ type: 'varchar', length: 50, default: 'claude-sonnet-4-6' })
   model_used: string;
 

@@ -39,6 +39,12 @@ export class Stock {
   @Column({ type: 'bigint', nullable: true })
   shares_outstanding: number | null;
 
+  @Column({ type: 'decimal', precision: 10, scale: 2, nullable: true })
+  week52_high: number | null;
+
+  @Column({ type: 'decimal', precision: 10, scale: 2, nullable: true })
+  week52_low: number | null;
+
   @Column({ length: 20, default: 'unknown' })
   shariah_status: string; // 'compliant', 'non_compliant', 'unknown', 'blacklisted'
 

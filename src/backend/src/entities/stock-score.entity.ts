@@ -44,6 +44,33 @@ export class StockScore {
   @Column({ type: 'decimal', precision: 6, scale: 2, default: 50 })
   liquidity_score: number;
 
+  // Fundamentals category scores (35% total)
+  @Column({ type: 'decimal', precision: 6, scale: 2, default: 50 })
+  earnings_growth_score: number;
+
+  @Column({ type: 'decimal', precision: 6, scale: 2, default: 50 })
+  debt_health_score: number;
+
+  @Column({ type: 'decimal', precision: 6, scale: 2, default: 50 })
+  roe_score: number;
+
+  @Column({ type: 'decimal', precision: 6, scale: 2, default: 50 })
+  revenue_trend_score: number;
+
+  // Valuation category scores (25% total)
+  @Column({ type: 'decimal', precision: 6, scale: 2, default: 50 })
+  pe_score: number;
+
+  @Column({ type: 'decimal', precision: 6, scale: 2, default: 50 })
+  pb_score: number;
+
+  @Column({ type: 'decimal', precision: 6, scale: 2, default: 50 })
+  dividend_score: number;
+
+  // Technical category - week52 position (7%)
+  @Column({ type: 'decimal', precision: 6, scale: 2, default: 50 })
+  week52_position_score: number;
+
   // Full breakdown of inputs and weights
   @Column({ type: 'jsonb', nullable: true })
   components: unknown | null;

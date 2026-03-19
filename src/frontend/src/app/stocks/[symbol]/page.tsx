@@ -10,11 +10,13 @@ import {
   stocksApi,
   aiApi,
   announcementsApi,
+  analysisApi,
   type Stock,
   type StockPrice,
   type StockAnalysis,
   type AiStatus,
   type Announcement,
+  type StockScoreData,
 } from '@/lib/api';
 import {
   ArrowLeft,
@@ -57,6 +59,9 @@ export default function StockDetailPage() {
 
   // Announcements state
   const [announcements, setAnnouncements] = useState<Announcement[]>([]);
+
+  // Stock score state
+  const [stockScore, setStockScore] = useState<StockScoreData | null>(null);
 
   useEffect(() => {
     const fetchData = async () => {
@@ -114,6 +119,14 @@ export default function StockDetailPage() {
   // Auto-fetch analysis on load
   useEffect(() => {
     fetchAnalysis();
+  }, [symbol]);
+
+  // Fetch stock score
+  useEffect(() => {
+    analysisApi.getScores(200).then((res) => {
+      const found = res.data.find((s) => s.symbol === symbol);
+      if (found) setStockScore(found);
+    }).catch(() => {});
   }, [symbol]);
 
   if (loading) {
@@ -472,6 +485,70 @@ export default function StockDetailPage() {
         </Card>
       </div>
 
+      {/* Composite Score Breakdown */}
+      {stockScore && (
+        <Card>
+          <CardHeader className="pb-3">
+            <div className="flex items-center justify-between flex-wrap gap-2">
+              <CardTitle className="text-sm flex items-center gap-2">
+                Composite Score
+                <span className={`rounded px-2 py-0.5 text-sm font-mono font-bold ${
+                  Number(stockScore.composite_score) >= 70 ? 'bg-green-500/15 text-green-400' :
+                  Number(stockScore.composite_score) >= 40 ? 'bg-yellow-500/15 text-yellow-400' :
+                  'bg-red-500/15 text-red-400'
+                }`}>
+                  {Number(stockScore.composite_score).toFixed(1)}/100
+                </span>
+              </CardTitle>
+              <span className="text-xs text-muted-foreground">
+                {stockScore.is_placeholder ? `${stockScore.data_days}/20 days of data (accumulating)` : `Based on ${stockScore.data_days} trading days`}
+              </span>
+            </div>
+          </CardHeader>
+          <CardContent>
+            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+              <ScoreCategory
+                title="Fundamentals"
+                weight="35%"
+                factors={[
+                  { label: 'Earnings Growth', score: stockScore.earnings_growth_score, weight: '10%' },
+                  { label: 'Debt Health', score: stockScore.debt_health_score, weight: '10%' },
+                  { label: 'ROE Quality', score: stockScore.roe_score, weight: '8%' },
+                  { label: 'Revenue Trend', score: stockScore.revenue_trend_score, weight: '7%' },
+                ]}
+              />
+              <ScoreCategory
+                title="Valuation"
+                weight="25%"
+                factors={[
+                  { label: 'P/E Value', score: stockScore.pe_score, weight: '10%' },
+                  { label: 'Dividend Yield', score: stockScore.dividend_score, weight: '10%' },
+                  { label: 'P/B Value', score: stockScore.pb_score, weight: '5%' },
+                ]}
+              />
+              <ScoreCategory
+                title="Technical"
+                weight="25%"
+                factors={[
+                  { label: '52-Wk Position', score: stockScore.week52_position_score, weight: '7%' },
+                  { label: 'Price Momentum', score: stockScore.momentum_score, weight: '8%' },
+                  { label: 'Volatility', score: stockScore.volatility_score, weight: '5%' },
+                  { label: 'Volume Trend', score: stockScore.volume_score, weight: '5%' },
+                ]}
+              />
+              <ScoreCategory
+                title="Market Context"
+                weight="15%"
+                factors={[
+                  { label: 'Sector Strength', score: stockScore.sector_score, weight: '8%' },
+                  { label: 'Liquidity', score: stockScore.liquidity_score, weight: '7%' },
+                ]}
+              />
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
       {/* Recent Announcements */}
       {announcements.length > 0 && (
         <Card>
@@ -505,6 +582,59 @@ export default function StockDetailPage() {
           </CardContent>
         </Card>
       )}
+    </div>
+  );
+}
+
+function ScoreCategory({
+  title,
+  weight,
+  factors,
+}: {
+  title: string;
+  weight: string;
+  factors: Array<{ label: string; score: number; weight: string }>;
+}) {
+  const categoryAvg =
+    factors.reduce((s, f) => s + Number(f.score), 0) / factors.length;
+
+  return (
+    <div className="rounded-lg border p-3 space-y-2">
+      <div className="flex items-center justify-between">
+        <p className="text-xs font-semibold">{title}</p>
+        <span className="text-xs text-muted-foreground">{weight}</span>
+      </div>
+      <div
+        className={`h-1 w-full rounded-full ${
+          categoryAvg >= 70 ? 'bg-green-500' :
+          categoryAvg >= 40 ? 'bg-yellow-500' :
+          'bg-red-500'
+        }`}
+        style={{ opacity: 0.6 }}
+      />
+      <div className="space-y-1.5">
+        {factors.map((f) => {
+          const val = Number(f.score);
+          const barColor =
+            val >= 70 ? 'bg-green-500' :
+            val >= 40 ? 'bg-yellow-500' :
+            'bg-red-500';
+          return (
+            <div key={f.label} className="space-y-0.5">
+              <div className="flex items-center justify-between">
+                <span className="text-xs text-muted-foreground">{f.label}</span>
+                <span className="text-xs font-mono">{val.toFixed(0)}</span>
+              </div>
+              <div className="h-1.5 w-full rounded-full bg-muted overflow-hidden">
+                <div
+                  className={`h-full rounded-full transition-all ${barColor}`}
+                  style={{ width: `${val}%` }}
+                />
+              </div>
+            </div>
+          );
+        })}
+      </div>
     </div>
   );
 }

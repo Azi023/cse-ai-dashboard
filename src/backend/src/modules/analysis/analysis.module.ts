@@ -11,6 +11,8 @@ import {
   Stock,
   DailyPrice,
   Alert,
+  CompanyFinancial,
+  NewsItem,
 } from '../../entities';
 import { CseDataModule } from '../cse-data/cse-data.module';
 import { PortfolioModule } from '../portfolio/portfolio.module';
@@ -26,6 +28,8 @@ import { PortfolioModule } from '../portfolio/portfolio.module';
       Stock,
       DailyPrice,
       Alert,
+      CompanyFinancial,
+      NewsItem,
     ]),
     CseDataModule,
     PortfolioModule,

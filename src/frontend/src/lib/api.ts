@@ -845,11 +845,25 @@ export interface StockScoreData {
   composite_score: number;
   data_days: number;
   is_placeholder: boolean;
+  // Fundamentals (35%)
+  earnings_growth_score: number;
+  debt_health_score: number;
+  roe_score: number;
+  revenue_trend_score: number;
+  // Valuation (25%)
+  pe_score: number;
+  pb_score: number;
+  dividend_score: number;
+  // Technical (25%)
   momentum_score: number;
   volume_score: number;
+  week52_position_score: number;
   volatility_score: number;
+  // Market context (15%)
   sector_score: number;
   liquidity_score: number;
+  // Full component breakdown
+  components?: Record<string, unknown>;
 }
 
 export interface AiRecommendationData {
@@ -858,9 +872,11 @@ export interface AiRecommendationData {
   recommended_stock: string;
   confidence: 'HIGH' | 'MEDIUM' | 'LOW';
   reasoning: string;
-  price_outlook_3m: string | null;
+  price_outlook_3m: string | null; // JSON string with bear/base/bull objects
   risk_flags: string[] | null;
   alternative: string | null;
+  portfolio_action: 'BUY' | 'HOLD' | 'WAIT' | null;
+  suggested_allocation_lkr: number | null;
   model_used: string;
   created_at: string;
 }
