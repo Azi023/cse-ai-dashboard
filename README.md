@@ -1,38 +1,72 @@
 # CSE AI Investment Intelligence Dashboard
 
-> A personal AI-powered, Shariah-compliant investment intelligence platform for the Colombo Stock Exchange (CSE).
+> AI-powered, Shariah-compliant investment assistant for the Colombo Stock Exchange.
 
-Built for Sri Lankan retail investors who want data-driven, Shariah-filtered stock analysis — without paying for Bloomberg terminals. Currently a personal tool, designed for future public release.
+An intelligent trading platform that watches the market, analyzes 296 stocks across 12 factors, calculates exact entry/exit points with risk management, and sends you daily actionable updates — all while strictly filtering for Islamic finance compliance.
+
+Currently in active development. Built for Sri Lankan retail investors who want institutional-grade analysis without Bloomberg-level costs.
+
+---
+
+## How It Works
+
+1. **Market opens at 9:30 AM** — the system starts pulling live prices, volumes, and news every 5 minutes
+2. **During the day** — it monitors your positions against calculated stop-loss levels. If a stock nears your danger zone, you get an immediate alert
+3. **Market closes at 2:30 PM** — the system saves the day's data, calculates technical indicators (RSI, MACD, moving averages), scores all compliant stocks, and updates your risk metrics
+4. **2:45 PM** — you receive a daily digest: market summary, your portfolio P&L, any warnings
+5. **Every Friday** — the AI picks the best stock to buy next with exact price, stop-loss, take-profit, and how many shares to buy
+6. **Over time** — the system tracks its own recommendations and adjusts confidence based on what actually worked
+
+You review, you approve, you stay in control. The AI does the research — you make the decisions.
 
 ---
 
 ## Features
 
 ### Market Intelligence
-- **Live CSE Data** — ASPI, S&P SL20, top gainers/losers, most active, all 20 sector indices (5-min polling during market hours)
-- **AI Daily Brief** — Claude Sonnet pre-market analysis: sentiment, sector rotation, key levels, actionable watchlist
-- **AI Trading Signals** — 5 signals per session with direction, confidence, and holding period
-- **AI Strategy Chat** — Interactive research assistant with live market context
-- **News Intelligence** — RSS aggregation from Economy Next and Google News CSE (every 30 min)
+- **Live CSE data** — ASPI, S&P SL20, gainers/losers, most active, 20 sector indices (5-min polling)
+- **AI daily brief** — Sentiment analysis, sector rotation, key support/resistance levels
+- **AI trading signals** — 5 signals per session with direction, confidence, Shariah status
+- **AI strategy chat** — Ask questions about any stock, sector, or market condition
+- **News intelligence** — Aggregated from Economy Next, Daily FT, Google News CSE
 - **Announcements** — Financial + approved CSE announcements with search
 
-### Portfolio & Compliance
-- **Portfolio Tracker** — Add holdings with broker fees, P&L using effective cost basis, daily change, sector allocation
-- **ATrad Sync** — Playwright automation reads your HNB Stockbrokers holdings and cash balance (READ-ONLY, never places orders)
-- **Shariah Screening** — Two-tier AAOIFI methodology: business activity (Tier 1) + financial ratios (Tier 2)
-- **Purification Calculator** — Dividend purification amounts per AAOIFI guidelines
-- **Journey Tracker** — Monthly RCA deposit tracking, KPIs, portfolio health score
+### Technical Analysis (8 indicators)
+- **SMA 20/50** — Trend direction, golden/death cross detection
+- **RSI (14-period)** — Overbought/oversold signals with Wilder's smoothing
+- **MACD (12,26,9)** — Momentum crossovers
+- **ATR (14-period)** — Volatility measurement for stop-loss calculation
+- **Support/resistance** — 20-day high/low levels from OHLC data
+- **Volume analysis** — Accumulation vs distribution detection
+- **Candlestick patterns** — Engulfing, hammer, doji detection
+- **Overall signal** — Composite score from STRONG_BUY to STRONG_SELL
 
-### AI Analysis Pipeline (Phase 2 — live, accumulating data)
-- **Market Snapshot** — Daily market close saved to DB (feeds scoring engine)
-- **Stock Scoring Engine** — Deterministic 6-factor composite score (no AI needed): dividend yield, momentum, volume trend, volatility, sector strength, liquidity
-- **AI Weekly Recommendation** — Every Friday: Claude Sonnet picks top Shariah-compliant stock with confidence + reasoning
-- **Daily Digest** — 2:45 PM SLT: Haiku-generated market summary + portfolio P&L + crash alerts
-- **Weekly Brief** — Friday 3:00 PM SLT: week review + AI stock pick + top 5 scores
+### Risk Management
+- **Stop-loss calculator** — ATR-based and support-based (picks the tighter protection)
+- **Take-profit targets** — Minimum 1:2 risk-reward ratio enforced
+- **Position sizing** — 1% maximum risk per trade (configurable)
+- **Portfolio heat tracking** — Total capital at risk across all positions (SAFE/CAUTION/DANGER)
+- **Real-time stop monitor** — Checks every 5 minutes during market hours, alerts immediately if price nears stop
+
+### AI Analysis Pipeline
+- **12-factor stock scoring** — Fundamentals (35%), valuation (25%), technicals (25%), market context (15%)
+- **Weekly AI recommendation** — Specific stock + entry price + stop-loss + take-profit + share quantity
+- **Daily digest** — AI-generated market summary with portfolio P&L (Haiku model, 2:45 PM)
+- **Weekly brief** — Deep analysis with forward outlook (Sonnet model, Friday 3:00 PM)
+- **Learning system** — Tracks past recommendation accuracy, feeds performance back into future prompts
+
+### Portfolio & Compliance
+- **Portfolio tracker** — Holdings with broker fees, effective cost basis, real-time P&L
+- **ATrad sync** — Playwright automation reads HNB Stockbrokers holdings and cash balance
+- **Shariah screening** — Two-tier AAOIFI methodology (business activity + financial ratios)
+- **Purification calculator** — Dividend purification amounts per AAOIFI guidelines
+- **Journey tracker** — Monthly RCA deposits, KPIs, portfolio health score (0-100)
 
 ### Alerts & Notifications
-- **Bell notifications** — Unread count, alert management
-- **Auto-alerts** — ASPI crash >3% (Crash Protocol reminder), portfolio drop >5%, unusual events
+- **Daily digest notification** — Automated at market close
+- **Stop-loss proximity alerts** — Real-time during market hours
+- **Crash protocol** — ASPI drop > 3% triggers special alert with guidance
+- **Shariah status changes** — Alert if any held stock's compliance status changes
 
 ---
 
@@ -40,59 +74,43 @@ Built for Sri Lankan retail investors who want data-driven, Shariah-filtered sto
 
 | Layer | Technology | Port |
 |-------|-----------|------|
-| Frontend | Next.js 14 (App Router) + TypeScript + Tailwind CSS + shadcn/ui | 3000 |
-| Backend | NestJS + TypeScript (strict mode) + TypeORM | 3001 |
+| Frontend | Next.js 14 + TypeScript + Tailwind CSS + shadcn/ui + framer-motion | 3000 |
+| Backend | NestJS + TypeScript + TypeORM | 3001 |
 | Database | PostgreSQL 16 | 5432 |
 | Cache | Redis 7 | 6379 |
-| Browser Automation | Playwright (Chromium, headless) | — |
+| Browser Automation | Playwright (Chromium) | — |
 | AI | Claude API (Haiku for digests, Sonnet for analysis) | — |
 | Charts | TradingView Lightweight Charts + Recharts | — |
 | Process Manager | PM2 | — |
 
 ---
 
-## Prerequisites
+## Getting Started
 
-- **Node.js** 20+
-- **PostgreSQL** 16 running locally
-- **Redis** 7 running locally
-- **PM2** (optional, for persistent processes): `npm install -g pm2`
-- **Playwright browsers**: `cd src/backend && npx playwright install chromium`
+### Prerequisites
+- Node.js 20+
+- PostgreSQL 16
+- Redis 7
+- PM2: `npm install -g pm2`
+- Playwright: `cd src/backend && npx playwright install chromium`
 
----
-
-## Installation
-
-### 1. Clone
+### Installation
 
 ```bash
+# Clone
 git clone https://github.com/Azi023/cse-ai-dashboard.git
 cd cse-ai-dashboard
-```
 
-### 2. Install dependencies
-
-```bash
+# Install dependencies
 cd src/backend && npm install
 cd ../../src/frontend && npm install
+
+# Database setup
+sudo -u postgres psql -c "CREATE USER cse_user WITH PASSWORD 'your_password';"
+sudo -u postgres psql -c "CREATE DATABASE cse_dashboard OWNER cse_user;"
 ```
 
-### 3. PostgreSQL setup
-
-```bash
-sudo -u postgres psql
-```
-
-```sql
-CREATE USER cse_user WITH PASSWORD 'your_password';
-CREATE DATABASE cse_dashboard OWNER cse_user;
-GRANT ALL PRIVILEGES ON DATABASE cse_dashboard TO cse_user;
-\q
-```
-
-Tables auto-create via TypeORM `synchronize: true` on first start.
-
-### 4. Environment variables
+### Environment Variables
 
 Create `src/backend/.env`:
 
@@ -108,11 +126,11 @@ DATABASE_NAME=cse_dashboard
 REDIS_HOST=localhost
 REDIS_PORT=6379
 
-# AI — Claude API (required for AI features)
+# AI (required for AI features)
 ANTHROPIC_API_KEY=sk-ant-api03-...
 
-# ATrad broker automation (optional — READ-ONLY)
-ATRAD_URL=https://your-atrad-instance.com
+# ATrad broker sync (optional)
+ATRAD_URL=https://trade.hnbstockbrokers.lk/atsweb/login
 ATRAD_USERNAME=your_username
 ATRAD_PASSWORD=your_password
 
@@ -121,215 +139,55 @@ NODE_ENV=development
 PORT=3001
 ```
 
-| Variable | Required | Description |
-|----------|----------|-------------|
-| `DATABASE_*` | Yes | PostgreSQL connection |
-| `REDIS_HOST/PORT` | Yes | Redis connection |
-| `ANTHROPIC_API_KEY` | Yes (for AI) | Claude API key from [console.anthropic.com](https://console.anthropic.com) |
-| `ATRAD_URL` | No | ATrad platform URL (HNB Stockbrokers) |
-| `ATRAD_USERNAME` | No | ATrad login username |
-| `ATRAD_PASSWORD` | No | ATrad login password |
-
-### 5. Start
-
-#### Option A: PM2 (recommended for persistence)
+### Start
 
 ```bash
-# From project root
+# Option A: PM2 (recommended — survives terminal close)
 pm2 start ecosystem.config.js
 pm2 save
-pm2 startup  # auto-start on reboot
-```
 
-#### Option B: Manual
-
-```bash
-# Terminal 1 — Backend
-cd src/backend
-npm run start:dev
-
-# Terminal 2 — Frontend
-cd src/frontend
-npm run dev
+# Option B: Manual (two terminals)
+cd src/backend && npm run start:dev    # Terminal 1
+cd src/frontend && npm run dev          # Terminal 2
 ```
 
 Open [http://localhost:3000](http://localhost:3000)
 
-### 6. Seed Shariah data (first run)
+### First Run Setup
 
 ```bash
-cd src/backend
-npx tsx ../../scripts/seed-shariah-data.ts
+# Seed Shariah compliance data (marks known compliant/non-compliant stocks)
+cd src/backend && npx tsx ../../scripts/seed-shariah-data.ts
 ```
 
-This marks known COMPLIANT and NON_COMPLIANT stocks. All others stay as `PENDING_REVIEW` until financial ratio data is imported.
+Tables auto-create via TypeORM on first backend start.
 
 ---
 
-## Architecture
+## Cron Schedule
 
-```
-cse-ai-dashboard/
-├── ecosystem.config.js          # PM2 process configuration
-├── scripts/                     # Standalone scripts
-│   ├── atrad-recon.ts           # ATrad holdings verification
-│   ├── seed-shariah-data.ts     # Shariah compliance seed data
-│   └── ingest-cbsl-data.ts      # CBSL macro data import
-├── src/
-│   ├── backend/                 # NestJS API (port 3001)
-│   │   └── src/
-│   │       ├── entities/        # 22 TypeORM entities
-│   │       └── modules/
-│   │           ├── cse-data/    # CSE API polling + Redis caching
-│   │           ├── ai-engine/   # Claude integration, signals, chat
-│   │           ├── portfolio/   # Holdings, P&L, fees, allocation
-│   │           ├── analysis/    # Scoring engine, snapshots, recommendations
-│   │           ├── notifications/ # Daily digest, weekly brief
-│   │           ├── atrad-sync/  # Playwright ATrad automation
-│   │           ├── shariah-screening/ # Two-tier compliance check
-│   │           ├── journey/     # RCA tracking, KPIs, deposits
-│   │           ├── news/        # RSS aggregation
-│   │           ├── alerts/      # Notifications, price alerts
-│   │           ├── macro/       # CBSL macro indicators
-│   │           └── dividends/   # Dividend tracking + purification
-│   └── frontend/                # Next.js dashboard (port 3000)
-│       └── src/
-│           ├── app/             # 11 pages (App Router)
-│           ├── components/      # UI components (market/, layout/, ui/)
-│           └── lib/             # API client, number utilities
-└── data/                        # Generated data (gitignored)
-    └── atrad-sync/              # ATrad screenshots + HTML dumps
-```
-
----
-
-## Cron Schedule (all times Sri Lanka Time, UTC+5:30)
+All times in Sri Lanka Time (UTC+5:30). Zero API calls outside these windows.
 
 | Time | Days | Job |
 |------|------|-----|
-| 9:25 AM | Mon–Fri | Pre-market warmup — initial CSE data fetch |
-| Every 5 min, 9:30–2:30 PM | Mon–Fri | Market data polling (ASPI, sectors, gainers, losers) |
-| Every 15 min, 9:30–2:30 PM | Mon–Fri | Announcements polling |
-| Every 15 min, 9:30–2:30 PM | Mon–Fri | ATrad sync (holdings + cash balance) |
-| Every 30 min, 8:00 AM–8:00 PM | Mon–Fri | News RSS aggregation |
-| 9:00 AM | Mon, Thu | Shariah screening (skips if run recently) |
+| 9:25 AM | Mon–Fri | Pre-market warmup |
+| Every 5 min, 9:30–2:30 | Mon–Fri | Market data + trade summary polling |
+| Every 5 min, 9:30–2:30 | Mon–Fri | Real-time stop-loss monitoring |
+| Every 15 min, 9:30–2:30 | Mon–Fri | ATrad portfolio sync + announcements |
+| Every 30 min, 8AM–8PM | Mon–Fri | News RSS feeds |
+| 9:00 AM | Mon, Thu | Shariah screening |
 | 2:35 PM | Mon–Fri | Post-close market snapshot |
-| 2:38 PM | Mon–Fri | ATrad post-close sync (feeds portfolio snapshot) |
-| 2:40 PM | Mon–Fri | Save daily market snapshot to DB |
-| 2:42 PM | Mon–Fri | Run stock scoring engine |
+| 2:38 PM | Mon–Fri | ATrad post-close sync |
+| 2:40 PM | Mon–Fri | Save daily market + portfolio snapshots |
+| 2:41 PM | Mon–Fri | Calculate technical indicators |
+| 2:42 PM | Mon–Fri | Run 12-factor stock scoring |
+| 2:43 PM | Mon–Fri | Calculate position risk metrics |
 | 2:45 PM | Mon–Fri | Generate daily digest (Haiku) |
-| 2:55 PM | Fri | Generate AI weekly recommendation (Sonnet) |
-| 3:00 PM | Fri | Generate weekly brief (Sonnet) |
+| 2:55 PM | Friday | Generate AI weekly recommendation (Sonnet) |
+| 3:00 PM | Friday | Generate weekly brief (Sonnet) |
+| Mon 9:15 AM | Monday | Track recommendation outcomes (learning) |
 | 6:00 PM | Mon–Fri | After-hours announcements check |
-
-**Zero external API calls outside these windows** (nights and weekends are completely silent).
-
----
-
-## Key API Endpoints
-
-### Market Data
-```
-GET /api/market/summary       ASPI, SP SL20, volume, turnover
-GET /api/market/gainers       Top 10 gainers
-GET /api/market/losers        Top 10 losers
-GET /api/market/active        Most active by volume
-GET /api/market/sectors       All 20 sector indices
-GET /api/stocks               All 296 CSE stocks
-GET /api/stocks/:symbol       Single stock with Shariah status
-```
-
-### AI Engine
-```
-GET /api/ai/daily-brief       Daily market brief (Claude Sonnet, cached 4h)
-GET /api/ai/signals           5 trading signals (cached, refreshed daily at 2:35 PM)
-POST /api/ai/chat             Strategy chat (live API)
-GET /api/ai/usage             Monthly token usage
-```
-
-### Portfolio
-```
-GET /api/portfolio            All holdings with live P&L
-GET /api/portfolio/summary    Total value, invested, P&L, allocation
-POST /api/portfolio           Add holding (symbol, quantity, buy_price, fees, buy_date)
-PUT /api/portfolio/:id        Update holding
-DELETE /api/portfolio/:id     Remove holding
-```
-
-### Analysis (Phase 2)
-```
-GET /api/analysis/data-status     Days accumulated, scoring readiness
-GET /api/analysis/scores          Stock scores (available after 20 market days)
-GET /api/analysis/recommendation  Latest AI weekly pick
-GET /api/analysis/snapshot/latest Most recent daily market snapshot
-```
-
-### ATrad
-```
-GET /api/atrad/status         Last sync time, holdings count, cash balance
-POST /api/atrad/sync          Trigger manual sync
-```
-
-### Notifications
-```
-GET /api/notifications/daily-digest   Latest digest content
-GET /api/alerts/notifications         All notifications
-GET /api/alerts/unread-count          Unread bell count
-```
-
----
-
-## Shariah Screening
-
-This platform uses the AAOIFI / Meezan / Dow Jones Islamic Finance methodology adapted for the CSE:
-
-### Tier 1: Business Activity (automatic exclusions)
-- Banks and conventional financial institutions
-- Insurance companies
-- Tobacco manufacturers (CTC)
-- Alcohol and distilleries (DIST, MELS, LEON)
-- Casinos and gambling (JKH via Cinnamon City of Light casino)
-- Conventional leasing and finance companies
-
-### Tier 2: Financial Ratios (requires quarterly financial data)
-- Interest income < 5% of total revenue
-- Total debt / total assets < 30%
-- Interest-bearing deposits / total assets < 30%
-- Accounts receivable / total assets < 50%
-
-Most stocks are `PENDING_REVIEW` until Tier 2 data is available. The data source is the Almas Equities whitelist — a Sri Lanka-specific Shariah screening service.
-
----
-
-## ATrad Integration
-
-The platform can read your ATrad (HNB Stockbrokers) portfolio automatically using Playwright browser automation.
-
-**READ-ONLY**: The automation only reads data. It never clicks buy/sell buttons, never places orders, and never modifies account data.
-
-What it reads:
-- Cash balance and buying power
-- All open holdings (symbol, quantity, average price)
-
-The sync runs every 15 minutes during market hours and once at 2:38 PM (post-close). You can also trigger it manually via the Sync Now button in the Portfolio page.
-
----
-
-## AI Cost Estimate
-
-Monthly Claude API cost for solo use (1 user):
-
-| Feature | Model | Frequency | Est. Cost/Month |
-|---------|-------|-----------|-----------------|
-| Daily digest | Haiku | 20 trading days | ~$0.20 |
-| Weekly brief | Sonnet | 4 weeks | ~$0.20 |
-| AI weekly recommendation | Sonnet | 4 weeks | ~$0.20 |
-| AI signals | Sonnet | 20 days | ~$1.00 |
-| AI daily brief | Sonnet | 20 days | ~$1.00 |
-| Strategy chat | Sonnet | On demand | ~$0.50 |
-| **Total** | | | **~$3/month** |
-
-A 500K token monthly budget guard auto-downgrades Sonnet → Haiku above threshold.
+| Sun 2:00 AM | Sunday | Company financial profile sync |
 
 ---
 
@@ -337,34 +195,136 @@ A 500K token monthly budget guard auto-downgrades Sonnet → Haiku above thresho
 
 | Page | Path | Description |
 |------|------|-------------|
-| Dashboard | `/` | ASPI/SP SL20, AI brief, news, market movers |
-| My Journey | `/journey` | RCA deposits, KPIs, portfolio health, monthly returns |
-| Portfolio | `/portfolio` | Holdings, P&L (with fees), allocation, Shariah compliance |
-| AI Signals | `/signals` | Trading signals with direction, confidence, Shariah status |
-| Stocks | `/stocks` | Browse all 296 CSE stocks, filter by sector + Shariah |
-| News | `/news` | RSS news feed from CSE-focused sources |
-| Alerts | `/alerts` | Notification bell, alert history |
+| Dashboard | `/` | Market overview, AI brief, news, market movers |
+| My Journey | `/journey` | RCA deposits, KPIs, AI advisor, portfolio health |
+| Portfolio | `/portfolio` | Holdings, P&L, risk management, Shariah compliance |
+| Stocks | `/stocks` | Browse 296 stocks with scores, Shariah filter |
+| Stock Detail | `/stocks/[symbol]` | Price chart, technical analysis, AI report |
+| Signals | `/signals` | AI trading signals with confidence levels |
+| News | `/news` | Aggregated CSE news with impact ratings |
+| Alerts | `/alerts` | Notifications and alert management |
 | Strategy Chat | `/chat` | Interactive AI research assistant |
-| Backtest | `/backtest` | Test RSI, SMA, Value strategies against historical data |
-| Dividends | `/dividends` | Dividend calendar, purification amounts |
+| Backtester | `/backtest` | Test strategies against historical data |
+| Dividends | `/dividends` | Dividend calendar and purification |
 | Performance | `/performance` | Signal accuracy tracking |
+
+---
+
+## Shariah Screening Methodology
+
+Based on AAOIFI / Meezan / Dow Jones standards adapted for Sri Lanka:
+
+**Tier 1 — Business Activity (automatic exclusions):**
+Banks, insurance, tobacco, alcohol, gambling, casinos, conventional leasing/finance, weapons, pork-related products.
+
+**Tier 2 — Financial Ratios (quarterly review):**
+- Interest income < 5% of total revenue
+- Total debt / total assets < 30%
+- Interest-bearing deposits / total assets < 30%
+- Accounts receivable / total assets < 50%
+
+Data source: Almas Equities whitelist (Sri Lanka's only Shariah equity screening service), cross-referenced with SEC Sri Lanka's accredited methodology.
+
+---
+
+## Cost
+
+For single-user personal use:
+
+| Item | Monthly Cost |
+|------|-------------|
+| Claude AI API (Haiku + Sonnet) | ~$3 |
+| Cloud hosting (optional) | $0 (laptop) or $5-12 (VPS) |
+| CSE market data | Free |
+| News feeds | Free |
+| **Total** | **~$3-15/month** |
+
+A 500K token/month budget guard automatically downgrades Sonnet → Haiku to prevent overspend.
+
+---
+
+## Roadmap
+
+### Current (v1 — Active Development)
+- [x] Live CSE market data pipeline (296 stocks, 20 sectors)
+- [x] 12-factor stock scoring engine
+- [x] 8-indicator technical analysis (SMA, RSI, MACD, ATR, S/R, volume, candlesticks)
+- [x] Risk management (stop-loss, take-profit, position sizing, portfolio heat)
+- [x] AI daily digest + weekly recommendation
+- [x] Shariah compliance screening (AAOIFI two-tier)
+- [x] ATrad broker sync (read-only)
+- [x] Learning system (recommendation outcome tracking)
+- [x] Dark/light theme, responsive UI
+- [ ] ATrad order automation (suggest-and-confirm — in progress)
+- [ ] Full Almas whitelist import
+
+### Phase 5 — Autonomous AI Trading
+- [ ] One-click order approval → Playwright executes on ATrad
+- [ ] AI auto-generates TP/SL orders for every new position
+- [ ] Automated RCA execution (monthly limit-order placement)
+- [ ] Full trade lifecycle: entry → monitor → exit, all AI-managed with user approval at each step
+- [ ] Strict Shariah compliance enforcement — system blocks non-compliant trades even if user tries
+
+### Phase 6 — Demo Trading Environment
+- [ ] Virtual trading account with LKR 1,000,000 demo capital
+- [ ] Uses real-time CSE market data (same feed as live)
+- [ ] AI places trades freely on demo account to learn and test strategies
+- [ ] Performance comparison: AI picks vs market benchmark vs random
+- [ ] Users test their own strategies risk-free before going live
+
+### Phase 7 — Multi-Market Expansion
+- [ ] NSE (India) integration — Shariah-screened Indian stocks
+- [ ] International markets (NYSE, LSE) via supported brokers
+- [ ] Cross-market portfolio tracking and unified P&L
+- [ ] Currency-adjusted returns (LKR ↔ INR ↔ USD)
+
+### Phase 8 — Crypto Trading
+- [ ] Shariah-screened cryptocurrency analysis
+- [ ] Integration with compliant crypto exchanges
+- [ ] Unified portfolio: stocks + crypto in one dashboard
+
+### Long-Term Vision
+A single platform where a Shariah-conscious investor can manage their entire portfolio — CSE stocks, international equities, and crypto — with AI handling the research, risk management, and execution while they focus on reviewing and approving decisions.
+
+---
+
+## API Endpoints (68 total)
+
+Key categories:
+
+```
+/api/market/*          — Live market data, indices, sectors
+/api/stocks/*          — Stock data, prices, profiles
+/api/ai/*              — AI brief, signals, chat, usage
+/api/portfolio/*       — Holdings, summary, Shariah status
+/api/analysis/*        — Scores, technicals, risk, recommendations
+/api/atrad/*           — Broker sync, status, orders
+/api/notifications/*   — Digests, briefs
+/api/alerts/*          — Notifications, unread count
+/api/shariah/*         — Compliance screening
+/api/news/*            — RSS feed aggregation
+/api/journey/*         — RCA tracking, KPIs, goals
+/api/dividends/*       — Dividend tracking, purification
+/api/backtest/*        — Strategy backtesting
+/api/macro/*           — CBSL economic indicators
+```
+
+Full endpoint documentation available via the running backend.
 
 ---
 
 ## Contributing
 
-This is currently a personal project. Issues and PRs are welcome for bug fixes. New features require discussion first — the Shariah compliance logic in particular must not be changed without proper Islamic finance knowledge.
+Issues and PRs welcome for bug fixes. Feature proposals require discussion first. Shariah compliance logic must not be modified without qualified Islamic finance knowledge.
 
 ---
 
 ## Disclaimer
 
-This is an educational tool, not financial advice. All data is provided for informational purposes only. Investment decisions must be made based on your own research and with appropriate professional guidance. Past signal performance does not guarantee future results.
-
-The Shariah compliance screening is based on publicly available methodology and may not represent a formal fatwa. Consult a qualified Islamic finance scholar before making investment decisions based on this screening.
+**This is an educational tool, not financial advice.** All data is for informational purposes only. Investment decisions carry risk including potential loss of capital. Past AI recommendation performance does not guarantee future results. Shariah screening is based on publicly available methodology and does not constitute a fatwa. Consult a licensed financial advisor and qualified Islamic scholar before making investment decisions.
 
 ---
 
 ## License
 
-MIT — Personal use and educational purposes.
+MIT
