@@ -145,7 +145,9 @@ export class DemoService implements OnModuleInit {
 
     const stock = await this.stockRepo.findOneBy({ symbol: dto.symbol });
     if (!stock)
-      throw new BadRequestException(`Stock ${dto.symbol} not found in database`);
+      throw new BadRequestException(
+        `Stock ${dto.symbol} not found in database`,
+      );
 
     const price = await this.getCurrentPrice(dto.symbol, stock.id);
     if (!price || price <= 0)
@@ -247,6 +249,7 @@ export class DemoService implements OnModuleInit {
         fee,
         net_value: netValue,
         source: dto.source ?? 'MANUAL',
+        ai_reasoning: dto.ai_reasoning ?? null,
         shariah_status: shariahStatus,
         market_snapshot: { aspi },
         executed_at: new Date(),
@@ -306,6 +309,7 @@ export class DemoService implements OnModuleInit {
         fee,
         net_value: netValue,
         source: dto.source ?? 'MANUAL',
+        ai_reasoning: dto.ai_reasoning ?? null,
         shariah_status: shariahStatus,
         market_snapshot: { aspi, realized_pnl: realizedPnl },
         executed_at: new Date(),
@@ -393,9 +397,7 @@ export class DemoService implements OnModuleInit {
       total_return: totalReturn,
       return_pct: returnPct,
       win_rate:
-        sells.length > 0
-          ? (profitableSells.length / sells.length) * 100
-          : 0,
+        sells.length > 0 ? (profitableSells.length / sells.length) * 100 : 0,
       total_trades: allTrades.length,
       total_sell_trades: sells.length,
       profitable_trades: profitableSells.length,
@@ -403,9 +405,7 @@ export class DemoService implements OnModuleInit {
         sells.length > 0 ? totalRealizedPnl / sells.length : 0,
       total_fees: parseFloat(String(account.total_fees_paid)),
       shariah_compliance:
-        holdings.length > 0
-          ? (compliantCount / holdings.length) * 100
-          : 100,
+        holdings.length > 0 ? (compliantCount / holdings.length) * 100 : 100,
     };
   }
 
@@ -426,7 +426,8 @@ export class DemoService implements OnModuleInit {
       .skip(skip)
       .take(limit);
 
-    if (query.symbol) qb.andWhere('t.symbol = :symbol', { symbol: query.symbol });
+    if (query.symbol)
+      qb.andWhere('t.symbol = :symbol', { symbol: query.symbol });
     if (query.dateFrom)
       qb.andWhere('t.executed_at >= :dateFrom', { dateFrom: query.dateFrom });
     if (query.dateTo)
@@ -463,6 +464,24 @@ export class DemoService implements OnModuleInit {
         : 0;
 
     const aspi = await this.getCurrentAspi();
+
+    // Calculate ASPI return since account creation
+    const initialAspiKey = `demo:initial-aspi:${accountId}`;
+    let aspiReturnPct = 0;
+    const initialAspiData = await this.redisService.getJson<{ value: number }>(
+      initialAspiKey,
+    );
+    if (!initialAspiData && aspi > 0) {
+      await this.redisService.setJson(
+        initialAspiKey,
+        { value: aspi },
+        365 * 24 * 3600,
+      );
+    } else if (initialAspiData?.value && aspi > 0) {
+      aspiReturnPct =
+        ((aspi - initialAspiData.value) / initialAspiData.value) * 100;
+    }
+
     const today = new Date();
     const todayStr = today.toISOString().split('T')[0];
 
@@ -482,7 +501,7 @@ export class DemoService implements OnModuleInit {
       holdings_value: holdingsValue,
       total_return_pct: totalReturnPct,
       aspi_value: aspi,
-      aspi_return_pct: 0,
+      aspi_return_pct: aspiReturnPct,
       num_holdings: holdings.length,
       trades_today: tradesToday,
     });

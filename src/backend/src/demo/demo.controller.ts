@@ -8,13 +8,19 @@ import {
   ParseIntPipe,
 } from '@nestjs/common';
 import { DemoService } from './demo.service';
+import { DemoAITraderService } from './demo-ai-trader.service';
+import { DemoCronService } from './demo-cron.service';
 import { CreateDemoAccountDto } from './dto/create-demo-account.dto';
 import { CreateDemoTradeDto } from './dto/create-demo-trade.dto';
 import { DemoQueryDto } from './dto/demo-query.dto';
 
 @Controller('demo')
 export class DemoController {
-  constructor(private readonly demoService: DemoService) {}
+  constructor(
+    private readonly demoService: DemoService,
+    private readonly aiTraderService: DemoAITraderService,
+    private readonly cronService: DemoCronService,
+  ) {}
 
   // ─── Accounts ──────────────────────────────────────────────────────────────
 
@@ -76,15 +82,20 @@ export class DemoController {
     return this.demoService.getSnapshots(accountId);
   }
 
+  @Post('snapshots/trigger/:accountId')
+  triggerSnapshot(@Param('accountId', ParseIntPipe) accountId: number) {
+    return this.cronService.triggerSnapshotForAccount(accountId);
+  }
+
   // ─── AI ────────────────────────────────────────────────────────────────────
 
   @Post('ai-trade/:accountId')
   triggerAITrade(@Param('accountId', ParseIntPipe) accountId: number) {
-    return this.demoService.triggerAITrade(accountId);
+    return this.aiTraderService.evaluateAndTrade(accountId);
   }
 
   @Get('ai-log/:accountId')
   getAILog(@Param('accountId', ParseIntPipe) accountId: number) {
-    return this.demoService.getAILog(accountId);
+    return this.aiTraderService.getAILog(accountId);
   }
 }

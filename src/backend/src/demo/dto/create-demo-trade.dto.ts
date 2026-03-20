@@ -1,4 +1,13 @@
-import { IsNotEmpty, IsString, IsNumber, IsInt, IsIn, IsOptional, Min, MaxLength } from 'class-validator';
+import {
+  IsNotEmpty,
+  IsString,
+  IsNumber,
+  IsInt,
+  IsIn,
+  IsOptional,
+  Min,
+  MaxLength,
+} from 'class-validator';
 
 export class CreateDemoTradeDto {
   @IsInt()
@@ -20,4 +29,8 @@ export class CreateDemoTradeDto {
   @IsOptional()
   @IsIn(['AI_SIGNAL', 'AI_AUTO', 'MANUAL', 'STRATEGY_TEST'])
   source?: string;
+
+  @IsOptional()
+  @IsString()
+  ai_reasoning?: string;
 }
