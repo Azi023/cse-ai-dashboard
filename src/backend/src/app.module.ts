@@ -25,6 +25,7 @@ import { JourneyModule } from './modules/journey/journey.module';
 import { InsightsModule } from './modules/insights/insights.module';
 import { NotificationsModule } from './modules/notifications/notifications.module';
 import { AnalysisModule } from './modules/analysis/analysis.module';
+import { DemoModule } from './demo/demo.module';
 
 @Module({
   imports: [
@@ -93,6 +94,7 @@ import { AnalysisModule } from './modules/analysis/analysis.module';
     InsightsModule,
     NotificationsModule,
     AnalysisModule,
+    DemoModule,
   ],
   controllers: [AppController],
   providers: [AppService],
