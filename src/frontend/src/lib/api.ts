@@ -1030,4 +1030,131 @@ export const analysisApi = {
   getOutcomes: () => api.get('/analysis/outcomes'),
 };
 
+// ─── Demo Trading Types ──────────────────────────────────────────────────────
+
+export interface DemoAccountData {
+  id: number;
+  name: string;
+  initial_capital: number;
+  cash_balance: number;
+  total_fees_paid: number;
+  strategy: string | null;
+  is_active: boolean;
+  created_at: string;
+  // computed (from getAccount)
+  holdings_value?: number;
+  total_value?: number;
+  portfolio_value?: number;
+  total_return_pct?: number;
+}
+
+export interface DemoHoldingEnriched {
+  id: number;
+  demo_account_id: number;
+  stock_id: number;
+  symbol: string;
+  quantity: number;
+  avg_cost_basis: number;
+  total_invested: number;
+  realized_pnl: number;
+  shariah_status: string;
+  current_price: number;
+  market_value: number;
+  unrealized_pnl: number;
+  pnl_pct: number;
+}
+
+export interface DemoTradeData {
+  id: number;
+  demo_account_id: number;
+  stock_id: number;
+  symbol: string;
+  direction: 'BUY' | 'SELL';
+  quantity: number;
+  price: number;
+  total_value: number;
+  fee: number;
+  net_value: number;
+  source: string;
+  ai_reasoning: string | null;
+  shariah_status: string;
+  market_snapshot: Record<string, unknown> | null;
+  executed_at: string;
+  created_at: string;
+}
+
+export interface DemoPerformanceData {
+  total_value: number;
+  cash_balance: number;
+  holdings_value: number;
+  total_return: number;
+  return_pct: number;
+  win_rate: number;
+  total_trades: number;
+  total_sell_trades: number;
+  profitable_trades: number;
+  avg_return_per_trade: number;
+  total_fees: number;
+  shariah_compliance: number;
+}
+
+export interface DemoSnapshotData {
+  id: number;
+  demo_account_id: number;
+  snapshot_date: string;
+  portfolio_value: number;
+  cash_balance: number;
+  holdings_value: number;
+  total_return_pct: number;
+  aspi_value: number | null;
+  aspi_return_pct: number | null;
+  num_holdings: number;
+  trades_today: number;
+  created_at: string;
+}
+
+export interface DemoBenchmarkData {
+  id: number;
+  demo_account_id: number;
+  benchmark_date: string;
+  portfolio_return_pct: number;
+  aspi_return_pct: number | null;
+  random_return_pct: number | null;
+  created_at: string;
+}
+
+export interface CreateDemoTradePayload {
+  demo_account_id: number;
+  symbol: string;
+  direction: 'BUY' | 'SELL';
+  quantity: number;
+  source?: string;
+  ai_reasoning?: string;
+}
+
+export const demoApi = {
+  getAccounts: () => api.get<DemoAccountData[]>('/demo/accounts'),
+  getAccount: (id: number) => api.get<DemoAccountData>(`/demo/accounts/${id}`),
+  resetAccount: (id: number) => api.post<DemoAccountData>(`/demo/accounts/${id}/reset`),
+  getHoldings: (accountId: number) => api.get<DemoHoldingEnriched[]>(`/demo/holdings/${accountId}`),
+  getTrades: (accountId: number, page = 1, limit = 20) =>
+    api.get<{ trades: DemoTradeData[]; total: number; page: number }>(
+      '/demo/trades',
+      { params: { demo_account_id: accountId, page, limit } },
+    ),
+  executeTrade: (payload: CreateDemoTradePayload) =>
+    api.post<DemoTradeData>('/demo/trades', payload),
+  getPerformance: (accountId: number) =>
+    api.get<DemoPerformanceData>(`/demo/performance/${accountId}`),
+  getSnapshots: (accountId: number) =>
+    api.get<DemoSnapshotData[]>(`/demo/snapshots/${accountId}`),
+  getBenchmarks: (accountId: number) =>
+    api.get<DemoBenchmarkData[]>(`/demo/benchmarks/${accountId}`),
+  triggerSnapshot: (accountId: number) =>
+    api.post(`/demo/snapshots/trigger/${accountId}`),
+  triggerAITrade: (accountId: number) =>
+    api.post(`/demo/ai-trade/${accountId}`),
+  getAILog: (accountId: number) => api.get(`/demo/ai-log/${accountId}`),
+};
+
 export default api;

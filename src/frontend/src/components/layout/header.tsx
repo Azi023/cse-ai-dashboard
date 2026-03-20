@@ -60,6 +60,7 @@ interface NavGroup {
   label: string;
   icon: React.ElementType;
   links: NavLink[];
+  badge?: string;
 }
 
 const topLinks: NavLink[] = [
@@ -103,7 +104,17 @@ const toolsGroup: NavGroup = {
   ],
 };
 
-const dropdownGroups = [analysisGroup, intelligenceGroup, toolsGroup];
+const demoGroup: NavGroup = {
+  label: 'Demo',
+  icon: FlaskConical,
+  badge: 'DEMO',
+  links: [
+    { href: '/demo', label: 'Demo Portfolio', icon: FlaskConical },
+    { href: '/demo/performance', label: 'Performance', icon: TrendingUp },
+  ],
+};
+
+const dropdownGroups = [analysisGroup, intelligenceGroup, toolsGroup, demoGroup];
 
 function DropdownMenu({ group, pathname }: { group: NavGroup; pathname: string }) {
   const [open, setOpen] = useState(false);
@@ -126,12 +137,21 @@ function DropdownMenu({ group, pathname }: { group: NavGroup; pathname: string }
       <button
         onClick={() => setOpen(!open)}
         className={`flex items-center gap-1 rounded-md px-2.5 py-1.5 text-sm font-medium transition-colors ${
-          groupIsActive
+          group.badge
+            ? groupIsActive
+              ? 'bg-amber-500/10 text-amber-500'
+              : 'text-muted-foreground hover:text-amber-500 hover:bg-amber-500/10'
+            : groupIsActive
             ? 'bg-primary/10 text-primary'
             : 'text-muted-foreground hover:text-foreground hover:bg-muted/50'
         }`}
       >
         {group.label}
+        {group.badge && (
+          <span className="text-[9px] font-bold bg-amber-500/20 text-amber-500 border border-amber-500/30 rounded px-1 py-px leading-none">
+            {group.badge}
+          </span>
+        )}
         <ChevronDown className={`h-3 w-3 transition-transform duration-200 ${open ? 'rotate-180' : ''}`} />
       </button>
 
@@ -429,8 +449,13 @@ export function Header() {
             .filter((group) => !(mode === 'simple' && group.label === 'Analysis'))
             .map((group) => (
             <div key={group.label}>
-              <p className="text-[10px] text-muted-foreground uppercase tracking-wider px-3 pt-2 pb-0.5 border-t mt-1">
+              <p className="text-[10px] text-muted-foreground uppercase tracking-wider px-3 pt-2 pb-0.5 border-t mt-1 flex items-center gap-1.5">
                 {group.label}
+                {group.badge && (
+                  <span className="text-[9px] font-bold bg-amber-500/20 text-amber-500 border border-amber-500/30 rounded px-1 py-px leading-none normal-case">
+                    {group.badge}
+                  </span>
+                )}
               </p>
               {group.links.map((link) => {
                 const Icon = link.icon;
