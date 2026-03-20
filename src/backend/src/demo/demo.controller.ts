@@ -98,4 +98,11 @@ export class DemoController {
   getAILog(@Param('accountId', ParseIntPipe) accountId: number) {
     return this.aiTraderService.getAILog(accountId);
   }
+
+  // ─── Maintenance ───────────────────────────────────────────────────────────
+
+  @Post('sync-shariah')
+  syncShariahStatus() {
+    return this.demoService.syncShariahStatus();
+  }
 }

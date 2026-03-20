@@ -623,6 +623,27 @@ export class DemoService implements OnModuleInit {
     return parseFloat(String(account.cash_balance)) + holdingsValue;
   }
 
+  /**
+   * Sync shariah_status in demo_holdings from the live stocks table.
+   * Call this after running Shariah screening.
+   */
+  async syncShariahStatus(): Promise<{ updated: number }> {
+    const holdings = await this.holdingRepo.find();
+    let updated = 0;
+    for (const h of holdings) {
+      const stock = await this.stockRepo.findOneBy({ symbol: h.symbol });
+      if (!stock) continue;
+      const mapped = this.mapShariahStatus(stock.shariah_status);
+      if (h.shariah_status !== mapped) {
+        h.shariah_status = mapped;
+        await this.holdingRepo.save(h);
+        updated++;
+      }
+    }
+    this.logger.log(`Synced shariah_status for ${updated} demo holdings`);
+    return { updated };
+  }
+
   private mapShariahStatus(status: string): string {
     if (status === 'compliant') return 'COMPLIANT';
     if (status === 'non_compliant' || status === 'blacklisted')

@@ -8,6 +8,7 @@ import {
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { CompanyFinancial, Stock } from '../../entities';
+import { CseApiService } from '../cse-data/cse-api.service';
 
 const VALID_QUARTERS = ['Q1', 'Q2', 'Q3', 'Q4', 'ANNUAL'];
 
@@ -48,6 +49,7 @@ export class CompanyFinancialsService {
     private readonly financialRepository: Repository<CompanyFinancial>,
     @InjectRepository(Stock)
     private readonly stockRepository: Repository<Stock>,
+    private readonly cseApiService: CseApiService,
   ) {}
 
   /**
@@ -146,10 +148,7 @@ export class CompanyFinancialsService {
   /**
    * PUT /api/financials/:id — Update an existing financial record.
    */
-  async update(
-    id: number,
-    dto: UpdateFinancialDto,
-  ): Promise<CompanyFinancial> {
+  async update(id: number, dto: UpdateFinancialDto): Promise<CompanyFinancial> {
     const record = await this.financialRepository.findOne({ where: { id } });
     if (!record) {
       throw new NotFoundException(`Financial record with id ${id} not found`);
@@ -245,6 +244,294 @@ export class CompanyFinancialsService {
   }
 
   /**
+   * GET /api/financials/status — Coverage stats scoped to compliant stocks.
+   */
+  async getStatus(): Promise<{
+    compliant_stocks: number;
+    with_financials: number;
+    missing: number;
+    coverage_percent: number;
+    last_cse_fetch: string | null;
+  }> {
+    const compliantStocks = await this.stockRepository.find({
+      where: { shariah_status: 'compliant', is_active: true },
+    });
+    const symbols = compliantStocks.map((s) => s.symbol);
+
+    let withData = 0;
+    if (symbols.length > 0) {
+      const result = await this.financialRepository
+        .createQueryBuilder('cf')
+        .select('DISTINCT cf.symbol', 'symbol')
+        .where('cf.symbol IN (:...symbols)', { symbols })
+        .getRawMany<{ symbol: string }>();
+      withData = result.length;
+    }
+
+    const cseFetch = await this.financialRepository.findOne({
+      where: { source: 'CSE_API' },
+      order: { updated_at: 'DESC' },
+    });
+
+    return {
+      compliant_stocks: symbols.length,
+      with_financials: withData,
+      missing: symbols.length - withData,
+      coverage_percent:
+        symbols.length > 0 ? (withData / symbols.length) * 100 : 0,
+      last_cse_fetch: cseFetch?.updated_at?.toISOString() ?? null,
+    };
+  }
+
+  /**
+   * POST /api/financials/fetch-cse — Auto-fetch market data from CSE API for all compliant stocks.
+   */
+  async fetchFromCse(): Promise<{
+    total: number;
+    fetched: number;
+    failed: number;
+    results: Array<{
+      symbol: string;
+      status: 'updated' | 'created' | 'no_data' | 'failed';
+      message?: string;
+    }>;
+  }> {
+    const compliantStocks = await this.stockRepository.find({
+      where: { shariah_status: 'compliant', is_active: true },
+    });
+
+    const results: Array<{
+      symbol: string;
+      status: 'updated' | 'created' | 'no_data' | 'failed';
+      message?: string;
+    }> = [];
+    let fetched = 0;
+    let failed = 0;
+
+    for (let i = 0; i < compliantStocks.length; i++) {
+      const stock = compliantStocks[i];
+
+      try {
+        const cseData = (await this.cseApiService.getCompanyInfo(
+          stock.symbol,
+        )) as Record<string, unknown> | null;
+
+        if (!cseData) {
+          failed++;
+          results.push({
+            symbol: stock.symbol,
+            status: 'no_data',
+            message: 'CSE API returned empty response',
+          });
+          continue;
+        }
+
+        const info = cseData?.reqSymbolInfo as
+          | Record<string, unknown>
+          | undefined;
+        const betaInfo = cseData?.reqSymbolBetaInfo as
+          | Record<string, unknown>
+          | undefined;
+
+        if (info) {
+          // Update stock entity with market data
+          if (info.marketCap != null) stock.market_cap = Number(info.marketCap);
+          if (info.p12HiPrice != null)
+            stock.week52_high = Number(info.p12HiPrice);
+          if (info.p12LowPrice != null)
+            stock.week52_low = Number(info.p12LowPrice);
+          if (info.lastTradedPrice != null)
+            stock.last_price = Number(info.lastTradedPrice);
+          if (betaInfo?.triASIBetaValue != null)
+            stock.beta = Number(betaInfo.triASIBetaValue);
+          await this.stockRepository.save(stock);
+        }
+
+        // Upsert a CSE_API financial record (for this fiscal year)
+        const fiscalYear = String(new Date().getFullYear());
+        const eps =
+          info?.earningsPerShare != null ? Number(info.earningsPerShare) : null;
+        const pe = info?.peRatio != null ? Number(info.peRatio) : null;
+
+        const existing = await this.financialRepository.findOne({
+          where: {
+            symbol: stock.symbol,
+            fiscal_year: fiscalYear,
+            quarter: 'ANNUAL',
+          },
+        });
+
+        if (existing) {
+          // Only fill in null fields from CSE; don't overwrite manual data
+          if (existing.earnings_per_share == null && eps != null)
+            existing.earnings_per_share = eps;
+          if (existing.pe_ratio == null && pe != null) existing.pe_ratio = pe;
+          if (existing.source === 'CSE_API') {
+            // Full update for CSE_API records
+            existing.source = 'CSE_API';
+            existing.report_date = new Date();
+          }
+          await this.financialRepository.save(existing);
+          results.push({ symbol: stock.symbol, status: 'updated' });
+        } else {
+          const record = this.financialRepository.create({
+            symbol: stock.symbol,
+            fiscal_year: fiscalYear,
+            quarter: 'ANNUAL',
+            source: 'CSE_API',
+            earnings_per_share: eps,
+            pe_ratio: pe,
+            report_date: new Date(),
+          });
+          await this.calculateDerivedRatios(record);
+          await this.financialRepository.save(record);
+          results.push({ symbol: stock.symbol, status: 'created' });
+        }
+
+        fetched++;
+        this.logger.log(`Fetched CSE data for ${stock.symbol}`);
+      } catch (err) {
+        failed++;
+        const msg = err instanceof Error ? err.message : String(err);
+        results.push({ symbol: stock.symbol, status: 'failed', message: msg });
+        this.logger.error(`Failed CSE fetch for ${stock.symbol}: ${msg}`);
+      }
+
+      // 1-second delay between requests
+      if (i < compliantStocks.length - 1) {
+        await new Promise((resolve) => setTimeout(resolve, 1000));
+      }
+    }
+
+    this.logger.log(
+      `CSE fetch complete: ${fetched} fetched, ${failed} failed of ${compliantStocks.length} compliant stocks`,
+    );
+    return { total: compliantStocks.length, fetched, failed, results };
+  }
+
+  /**
+   * POST /api/financials/import-csv — Parse CSV text and bulk-upsert financial records.
+   * CSV columns: symbol, period, revenue, net_income, total_assets, total_liabilities,
+   *              total_equity, eps, interest_bearing_debt
+   */
+  async importFromCsv(csvText: string): Promise<{
+    imported: number;
+    skipped: number;
+    errors: string[];
+  }> {
+    const lines = csvText.split(/\r?\n/).filter((l) => l.trim());
+    if (lines.length < 2) {
+      throw new BadRequestException(
+        'CSV must have a header row and at least one data row',
+      );
+    }
+
+    const headers = lines[0].split(',').map((h) => h.trim().toLowerCase());
+    const required = ['symbol', 'period'];
+    for (const r of required) {
+      if (!headers.includes(r)) {
+        throw new BadRequestException(`CSV missing required column: ${r}`);
+      }
+    }
+
+    const col = (row: string[], name: string): string => {
+      const idx = headers.indexOf(name);
+      return idx >= 0 ? (row[idx] ?? '').trim() : '';
+    };
+    const num = (v: string): number | null => {
+      if (!v || v === '') return null;
+      const n = Number(v);
+      return isNaN(n) ? null : n;
+    };
+
+    let imported = 0;
+    let skipped = 0;
+    const errors: string[] = [];
+
+    for (let i = 1; i < lines.length; i++) {
+      const row = lines[i].split(',');
+      const symbol = col(row, 'symbol').toUpperCase();
+      const period = col(row, 'period'); // e.g. "FY-2025" or "2024/25"
+
+      if (!symbol || !period) {
+        errors.push(`Row ${i + 1}: missing symbol or period`);
+        skipped++;
+        continue;
+      }
+
+      // Parse period into fiscal_year + quarter
+      let fiscal_year = period;
+      let quarter = 'ANNUAL';
+      const qMatch = period.match(/Q([1-4])/i);
+      if (qMatch) {
+        quarter = `Q${qMatch[1]}`;
+        fiscal_year = period.replace(/[-_]?Q[1-4]/i, '').trim();
+      }
+
+      if (!VALID_QUARTERS.includes(quarter)) {
+        errors.push(`Row ${i + 1}: invalid quarter in period "${period}"`);
+        skipped++;
+        continue;
+      }
+
+      try {
+        const existing = await this.financialRepository.findOne({
+          where: { symbol, fiscal_year, quarter },
+        });
+
+        const fields = {
+          total_revenue: num(col(row, 'revenue')),
+          net_profit: num(col(row, 'net_income')),
+          total_assets: num(col(row, 'total_assets')),
+          total_liabilities: num(col(row, 'total_liabilities')),
+          shareholders_equity: num(col(row, 'total_equity')),
+          earnings_per_share: num(col(row, 'eps')),
+          interest_bearing_debt: num(col(row, 'interest_bearing_debt')),
+          interest_income: num(col(row, 'interest_income')),
+          non_compliant_income: num(col(row, 'non_compliant_income')),
+        };
+
+        if (existing) {
+          Object.assign(existing, fields);
+          await this.calculateDerivedRatios(existing);
+          await this.financialRepository.save(existing);
+        } else {
+          const record = this.financialRepository.create({
+            symbol,
+            fiscal_year,
+            quarter,
+            source: 'MANUAL',
+            ...fields,
+          });
+          await this.calculateDerivedRatios(record);
+          await this.financialRepository.save(record);
+        }
+        imported++;
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err);
+        errors.push(`Row ${i + 1} (${symbol}): ${msg}`);
+        skipped++;
+      }
+    }
+
+    this.logger.log(
+      `CSV import complete: ${imported} imported, ${skipped} skipped`,
+    );
+    return { imported, skipped, errors };
+  }
+
+  /**
+   * GET /api/financials/template-csv — Return CSV template for bulk import.
+   */
+  getTemplateCsv(): string {
+    const header =
+      'symbol,period,revenue,net_income,total_assets,total_liabilities,total_equity,eps,interest_bearing_debt,interest_income,non_compliant_income';
+    const example =
+      'AEL.N0000,FY-2025,12500,1200,45000,22000,23000,3.50,5000,0,0';
+    return `${header}\n${example}\n`;
+  }
+
+  /**
    * Auto-calculate derived ratios from fundamental data + stock's last_price.
    * Only overwrites null values — manual entries are preserved.
    */
@@ -271,7 +558,12 @@ export class CompanyFinancialsService {
       : null;
 
     // P/E = last_price / EPS
-    if (record.pe_ratio == null && lastPrice != null && eps != null && eps !== 0) {
+    if (
+      record.pe_ratio == null &&
+      lastPrice != null &&
+      eps != null &&
+      eps !== 0
+    ) {
       record.pe_ratio = Number((lastPrice / eps).toFixed(4));
     }
 
@@ -287,9 +579,7 @@ export class CompanyFinancialsService {
     ) {
       const bookValuePerShare = equity / sharesOutstanding;
       if (bookValuePerShare !== 0) {
-        record.pb_ratio = Number(
-          (lastPrice / bookValuePerShare).toFixed(4),
-        );
+        record.pb_ratio = Number((lastPrice / bookValuePerShare).toFixed(4));
       }
     }
 

@@ -32,6 +32,9 @@ import {
   Database,
   TrendingUp,
   X,
+  RefreshCw,
+  Upload,
+  Download,
 } from 'lucide-react';
 import { safeNum } from '@/lib/format';
 
@@ -148,6 +151,17 @@ export default function AdminFinancialsPage() {
   // Existing records for selected symbol
   const [existingRecords, setExistingRecords] = useState<CompanyFinancial[]>([]);
   const [loadingRecords, setLoadingRecords] = useState(false);
+
+  // CSE Auto-Fetch
+  const [fetchingCse, setFetchingCse] = useState(false);
+  const [cseFetchResult, setCseFetchResult] = useState<{ total: number; fetched: number; failed: number } | null>(null);
+  const [cseFetchError, setCseFetchError] = useState<string | null>(null);
+
+  // CSV Import
+  const [csvFile, setCsvFile] = useState<File | null>(null);
+  const [importingCsv, setImportingCsv] = useState(false);
+  const [csvImportResult, setCsvImportResult] = useState<{ imported: number; skipped: number; errors: string[] } | null>(null);
+  const [csvImportError, setCsvImportError] = useState<string | null>(null);
 
   const fetchInitialData = useCallback(async () => {
     try {
@@ -294,6 +308,44 @@ export default function AdminFinancialsPage() {
     setForm((prev) => ({ ...prev, [field]: value }));
   };
 
+  const handleFetchCse = async () => {
+    setFetchingCse(true);
+    setCseFetchResult(null);
+    setCseFetchError(null);
+    try {
+      const res = await financialsApi.fetchFromCse();
+      setCseFetchResult(res.data);
+      financialsApi.getCoverage().then((r) => setCoverage(r.data)).catch(() => {});
+    } catch (err: unknown) {
+      const msg = err && typeof err === 'object' && 'response' in err
+        ? (err as { response?: { data?: { message?: string } } }).response?.data?.message ?? 'Fetch failed'
+        : 'Fetch failed';
+      setCseFetchError(typeof msg === 'string' ? msg : JSON.stringify(msg));
+    } finally {
+      setFetchingCse(false);
+    }
+  };
+
+  const handleCsvImport = async () => {
+    if (!csvFile) return;
+    setImportingCsv(true);
+    setCsvImportResult(null);
+    setCsvImportError(null);
+    try {
+      const res = await financialsApi.importCsv(csvFile);
+      setCsvImportResult(res.data);
+      financialsApi.getCoverage().then((r) => setCoverage(r.data)).catch(() => {});
+      setCsvFile(null);
+    } catch (err: unknown) {
+      const msg = err && typeof err === 'object' && 'response' in err
+        ? (err as { response?: { data?: { message?: string } } }).response?.data?.message ?? 'Import failed'
+        : 'Import failed';
+      setCsvImportError(typeof msg === 'string' ? msg : JSON.stringify(msg));
+    } finally {
+      setImportingCsv(false);
+    }
+  };
+
   return (
     <div className="space-y-6">
       {/* Header */}
@@ -381,6 +433,124 @@ export default function AdminFinancialsPage() {
           </CardContent>
         </Card>
       </div>
+
+      {/* Section A: CSE Auto-Fetch */}
+      <Card>
+        <CardHeader>
+          <div className="flex items-center justify-between">
+            <CardTitle className="text-base flex items-center gap-2">
+              <RefreshCw className="h-4 w-4" />
+              Auto-Fetch from CSE API
+            </CardTitle>
+            <Button onClick={handleFetchCse} disabled={fetchingCse} size="sm" className="gap-1.5">
+              {fetchingCse ? <RefreshCw className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
+              {fetchingCse ? 'Fetching...' : 'Fetch All'}
+            </Button>
+          </div>
+        </CardHeader>
+        <CardContent>
+          <p className="text-sm text-muted-foreground mb-3">
+            Fetches market cap, 52-week high/low, last price, and beta for all Shariah-compliant stocks from the CSE API. Updates stock data and creates financial records where missing.
+          </p>
+          <div className="flex items-center gap-4 text-sm">
+            <span className="text-muted-foreground">
+              Compliant stocks: <span className="font-medium text-foreground">{coverage?.stocks_with_financials ?? '—'}/{coverage?.total_stocks ?? '—'} with data</span>
+            </span>
+          </div>
+          {cseFetchResult && (
+            <div className="mt-3 flex items-center gap-2 rounded-lg border border-green-500/30 bg-green-500/5 px-4 py-3 text-sm text-green-500">
+              <CheckCircle2 className="h-4 w-4 shrink-0" />
+              Fetched {cseFetchResult.fetched} of {cseFetchResult.total} stocks
+              {cseFetchResult.failed > 0 && ` (${cseFetchResult.failed} failed)`}
+            </div>
+          )}
+          {cseFetchError && (
+            <div className="mt-3 flex items-center gap-2 rounded-lg border border-destructive/30 bg-destructive/5 px-4 py-3 text-sm text-destructive">
+              <AlertCircle className="h-4 w-4 shrink-0" />
+              {cseFetchError}
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* Section C: CSV Bulk Import */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-base flex items-center gap-2">
+            <Upload className="h-4 w-4" />
+            CSV Bulk Import
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          <p className="text-sm text-muted-foreground">
+            Upload a CSV with columns: <code className="text-xs bg-muted px-1 rounded">symbol, period, revenue, net_income, total_assets, total_liabilities, total_equity, eps, interest_bearing_debt</code>
+          </p>
+          <div className="flex items-center gap-3 flex-wrap">
+            <label className="cursor-pointer">
+              <input
+                type="file"
+                accept=".csv,text/csv"
+                className="hidden"
+                onChange={(e) => setCsvFile(e.target.files?.[0] ?? null)}
+              />
+              <div className="flex items-center gap-2 rounded-lg border border-input bg-background px-3 py-2 text-sm hover:bg-muted/50 transition-colors cursor-pointer">
+                <Upload className="h-4 w-4 text-muted-foreground" />
+                {csvFile ? csvFile.name : 'Choose File'}
+              </div>
+            </label>
+            <Button
+              onClick={handleCsvImport}
+              disabled={!csvFile || importingCsv}
+              size="sm"
+              className="gap-1.5"
+            >
+              {importingCsv ? 'Importing...' : 'Upload & Import'}
+            </Button>
+            <a
+              href="/api/financials/template-csv"
+              download="financials-template.csv"
+              onClick={(e) => {
+                e.preventDefault();
+                fetch('http://localhost:3001/api/financials/template-csv')
+                  .then((r) => r.blob())
+                  .then((blob) => {
+                    const url = URL.createObjectURL(blob);
+                    const a = document.createElement('a');
+                    a.href = url;
+                    a.download = 'financials-template.csv';
+                    a.click();
+                    URL.revokeObjectURL(url);
+                  })
+                  .catch(() => {});
+              }}
+              className="flex items-center gap-1.5 text-sm text-primary hover:underline"
+            >
+              <Download className="h-4 w-4" />
+              CSV Template
+            </a>
+          </div>
+          {csvImportResult && (
+            <div className="flex items-center gap-2 rounded-lg border border-green-500/30 bg-green-500/5 px-4 py-3 text-sm text-green-500">
+              <CheckCircle2 className="h-4 w-4 shrink-0" />
+              <span>
+                Imported {csvImportResult.imported} records
+                {csvImportResult.skipped > 0 && `, ${csvImportResult.skipped} skipped`}
+                {csvImportResult.errors.length > 0 && (
+                  <ul className="mt-1 text-destructive text-xs list-disc ml-4">
+                    {csvImportResult.errors.slice(0, 5).map((e, i) => <li key={i}>{e}</li>)}
+                  </ul>
+                )}
+              </span>
+            </div>
+          )}
+          {csvImportError && (
+            <div className="flex items-center gap-2 rounded-lg border border-destructive/30 bg-destructive/5 px-4 py-3 text-sm text-destructive">
+              <AlertCircle className="h-4 w-4 shrink-0" />
+              {csvImportError}
+            </div>
+          )}
+        </CardContent>
+      </Card>
 
       {/* Symbol Search */}
       <Card>

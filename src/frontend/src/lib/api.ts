@@ -346,6 +346,30 @@ export const financialsApi = {
     },
   ) => api.put<CompanyFinancial>(`/financials/${id}`, data),
   getCoverage: () => api.get<FinancialsCoverage>('/financials/summary/coverage'),
+  getStatus: () =>
+    api.get<{
+      compliant_stocks: number;
+      with_financials: number;
+      missing: number;
+      coverage_percent: number;
+      last_cse_fetch: string | null;
+    }>('/financials/status'),
+  fetchFromCse: () =>
+    api.post<{
+      total: number;
+      fetched: number;
+      failed: number;
+      results: Array<{ symbol: string; status: string; message?: string }>;
+    }>('/financials/fetch-cse', {}),
+  importCsv: (file: File) => {
+    const formData = new FormData();
+    formData.append('file', file);
+    return api.post<{ imported: number; skipped: number; errors: string[] }>(
+      '/financials/import-csv',
+      formData,
+      { headers: { 'Content-Type': 'multipart/form-data' } },
+    );
+  },
 };
 
 // Macro / CBSL Indicators Types

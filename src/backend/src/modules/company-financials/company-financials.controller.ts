@@ -6,14 +6,17 @@ import {
   Param,
   Body,
   ParseIntPipe,
+  Res,
+  UseInterceptors,
+  UploadedFile,
 } from '@nestjs/common';
+import { FileInterceptor } from '@nestjs/platform-express';
+import type { Response } from 'express';
 import { CompanyFinancialsService } from './company-financials.service';
 
 @Controller('financials')
 export class CompanyFinancialsController {
-  constructor(
-    private readonly financialsService: CompanyFinancialsService,
-  ) {}
+  constructor(private readonly financialsService: CompanyFinancialsService) {}
 
   /** POST /api/financials — Create a new financial record. */
   @Post()
@@ -52,6 +55,43 @@ export class CompanyFinancialsController {
   @Get('summary/coverage')
   async getCoverage() {
     return this.financialsService.getCoverage();
+  }
+
+  /** GET /api/financials/status — Coverage stats scoped to compliant stocks. */
+  @Get('status')
+  async getStatus() {
+    return this.financialsService.getStatus();
+  }
+
+  /** GET /api/financials/template-csv — Download CSV import template. */
+  @Get('template-csv')
+  getTemplateCsv(@Res() res: Response) {
+    const csv = this.financialsService.getTemplateCsv();
+    res.setHeader('Content-Type', 'text/csv');
+    res.setHeader(
+      'Content-Disposition',
+      'attachment; filename="financials-template.csv"',
+    );
+    res.send(csv);
+  }
+
+  /** POST /api/financials/fetch-cse — Auto-fetch market data for all compliant stocks. */
+  @Post('fetch-cse')
+  async fetchFromCse() {
+    return this.financialsService.fetchFromCse();
+  }
+
+  /** POST /api/financials/import-csv — Bulk import from CSV file. */
+  @Post('import-csv')
+  @UseInterceptors(FileInterceptor('file'))
+  async importCsv(
+    @UploadedFile() file: { buffer: Buffer; originalname: string } | undefined,
+  ) {
+    if (!file) {
+      return { imported: 0, skipped: 0, errors: ['No file uploaded'] };
+    }
+    const csvText = file.buffer.toString('utf-8');
+    return this.financialsService.importFromCsv(csvText);
   }
 
   /** GET /api/financials/:symbol — All records for a symbol. */
