@@ -29,15 +29,12 @@ export interface ATradPortfolio {
 // ── Constants ───────────────────────────────────────────────────────────────
 
 const TIMEOUT_MS = 60_000;
-const SCREENSHOT_DIR = path.resolve(
-  __dirname,
-  '../../../../data/atrad-sync',
-);
+const SCREENSHOT_DIR = path.resolve(__dirname, '../../../../data/atrad-sync');
 
 // Login form selectors — exact IDs confirmed from ATrad HTML recon first, then fallbacks
 const USERNAME_SELECTORS = [
-  '#txtUserName',                          // confirmed: ATrad uses this exact ID
-  'input[name="txtUserName"]',             // confirmed: ATrad name attribute
+  '#txtUserName', // confirmed: ATrad uses this exact ID
+  'input[name="txtUserName"]', // confirmed: ATrad name attribute
   'input[name="username"]',
   'input[name="userName"]',
   'input[name="user"]',
@@ -55,8 +52,8 @@ const USERNAME_SELECTORS = [
 ];
 
 const PASSWORD_SELECTORS = [
-  '#txtPassword',                          // confirmed: ATrad uses this exact ID
-  'input[name="txtPassword"]',             // confirmed: ATrad name attribute
+  '#txtPassword', // confirmed: ATrad uses this exact ID
+  'input[name="txtPassword"]', // confirmed: ATrad name attribute
   'input[name="password"]',
   'input[name="passwd"]',
   'input[name="pass"]',
@@ -67,7 +64,7 @@ const PASSWORD_SELECTORS = [
 ];
 
 const LOGIN_BUTTON_SELECTORS = [
-  '#btnSubmit',                            // confirmed: ATrad uses this exact ID
+  '#btnSubmit', // confirmed: ATrad uses this exact ID
   'button[type="submit"]',
   'input[type="submit"]',
   'button:has-text("Login")',
@@ -202,7 +199,9 @@ async function openClientMenu(page: Page): Promise<boolean> {
         }
         return true;
       }
-    } catch { /* try next */ }
+    } catch {
+      /* try next */
+    }
   }
   try {
     await page.getByText('Client', { exact: true }).first().click();
@@ -235,26 +234,25 @@ async function navigateToAccountSummary(page: Page): Promise<boolean> {
         await page.waitForTimeout(5000);
         await takeScreenshot(page, 'account-summary-nav');
         const html = await page.content();
-        fs.writeFileSync(path.join(SCREENSHOT_DIR, 'account-summary-after-nav.html'), html);
+        fs.writeFileSync(
+          path.join(SCREENSHOT_DIR, 'account-summary-after-nav.html'),
+          html,
+        );
         logger.log('Account Summary HTML dumped after navigation');
         return true;
       }
-    } catch { /* try next */ }
+    } catch {
+      /* try next */
+    }
   }
   logger.error('Could not navigate to Account Summary');
   return false;
 }
 
 async function navigateToPortfolio(page: Page): Promise<boolean> {
-  // Check if holdings grid is already visible
-  const alreadyLoaded =
-    (await page.$('#_atrad_equityDiv')) !== null ||
-    (await page.$('table:has(th:has-text("Qty"))')) !== null;
-  if (alreadyLoaded) {
-    logger.log('Holdings content already visible on page');
-    return true;
-  }
-
+  // NOTE: #_atrad_equityDiv exists in the DOM on ALL pages of the ATrad SPA
+  // (it's always present, just hidden/shown via CSS). Never use it as an
+  // "already loaded" signal — it will always be found and skip navigation.
   const opened = await openClientMenu(page);
   if (!opened) return false;
 
@@ -277,16 +275,118 @@ async function navigateToPortfolio(page: Page): Promise<boolean> {
         await takeScreenshot(page, 'stock-holding-page');
         return true;
       }
-    } catch { /* try next */ }
+    } catch {
+      /* try next */
+    }
   }
 
   logger.error('Could not navigate to Stock Holding');
   return false;
 }
 
-// ── Scrape holdings from portfolio table ────────────────────────────────────
+// ── ATrad REST API — holdings (most reliable after browser login) ─────────
+// After Playwright login, the session cookies are live in the browser context.
+// We use page.evaluate to call the ATrad AJAX endpoint from within that session.
+// ATrad returns single-quoted JSON — normalise before parse.
+// Leave stockHoldingClientAccount empty to return all holdings.
+
+async function scrapeHoldingsViaApi(page: Page): Promise<ATradHolding[]> {
+  try {
+    const rawText: string = await page.evaluate(async () => {
+      const resp = await fetch('/atsweb/client', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: 'action=getStockHolding&exchange=CSE&broker=FWS&stockHoldingClientAccount=&format=json',
+      });
+      return resp.text();
+    });
+
+    if (!rawText || rawText.trim().length === 0) {
+      logger.warn('ATrad holdings API returned empty response');
+      return [];
+    }
+
+    // Normalise single-quoted JSON to double-quoted (ATrad legacy response format)
+    const normalised = rawText.replace(/'/g, '"');
+    const data = JSON.parse(normalised) as Record<string, unknown>;
+    logger.log(`ATrad holdings API raw keys: ${Object.keys(data).join(', ')}`);
+
+    const rows: unknown[] = (data['portfolios'] ??
+      data['holdings'] ??
+      data['stockHoldings'] ??
+      []) as unknown[];
+
+    if (!Array.isArray(rows) || rows.length === 0) {
+      logger.warn(
+        `ATrad holdings API: no rows in response. Full response: ${rawText.substring(0, 500)}`,
+      );
+      return [];
+    }
+
+    const holdings: ATradHolding[] = rows
+      .map((r: unknown) => {
+        const p = r as Record<string, unknown>;
+        const symbol = String(p['symbol'] ?? p['security'] ?? p['scrip'] ?? '')
+          .replace(/\.N\d+$/i, '')
+          .trim();
+        const quantity = parseNumber(
+          String(p['qty'] ?? p['quantity'] ?? p['balance'] ?? 0),
+        );
+        const avgPrice = parseNumber(
+          String(
+            p['avgPrice'] ??
+              p['averagePrice'] ??
+              p['cost'] ??
+              p['buyPrice'] ??
+              0,
+          ),
+        );
+        const currentPrice = parseNumber(
+          String(
+            p['currentPrice'] ?? p['lastPrice'] ?? p['ltp'] ?? p['price'] ?? 0,
+          ),
+        );
+        const marketValue = parseNumber(
+          String(p['marketValue'] ?? p['currentValue'] ?? p['mktValue'] ?? 0),
+        );
+        const unrealizedPL = parseNumber(
+          String(
+            p['unrealizedPL'] ?? p['profitLoss'] ?? p['pl'] ?? p['gain'] ?? 0,
+          ),
+        );
+        const unrealizedPLPct = parseNumber(
+          String(p['unrealizedPLPct'] ?? p['plPct'] ?? p['gainPct'] ?? 0),
+        );
+        const companyName = String(
+          p['companyName'] ?? p['company'] ?? p['name'] ?? symbol,
+        );
+        return {
+          symbol,
+          companyName,
+          quantity,
+          avgPrice,
+          currentPrice,
+          marketValue,
+          unrealizedPL,
+          unrealizedPLPct,
+        };
+      })
+      .filter((h) => h.symbol && h.quantity > 0);
+
+    logger.log(`ATrad API: parsed ${holdings.length} holdings`);
+    return holdings;
+  } catch (err) {
+    logger.warn(`ATrad API holdings scrape failed: ${String(err)}`);
+    return [];
+  }
+}
+
+// ── Scrape holdings from portfolio table (DOM fallback) ──────────────────────
 
 async function scrapeHoldings(page: Page): Promise<ATradHolding[]> {
+  // Primary: use the ATrad REST API via authenticated browser session
+  const apiHoldings = await scrapeHoldingsViaApi(page);
+  if (apiHoldings.length > 0) return apiHoldings;
   const holdings: ATradHolding[] = [];
 
   // Try multiple table selectors — ATrad-specific first, then generic fallbacks
@@ -340,8 +440,9 @@ async function scrapeHoldings(page: Page): Promise<ATradHolding[]> {
   }
 
   // Extract headers to determine column positions
-  const headers = await tableElement.$$eval('thead th, thead td, tr:first-child th, tr:first-child td', (cells) =>
-    cells.map((c) => (c.textContent ?? '').trim().toLowerCase()),
+  const headers = await tableElement.$$eval(
+    'thead th, thead td, tr:first-child th, tr:first-child td',
+    (cells) => cells.map((c) => (c.textContent ?? '').trim().toLowerCase()),
   );
 
   logger.log(`Table headers found: ${JSON.stringify(headers)}`);
@@ -352,11 +453,18 @@ async function scrapeHoldings(page: Page): Promise<ATradHolding[]> {
     if (/symbol|security|stock|scrip/i.test(h)) colMap.symbol = i;
     if (/company|name/i.test(h)) colMap.companyName = i;
     if (/qty|quantity|shares|holding/i.test(h)) colMap.quantity = i;
-    if (/avg.*price|average.*price|cost|buy.*price/i.test(h)) colMap.avgPrice = i;
-    if (/current.*price|market.*price|last.*price|ltp|last/i.test(h)) colMap.currentPrice = i;
+    if (/avg.*price|average.*price|cost|buy.*price/i.test(h))
+      colMap.avgPrice = i;
+    if (/current.*price|market.*price|last.*price|ltp|last/i.test(h))
+      colMap.currentPrice = i;
     if (/market.*val|mkt.*val|current.*val/i.test(h)) colMap.marketValue = i;
-    if (/p\s*[&/]\s*l|profit|gain|unreali[sz]ed/i.test(h)) colMap.unrealizedPL = i;
-    if (/%|pct|percent/i.test(h) && /p\s*[&/]\s*l|profit|gain|unreali[sz]ed/i.test(h)) colMap.unrealizedPLPct = i;
+    if (/p\s*[&/]\s*l|profit|gain|unreali[sz]ed/i.test(h))
+      colMap.unrealizedPL = i;
+    if (
+      /%|pct|percent/i.test(h) &&
+      /p\s*[&/]\s*l|profit|gain|unreali[sz]ed/i.test(h)
+    )
+      colMap.unrealizedPLPct = i;
   });
 
   // Get data rows
@@ -418,7 +526,9 @@ async function scrapeHoldingsFromCards(page: Page): Promise<ATradHolding[]> {
     try {
       const cards = await page.$$(sel);
       if (cards.length > 0) {
-        logger.log(`Found ${cards.length} portfolio cards with selector: ${sel}`);
+        logger.log(
+          `Found ${cards.length} portfolio cards with selector: ${sel}`,
+        );
         for (const card of cards) {
           const text = await card.textContent();
           if (text) {
@@ -450,32 +560,46 @@ async function scrapeAccountSummary(
   }> = [
     {
       key: 'buyingPower',
-      patterns: [/buying\s*power/i, /available\s*balance/i, /available\s*cash/i, /free\s*cash/i],
+      patterns: [
+        /buying\s*power/i,
+        /available\s*balance/i,
+        /available\s*cash/i,
+        /free\s*cash/i,
+      ],
     },
     {
       key: 'accountValue',
-      patterns: [/account\s*value/i, /total\s*value/i, /portfolio\s*value/i, /net\s*worth/i, /equity/i],
+      patterns: [
+        /account\s*value/i,
+        /total\s*value/i,
+        /portfolio\s*value/i,
+        /net\s*worth/i,
+        /equity/i,
+      ],
     },
     {
       key: 'cashBalance',
-      patterns: [/cash\s*balance/i, /cash/i, /settled\s*cash/i, /available\s*fund/i],
+      patterns: [
+        /cash\s*balance/i,
+        /cash/i,
+        /settled\s*cash/i,
+        /available\s*fund/i,
+      ],
     },
   ];
 
   try {
     // Strategy 1: Look for label-value pairs in spans/divs
-    const allText = await page.$$eval(
-      'span, div, td, label, p',
-      (elements) =>
-        elements.map((el) => ({
-          text: (el.textContent ?? '').trim(),
-          next: el.nextElementSibling
-            ? (el.nextElementSibling.textContent ?? '').trim()
-            : '',
-          parent: el.parentElement
-            ? (el.parentElement.textContent ?? '').trim()
-            : '',
-        })),
+    const allText = await page.$$eval('span, div, td, label, p', (elements) =>
+      elements.map((el) => ({
+        text: (el.textContent ?? '').trim(),
+        next: el.nextElementSibling
+          ? (el.nextElementSibling.textContent ?? '').trim()
+          : '',
+        parent: el.parentElement
+          ? (el.parentElement.textContent ?? '').trim()
+          : '',
+      })),
     );
 
     // Sanity bound: retail account balance cannot exceed LKR 50 million
@@ -484,17 +608,22 @@ async function scrapeAccountSummary(
     for (const { key, patterns } of labelPatterns) {
       for (const el of allText) {
         // Skip elements that look like market watchlist column headers
-        if (/cash\s+in|cash\s+out|buy\s+sell|sentiment/i.test(el.text)) continue;
+        if (/cash\s+in|cash\s+out|buy\s+sell|sentiment/i.test(el.text))
+          continue;
         for (const pattern of patterns) {
           if (pattern.test(el.text)) {
             // Try to parse the number from adjacent text
-            const adjacentNumber = parseNumber(el.next) || parseNumber(el.parent.replace(el.text, ''));
+            const adjacentNumber =
+              parseNumber(el.next) ||
+              parseNumber(el.parent.replace(el.text, ''));
             if (adjacentNumber > 0 && adjacentNumber < MAX_RETAIL_BALANCE) {
               result[key] = adjacentNumber;
               logger.log(`Found ${key}: ${adjacentNumber}`);
               break;
             } else if (adjacentNumber >= MAX_RETAIL_BALANCE) {
-              logger.warn(`Skipping implausible ${key} value: ${adjacentNumber} (looks like market data, not account balance)`);
+              logger.warn(
+                `Skipping implausible ${key} value: ${adjacentNumber} (looks like market data, not account balance)`,
+              );
             }
           }
         }
@@ -509,15 +638,30 @@ async function scrapeAccountSummary(
     }> = [
       {
         key: 'buyingPower',
-        selectors: ['#buyingPower', '.buying-power', '[data-field="buyingPower"]', '#availableBalance'],
+        selectors: [
+          '#buyingPower',
+          '.buying-power',
+          '[data-field="buyingPower"]',
+          '#availableBalance',
+        ],
       },
       {
         key: 'accountValue',
-        selectors: ['#accountValue', '.account-value', '[data-field="accountValue"]', '#portfolioValue'],
+        selectors: [
+          '#accountValue',
+          '.account-value',
+          '[data-field="accountValue"]',
+          '#portfolioValue',
+        ],
       },
       {
         key: 'cashBalance',
-        selectors: ['#cashBalance', '.cash-balance', '[data-field="cashBalance"]', '#cash'],
+        selectors: [
+          '#cashBalance',
+          '.cash-balance',
+          '[data-field="cashBalance"]',
+          '#cash',
+        ],
       },
     ];
 
@@ -550,13 +694,18 @@ async function scrapeAccountSummary(
 // ── Main sync function ──────────────────────────────────────────────────────
 
 export async function syncATradPortfolio(): Promise<ATradPortfolio> {
-  const loginUrl = process.env.ATRAD_URL || process.env.ATRAD_LOGIN_URL || 'https://trade.hnbstockbrokers.lk/atsweb/login';
+  const loginUrl =
+    process.env.ATRAD_URL ||
+    process.env.ATRAD_LOGIN_URL ||
+    'https://trade.hnbstockbrokers.lk/atsweb/login';
   const username = process.env.ATRAD_USERNAME;
   const password = process.env.ATRAD_PASSWORD;
 
   // Validate credentials
   if (!username || !password) {
-    logger.error('ATrad credentials not configured. Set ATRAD_USERNAME and ATRAD_PASSWORD in .env');
+    logger.error(
+      'ATrad credentials not configured. Set ATRAD_USERNAME and ATRAD_PASSWORD in .env',
+    );
     return {
       holdings: [],
       buyingPower: 0,
@@ -564,7 +713,8 @@ export async function syncATradPortfolio(): Promise<ATradPortfolio> {
       cashBalance: 0,
       lastSynced: new Date(),
       syncSuccess: false,
-      error: 'ATrad credentials not configured. Set ATRAD_USERNAME and ATRAD_PASSWORD environment variables.',
+      error:
+        'ATrad credentials not configured. Set ATRAD_USERNAME and ATRAD_PASSWORD environment variables.',
     };
   }
 
@@ -593,14 +743,27 @@ export async function syncATradPortfolio(): Promise<ATradPortfolio> {
 
     // ── Step 1: Navigate to login page ──────────────────────────────────
     logger.log(`Navigating to ATrad login: ${loginUrl}`);
-    await page.goto(loginUrl, { waitUntil: 'networkidle', timeout: TIMEOUT_MS });
+    await page.goto(loginUrl, {
+      waitUntil: 'networkidle',
+      timeout: TIMEOUT_MS,
+    });
     logger.log('Login page loaded');
     await takeScreenshot(page, 'login-page');
 
     // ── Step 2: Fill credentials ────────────────────────────────────────
     logger.log('Filling login credentials...');
-    const userFilled = await findAndFill(page, USERNAME_SELECTORS, username, 'username');
-    const passFilled = await findAndFill(page, PASSWORD_SELECTORS, password, 'password');
+    const userFilled = await findAndFill(
+      page,
+      USERNAME_SELECTORS,
+      username,
+      'username',
+    );
+    const passFilled = await findAndFill(
+      page,
+      PASSWORD_SELECTORS,
+      password,
+      'password',
+    );
 
     if (!userFilled || !passFilled) {
       await takeScreenshot(page, 'login-fields-not-found');
@@ -617,7 +780,11 @@ export async function syncATradPortfolio(): Promise<ATradPortfolio> {
 
     // ── Step 3: Click login button ──────────────────────────────────────
     logger.log('Clicking login button...');
-    const loginClicked = await findAndClick(page, LOGIN_BUTTON_SELECTORS, 'login button');
+    const loginClicked = await findAndClick(
+      page,
+      LOGIN_BUTTON_SELECTORS,
+      'login button',
+    );
 
     if (!loginClicked) {
       // Try pressing Enter as fallback
@@ -628,10 +795,15 @@ export async function syncATradPortfolio(): Promise<ATradPortfolio> {
     // Wait for navigation after login
     logger.log('Waiting for post-login navigation...');
     try {
-      await page.waitForNavigation({ waitUntil: 'networkidle', timeout: 15_000 });
+      await page.waitForNavigation({
+        waitUntil: 'networkidle',
+        timeout: 15_000,
+      });
     } catch {
       // Some SPAs don't trigger navigation, wait for content change
-      logger.log('No navigation detected, waiting for page content to change...');
+      logger.log(
+        'No navigation detected, waiting for page content to change...',
+      );
       await page.waitForTimeout(5000);
     }
 
@@ -654,7 +826,10 @@ export async function syncATradPortfolio(): Promise<ATradPortfolio> {
         const errorEl = await page.$(sel);
         if (errorEl) {
           const errorText = await errorEl.textContent();
-          if (errorText && /invalid|incorrect|failed|wrong|error/i.test(errorText)) {
+          if (
+            errorText &&
+            /invalid|incorrect|failed|wrong|error/i.test(errorText)
+          ) {
             logger.error(`Login error detected: ${errorText}`);
             return {
               holdings: [],
@@ -705,8 +880,8 @@ export async function syncATradPortfolio(): Promise<ATradPortfolio> {
     logger.log(`Found ${holdings.length} holdings`);
     logger.log(
       `Account summary — Buying Power: ${accountSummary.buyingPower}, ` +
-      `Account Value: ${accountSummary.accountValue}, ` +
-      `Cash Balance: ${accountSummary.cashBalance}`,
+        `Account Value: ${accountSummary.accountValue}, ` +
+        `Cash Balance: ${accountSummary.cashBalance}`,
     );
 
     await takeScreenshot(page, 'final-state');

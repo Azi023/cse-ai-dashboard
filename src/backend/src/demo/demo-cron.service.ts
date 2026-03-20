@@ -65,16 +65,16 @@ export class DemoCronService {
 
     for (const account of accounts) {
       try {
-        const decisions = await this.aiTraderService.evaluateAndTrade(account.id);
+        const decisions = await this.aiTraderService.evaluateAndTrade(
+          account.id,
+        );
         const trades = decisions.filter((d) => d.action !== 'NO_TRADE');
         this.logger.log(
           `Account ${account.id}: ${trades.length} trade(s) executed, ` +
             `${decisions.length - trades.length} skipped.`,
         );
       } catch (err) {
-        this.logger.error(
-          `AI trader failed for account ${account.id}: ${err}`,
-        );
+        this.logger.error(`AI trader failed for account ${account.id}: ${err}`);
       }
     }
   }
@@ -192,7 +192,9 @@ export class DemoCronService {
 
   // ─── Public Methods (for manual triggers) ─────────────────────────────────
 
-  async triggerSnapshotForAccount(accountId: number): Promise<DemoDailySnapshot> {
+  async triggerSnapshotForAccount(
+    accountId: number,
+  ): Promise<DemoDailySnapshot> {
     return this.demoService.captureEODSnapshot(accountId);
   }
 
@@ -236,7 +238,9 @@ export class DemoCronService {
     });
     const sharpeRatio =
       allSnapshots.length >= 20
-        ? this.calculateSharpe(allSnapshots.map((s) => parseFloat(String(s.portfolio_value))))
+        ? this.calculateSharpe(
+            allSnapshots.map((s) => parseFloat(String(s.portfolio_value))),
+          )
         : null;
 
     // Max drawdown
@@ -256,11 +260,16 @@ export class DemoCronService {
       return (snap?.realized_pnl ?? 0) > 0;
     });
     const winRate =
-      sells.length > 0
-        ? (profitableSells.length / sells.length) * 100
-        : null;
+      sells.length > 0 ? (profitableSells.length / sells.length) * 100 : null;
 
-    const benchmark = this.benchmarkRepo.create({
+    // Upsert: find existing benchmark for today, then update-or-insert
+    const existingBenchmark = await this.benchmarkRepo
+      .createQueryBuilder('b')
+      .where('b.demo_account_id = :id', { id: accountId })
+      .andWhere('b.benchmark_date = :date', { date: todayStr })
+      .getOne();
+
+    const benchmarkData = {
       demo_account_id: accountId,
       benchmark_date: today,
       ai_portfolio_value: aiPortfolioValue,
@@ -270,8 +279,12 @@ export class DemoCronService {
       sharpe_ratio: sharpeRatio,
       max_drawdown: maxDrawdown,
       win_rate: winRate,
-    });
-
+    };
+    const benchmark = this.benchmarkRepo.create(
+      existingBenchmark
+        ? { ...existingBenchmark, ...benchmarkData }
+        : benchmarkData,
+    );
     const saved = await this.benchmarkRepo.save(benchmark);
     this.logger.log(
       `Benchmark updated for account ${accountId}: ` +
@@ -311,7 +324,9 @@ export class DemoCronService {
       portfolio = {
         symbols,
         initial_prices: initialPrices,
-        initialized_at: new Date(account.created_at).toISOString().split('T')[0],
+        initialized_at: new Date(account.created_at)
+          .toISOString()
+          .split('T')[0],
       };
       await this.redisService.setJson(key, portfolio, 365 * 24 * 3600);
       this.logger.log(

@@ -493,7 +493,14 @@ export class DemoService implements OnModuleInit {
       })
       .getCount();
 
-    const snapshot = this.snapshotRepo.create({
+    // Upsert: find existing snapshot for today, then update-or-insert
+    const existing = await this.snapshotRepo
+      .createQueryBuilder('s')
+      .where('s.demo_account_id = :id', { id: accountId })
+      .andWhere('s.snapshot_date = :date', { date: todayStr })
+      .getOne();
+
+    const snapshotData = {
       demo_account_id: accountId,
       snapshot_date: today,
       portfolio_value: portfolioValue,
@@ -504,8 +511,10 @@ export class DemoService implements OnModuleInit {
       aspi_return_pct: aspiReturnPct,
       num_holdings: holdings.length,
       trades_today: tradesToday,
-    });
-
+    };
+    const snapshot = this.snapshotRepo.create(
+      existing ? { ...existing, ...snapshotData } : snapshotData,
+    );
     return this.snapshotRepo.save(snapshot);
   }
 
