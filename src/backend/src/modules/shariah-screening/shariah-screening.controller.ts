@@ -49,4 +49,10 @@ export class ShariahScreeningController {
     await this.shariahScreeningService.runScreening();
     return this.shariahScreeningService.getOverviewStatus();
   }
+
+  /** POST /api/shariah/run-tier2-screening — Run Tier 2 ratio screening on pending_review stocks. */
+  @Post('run-tier2-screening')
+  async runTier2Screening() {
+    return this.shariahScreeningService.runTier2Screening();
+  }
 }

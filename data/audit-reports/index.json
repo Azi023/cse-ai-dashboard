@@ -1,0 +1,19 @@
+{
+  "_meta": {
+    "created": "2026-03-20",
+    "note": "CSE PDF reports index. PDFs at cse.lk/cmt/upload_report_file/* return 404 — may require authenticated session. Financial data must be imported manually from quarterly reports.",
+    "status": "PDF_ACCESS_BLOCKED"
+  },
+  "AEL.N0000": {
+    "status": "no_announcements_in_db",
+    "note": "No financial announcements found in local DB for AEL. Annual report likely available on CSE website."
+  },
+  "TJL.N0000": {
+    "status": "no_announcements_in_db",
+    "note": "Teejay Lanka quarterly reports available on CSE website."
+  },
+  "TKYO.N0000": {
+    "status": "no_announcements_in_db",
+    "note": "Tokyo Cement annual report available on CSE website."
+  }
+}

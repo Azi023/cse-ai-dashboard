@@ -1,8 +1,11 @@
 import { Injectable, Logger } from '@nestjs/common';
+import { InjectRepository } from '@nestjs/typeorm';
+import { Repository } from 'typeorm';
 import { ConfigService } from '@nestjs/config';
 import { MockGenerator } from './mock-generator';
 import { SYSTEM_PROMPTS } from './prompts';
 import { RedisService } from '../cse-data/redis.service';
+import { MacroData } from '../../entities';
 import * as fs from 'fs';
 import * as path from 'path';
 
@@ -87,6 +90,8 @@ export class AiEngineService {
     private readonly configService: ConfigService,
     private readonly mockGenerator: MockGenerator,
     private readonly redisService: RedisService,
+    @InjectRepository(MacroData)
+    private readonly macroDataRepo: Repository<MacroData>,
   ) {
     const apiKey = this.configService.get<string>('ANTHROPIC_API_KEY');
     this.isLive = !!apiKey && apiKey.length > 0;
@@ -101,6 +106,57 @@ export class AiEngineService {
       `AI Engine initialized in ${this.isLive ? 'LIVE' : 'MOCK'} mode`,
     );
     this.logger.log(`AI content directory: ${this.aiContentDir}`);
+  }
+
+  // --- Macro context builder ---
+
+  private async buildMacroContext(): Promise<string> {
+    try {
+      const indicators = await this.macroDataRepo
+        .createQueryBuilder('md')
+        .select(['md.indicator', 'md.value', 'md.data_date'])
+        .where('md.indicator IN (:...keys)', {
+          keys: [
+            'sdfr',
+            'slfr',
+            'tbill_91d',
+            'inflation_ccpi_yoy',
+            'usd_lkr',
+            'fx_reserves_usd_bn',
+            'aspi_pe_ratio',
+            'foreign_net_buying_mtd',
+            'awplr',
+          ],
+        })
+        .orderBy('md.data_date', 'DESC')
+        .getMany();
+
+      const map = new Map<string, number>();
+      for (const ind of indicators) {
+        if (!map.has(ind.indicator)) map.set(ind.indicator, Number(ind.value));
+      }
+
+      const opr = map.get('slfr');
+      const sdf = map.get('sdfr');
+      const inflation = map.get('inflation_ccpi_yoy');
+      const usdlkr = map.get('usd_lkr');
+      const reserves = map.get('fx_reserves_usd_bn');
+      const marketPE = map.get('aspi_pe_ratio');
+      const foreignNet = map.get('foreign_net_buying_mtd');
+      const awplr = map.get('awplr');
+      const tbill91 = map.get('tbill_91d');
+
+      return `\n\nSri Lanka Macro Environment (CBSL / Public Data):
+- CBSL policy rates: SLFR ${opr ?? 'N/A'}% (lending), SDFR ${sdf ?? 'N/A'}% (deposit)
+- 91-day T-bill yield: ${tbill91 ?? 'N/A'}% | AWPLR: ${awplr ?? 'N/A'}%
+- Inflation (CCPI YoY): ${inflation ?? 'N/A'}%
+- USD/LKR: ${usdlkr?.toFixed(2) ?? 'N/A'} | FX Reserves: $${reserves ?? 'N/A'}B
+- CSE market P/E: ${marketPE ?? 'N/A'}x
+- Foreign net buying MTD: LKR ${foreignNet ?? 'N/A'}M
+- Upcoming: CBSL rate decision March 25, 2026`;
+    } catch {
+      return '';
+    }
   }
 
   // --- Rate limiter ---
@@ -368,6 +424,8 @@ export class AiEngineService {
         year: 'numeric',
       });
 
+      const macroContext = await this.buildMacroContext();
+
       const response = await client.messages.create({
         model: 'claude-sonnet-4-6',
         max_tokens: 2000,
@@ -375,7 +433,7 @@ export class AiEngineService {
         messages: [
           {
             role: 'user',
-            content: `Today's date in Colombo, Sri Lanka is: ${todayStr}\n\nHere is today's CSE market data. Generate a comprehensive daily brief with the exact date "${todayStr}" in the MARKET PULSE header:\n\n${dataContext}`,
+            content: `Today's date in Colombo, Sri Lanka is: ${todayStr}\n\nHere is today's CSE market data. Generate a comprehensive daily brief with the exact date "${todayStr}" in the MARKET PULSE header:\n\n${dataContext}${macroContext}`,
           },
         ],
       });
@@ -502,6 +560,7 @@ export class AiEngineService {
       });
 
       const marketData = await this.mockGenerator.getMarketData();
+      const macroContext = await this.buildMacroContext();
 
       const response = await client.messages.create({
         model: 'claude-sonnet-4-6',
@@ -510,7 +569,7 @@ export class AiEngineService {
         messages: [
           {
             role: 'user',
-            content: `Respond with ONLY a raw JSON array. No markdown. No backticks. No explanation. Start your response with [ and end with ].\n\nGenerate trading signals based on today's CSE market data. Each element must match this exact structure:\n{\n  "symbol": "SYMBOL.N0000",\n  "name": "Company Name",\n  "currentPrice": 100.00,\n  "direction": "BUY|HOLD|SELL",\n  "reasoning": "2-3 technical sentences for analysts",\n  "rationale_simple": "One plain-English sentence a beginner investor can understand",\n  "confidence": "HIGH|MEDIUM|LOW",\n  "shariahStatus": "compliant|non_compliant|pending_review",\n  "suggested_holding_period": "e.g. 12-24 months, 3-6 months, Short-term: 1-4 weeks"\n}\n\nIMPORTANT: Never say 'buy' or 'sell' as direct instructions. Use 'worth considering' or 'may warrant attention'. Always include suggested_holding_period and rationale_simple.\n\nMarket data:\n${JSON.stringify(marketData, null, 2)}`,
+            content: `Respond with ONLY a raw JSON array. No markdown. No backticks. No explanation. Start your response with [ and end with ].\n\nGenerate trading signals based on today's CSE market data. Each element must match this exact structure:\n{\n  "symbol": "SYMBOL.N0000",\n  "name": "Company Name",\n  "currentPrice": 100.00,\n  "direction": "BUY|HOLD|SELL",\n  "reasoning": "2-3 technical sentences for analysts",\n  "rationale_simple": "One plain-English sentence a beginner investor can understand",\n  "confidence": "HIGH|MEDIUM|LOW",\n  "shariahStatus": "compliant|non_compliant|pending_review",\n  "suggested_holding_period": "e.g. 12-24 months, 3-6 months, Short-term: 1-4 weeks"\n}\n\nIMPORTANT: Never say 'buy' or 'sell' as direct instructions. Use 'worth considering' or 'may warrant attention'. Always include suggested_holding_period and rationale_simple.\n\nMarket data:\n${JSON.stringify(marketData, null, 2)}${macroContext}`,
           },
         ],
       });

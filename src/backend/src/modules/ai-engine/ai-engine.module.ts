@@ -4,10 +4,10 @@ import { AiEngineController } from './ai-engine.controller';
 import { AiEngineService } from './ai-engine.service';
 import { MockGenerator } from './mock-generator';
 import { CseDataModule } from '../cse-data/cse-data.module';
-import { Stock } from '../../entities';
+import { Stock, MacroData } from '../../entities';
 
 @Module({
-  imports: [TypeOrmModule.forFeature([Stock]), CseDataModule],
+  imports: [TypeOrmModule.forFeature([Stock, MacroData]), CseDataModule],
   controllers: [AiEngineController],
   providers: [AiEngineService, MockGenerator],
   exports: [AiEngineService],

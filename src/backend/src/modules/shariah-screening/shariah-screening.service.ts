@@ -2,11 +2,12 @@ import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { Cron } from '@nestjs/schedule';
-import { Stock, ShariahScreening } from '../../entities';
+import { Stock, ShariahScreening, CompanyFinancial } from '../../entities';
 import {
   getBlacklistedSymbols,
   isBlacklisted,
   getBlacklistEntries,
+  isWhitelisted,
 } from './blacklist';
 import { RedisService } from '../cse-data/redis.service';
 
@@ -36,6 +37,8 @@ export class ShariahScreeningService implements OnModuleInit {
     private readonly stockRepository: Repository<Stock>,
     @InjectRepository(ShariahScreening)
     private readonly screeningRepository: Repository<ShariahScreening>,
+    @InjectRepository(CompanyFinancial)
+    private readonly financialRepository: Repository<CompanyFinancial>,
     private readonly redisService: RedisService,
   ) {}
 
@@ -82,9 +85,20 @@ export class ShariahScreeningService implements OnModuleInit {
     let pending = 0;
 
     for (const stock of stocks) {
+      const whitelistResult = isWhitelisted(stock.symbol);
       const blacklistResult = isBlacklisted(stock.symbol);
 
-      if (blacklistResult.blacklisted) {
+      if (whitelistResult.whitelisted) {
+        // Almas-confirmed compliant — skip Tier 2
+        stock.shariah_status = 'compliant';
+        compliant++;
+
+        await this.saveScreeningRecord(stock.symbol, 'compliant', {
+          tier1_result: 'pass_whitelist',
+          tier2_pass: true,
+          notes: whitelistResult.reason ?? 'Almas Equities whitelist verified',
+        });
+      } else if (blacklistResult.blacklisted) {
         // Tier 1 FAIL — blacklisted
         stock.shariah_status = 'non_compliant';
         nonCompliant++;
@@ -378,6 +392,160 @@ export class ShariahScreeningService implements OnModuleInit {
       pending_review: pendingReview,
       total,
       blacklisted_count: getBlacklistedSymbols().length,
+    };
+  }
+
+  /**
+   * POST /api/shariah/run-tier2-screening
+   * For all pending_review stocks: fetch financial data, compute ratios, upgrade/downgrade status.
+   */
+  async runTier2Screening(): Promise<{
+    processed: number;
+    upgraded_to_compliant: number;
+    downgraded_to_non_compliant: number;
+    still_pending: number;
+    details: Array<{ symbol: string; result: string; reason?: string }>;
+  }> {
+    const pendingStocks = await this.stockRepository.find({
+      where: { shariah_status: 'pending_review', is_active: true },
+    });
+
+    if (pendingStocks.length === 0) {
+      return {
+        processed: 0,
+        upgraded_to_compliant: 0,
+        downgraded_to_non_compliant: 0,
+        still_pending: 0,
+        details: [],
+      };
+    }
+
+    let upgradedCount = 0;
+    let downgradedCount = 0;
+    let stillPending = 0;
+    const details: Array<{ symbol: string; result: string; reason?: string }> =
+      [];
+
+    for (const stock of pendingStocks) {
+      // Get the most recent financial data for this stock
+      const financial = await this.financialRepository.findOne({
+        where: { symbol: stock.symbol },
+        order: { report_date: 'DESC' },
+      });
+
+      if (!financial) {
+        stillPending++;
+        details.push({
+          symbol: stock.symbol,
+          result: 'still_pending',
+          reason: 'No financial data',
+        });
+        continue;
+      }
+
+      // Compute Tier 2 ratios from company_financials
+      const totalRevenue = financial.total_revenue
+        ? Number(financial.total_revenue)
+        : null;
+      const totalAssets = financial.total_assets
+        ? Number(financial.total_assets)
+        : null;
+
+      const interestIncomeRatio =
+        totalRevenue && totalRevenue > 0 && financial.interest_income !== null
+          ? Number(financial.interest_income) / totalRevenue
+          : null;
+
+      const debtRatio =
+        totalAssets &&
+        totalAssets > 0 &&
+        financial.interest_bearing_debt !== null
+          ? Number(financial.interest_bearing_debt) / totalAssets
+          : null;
+
+      const interestDepositRatio =
+        totalAssets &&
+        totalAssets > 0 &&
+        financial.interest_bearing_deposits !== null
+          ? Number(financial.interest_bearing_deposits) / totalAssets
+          : null;
+
+      const receivablesRatio =
+        totalAssets && totalAssets > 0 && financial.receivables !== null
+          ? Number(financial.receivables) / totalAssets
+          : null;
+
+      const hasEnoughData =
+        interestIncomeRatio !== null ||
+        debtRatio !== null ||
+        interestDepositRatio !== null ||
+        receivablesRatio !== null;
+
+      if (!hasEnoughData) {
+        stillPending++;
+        details.push({
+          symbol: stock.symbol,
+          result: 'still_pending',
+          reason: 'Financial data incomplete for ratio calculation',
+        });
+        continue;
+      }
+
+      // Create a ShariahScreening-like object for runTier2Screen
+      const screeningProxy = {
+        interest_income_ratio: interestIncomeRatio,
+        debt_ratio: debtRatio,
+        interest_deposit_ratio: interestDepositRatio,
+        receivables_ratio: receivablesRatio,
+      } as ShariahScreening;
+
+      const tier2Result = this.runTier2Screen(screeningProxy);
+
+      if (tier2Result.pass) {
+        stock.shariah_status = 'compliant';
+        upgradedCount++;
+        details.push({ symbol: stock.symbol, result: 'upgraded_to_compliant' });
+      } else {
+        stock.shariah_status = 'non_compliant';
+        downgradedCount++;
+        details.push({
+          symbol: stock.symbol,
+          result: 'downgraded_to_non_compliant',
+          reason: `Failed: ${tier2Result.failedRatios.join(', ')}`,
+        });
+      }
+
+      await this.saveScreeningRecord(stock.symbol, stock.shariah_status, {
+        tier1_result: 'pass',
+        tier2_pass: tier2Result.pass,
+        interest_income_ratio: interestIncomeRatio,
+        debt_ratio: debtRatio,
+        interest_deposit_ratio: interestDepositRatio,
+        receivables_ratio: receivablesRatio,
+        notes: tier2Result.pass
+          ? `Data source: ${financial.source}`
+          : `Failed: ${tier2Result.failedRatios.join(', ')} | Source: ${financial.source}`,
+      });
+    }
+
+    // Batch save updated statuses
+    const changedStocks = pendingStocks.filter(
+      (s) => s.shariah_status !== 'pending_review',
+    );
+    if (changedStocks.length > 0) {
+      await this.stockRepository.save(changedStocks);
+    }
+
+    this.logger.log(
+      `Tier 2 screening complete: ${upgradedCount} compliant, ${downgradedCount} non-compliant, ${stillPending} still pending`,
+    );
+
+    return {
+      processed: pendingStocks.length,
+      upgraded_to_compliant: upgradedCount,
+      downgraded_to_non_compliant: downgradedCount,
+      still_pending: stillPending,
+      details,
     };
   }
 
