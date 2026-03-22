@@ -22,6 +22,14 @@ export class GlobalDataController {
   }
 
   /**
+   * GET /api/global/economic-calendar — High-impact economic events for the week.
+   */
+  @Get('economic-calendar')
+  async getEconomicCalendar() {
+    return this.globalDataService.getEconomicCalendar();
+  }
+
+  /**
    * POST /api/global/manual — Manually set a value (e.g., tea price, rubber price).
    * Body: { indicator: string, value: number, date?: string }
    */

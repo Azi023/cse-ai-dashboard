@@ -17,6 +17,7 @@ import {
   newsApi,
   alertsApi,
   portfolioApi,
+  globalApi,
   type MarketSummary,
   type TopStock,
   type SectorIndex,
@@ -24,6 +25,7 @@ import {
   type NewsItemData,
   type AlertRecord,
   type PortfolioSummary,
+  type EconomicEvent,
 } from '@/lib/api';
 import {
   TrendingUp,
@@ -107,6 +109,7 @@ export default function DashboardPage() {
   const [nonCompliantSymbols, setNonCompliantSymbols] = useState<Set<string>>(new Set());
   const [recentNews, setRecentNews] = useState<NewsItemData[]>([]);
   const [recentAlerts, setRecentAlerts] = useState<AlertRecord[]>([]);
+  const [economicEvents, setEconomicEvents] = useState<EconomicEvent[]>([]);
   const [moversTab, setMoversTab] = useState<'gainers' | 'losers' | 'active'>('gainers');
   const [portfolioSummary, setPortfolioSummary] = useState<PortfolioSummary | null>(null);
 
@@ -162,6 +165,7 @@ export default function DashboardPage() {
     });
 
     alertsApi.getNotifications(5).then((res) => setRecentAlerts(res.data)).catch(() => {});
+    globalApi.getEconomicCalendar().then((res) => setEconomicEvents(res.data)).catch(() => {});
   }, []);
 
   useEffect(() => {
@@ -276,16 +280,37 @@ export default function DashboardPage() {
               <p className="text-xs font-medium">Upcoming Events</p>
             </div>
             <div className="space-y-1.5">
-              {[
-                { date: 'Mar 25', label: 'CBSL Rate Decision' },
-                { date: 'Mar 31', label: 'Q4 Earnings Season Begins' },
-                { date: 'Apr 1', label: 'Next RCA Purchase Window' },
-              ].map((event) => (
-                <div key={event.date} className="flex items-center gap-2 text-xs">
-                  <span className="num text-muted-foreground w-12 flex-shrink-0">{event.date}</span>
-                  <span className="text-foreground">{event.label}</span>
-                </div>
-              ))}
+              {economicEvents.length > 0 ? (
+                economicEvents.slice(0, 5).map((event, i) => {
+                  const d = new Date(event.date);
+                  const label = d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+                  return (
+                    <div key={i} className="flex items-start gap-2 text-xs">
+                      <span className="num text-muted-foreground w-12 flex-shrink-0 mt-px">{label}</span>
+                      <div className="flex-1 min-w-0">
+                        <span className="text-foreground leading-tight">{event.title}</span>
+                        <span className={`ml-1.5 text-[10px] font-medium ${
+                          event.impact === 'High' ? 'text-red-500' : 'text-yellow-500'
+                        }`}>
+                          {event.country} {event.impact}
+                        </span>
+                      </div>
+                    </div>
+                  );
+                })
+              ) : (
+                // Fallback to known local events
+                [
+                  { date: 'Mar 25', label: 'CBSL Rate Decision' },
+                  { date: 'Mar 31', label: 'Q4 Earnings Season Begins' },
+                  { date: 'Apr 1', label: 'Next RCA Purchase Window' },
+                ].map((event) => (
+                  <div key={event.date} className="flex items-center gap-2 text-xs">
+                    <span className="num text-muted-foreground w-12 flex-shrink-0">{event.date}</span>
+                    <span className="text-foreground">{event.label}</span>
+                  </div>
+                ))
+              )}
             </div>
           </CardContent>
         </Card>

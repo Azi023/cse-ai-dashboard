@@ -26,6 +26,24 @@ export const GLOBAL_INDICATOR_LABELS: Record<string, string> = {
   [GLOBAL_INDICATORS.RUBBER]: 'Rubber',
 };
 
+interface RawForexEvent {
+  title: string;
+  country: string;
+  date: string;
+  impact: string;
+  forecast?: string;
+  previous?: string;
+}
+
+export interface EconomicEvent {
+  title: string;
+  country: string;
+  date: string;
+  impact: string;
+  forecast: string;
+  previous: string;
+}
+
 export interface GlobalIndicatorResult {
   indicator: string;
   label: string;
@@ -279,6 +297,66 @@ export class GlobalDataService {
     }
 
     return results;
+  }
+
+  // ─── Economic Calendar ─────────────────────────────────────
+
+  /**
+   * Fetch high-impact economic events from ForexFactory for the current week.
+   * Filters for USD events + any LKR/IMF/global events.
+   * Cached in Redis for 4 hours.
+   */
+  async getEconomicCalendar(): Promise<EconomicEvent[]> {
+    const cacheKey = 'economic_calendar';
+    const cached = await this.redisService.getJson<EconomicEvent[]>(cacheKey);
+    if (cached) return cached;
+
+    try {
+      const response = await firstValueFrom(
+        this.httpService.get<RawForexEvent[]>(
+          'https://nfs.faireconomy.media/ff_calendar_thisweek.json',
+          {
+            timeout: 10000,
+            headers: {
+              'User-Agent': 'Mozilla/5.0 (compatible; CSE-Dashboard/1.0)',
+            },
+          },
+        ),
+      );
+
+      const events = (response.data ?? [])
+        .filter(
+          (e) =>
+            // High/Medium impact USD events affect USD/LKR and global sentiment
+            (e.country === 'USD' &&
+              (e.impact === 'High' || e.impact === 'Medium')) ||
+            // IMF, World Bank, or any LKR-tagged events
+            (e.impact === 'High' &&
+              ['EUR', 'CNY', 'JPY'].includes(e.country)) ||
+            // Catch keywords relevant to SL
+            /CBSL|IMF|World Bank|Sri Lanka|Fed Rate|Fed Decision|FOMC/i.test(
+              e.title,
+            ),
+        )
+        .map(
+          (e): EconomicEvent => ({
+            title: e.title,
+            country: e.country,
+            date: e.date,
+            impact: e.impact,
+            forecast: e.forecast ?? '',
+            previous: e.previous ?? '',
+          }),
+        )
+        .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime())
+        .slice(0, 15);
+
+      await this.redisService.setJson(cacheKey, events, 4 * 3600);
+      return events;
+    } catch (error) {
+      this.logger.warn(`ForexFactory calendar fetch failed: ${String(error)}`);
+      return [];
+    }
   }
 
   /**

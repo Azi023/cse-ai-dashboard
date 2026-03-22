@@ -523,11 +523,21 @@ export interface GlobalIndicator {
   currency: string;
 }
 
+export interface EconomicEvent {
+  title: string;
+  country: string;
+  date: string;
+  impact: string;
+  forecast: string;
+  previous: string;
+}
+
 export const globalApi = {
   getIndicators: () => api.get<GlobalIndicator[]>('/global/indicators'),
   refresh: () => api.post<{ message: string; errors: string[] }>('/global/refresh'),
   setManual: (data: { indicator: string; value: number; date?: string }) =>
     api.post('/global/manual', data),
+  getEconomicCalendar: () => api.get<EconomicEvent[]>('/global/economic-calendar'),
 };
 
 // AI Engine Types
