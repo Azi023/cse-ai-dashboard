@@ -977,12 +977,12 @@ function RiskManagementCard({ riskData }: { riskData: PortfolioRiskSummary }) {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {riskData.positions.map((pos) => {
+              {riskData.positions.map((pos, index) => {
                 const distPct = safeNum(pos.distance_to_stop_pct);
                 const nearStop = distPct < 5 && distPct >= 0;
                 const rr = safeNum(pos.risk_reward_ratio);
                 return (
-                  <TableRow key={pos.symbol}>
+                  <TableRow key={`${pos.symbol}-${index}`}>
                     <TableCell className="font-medium">
                       <div className="flex items-center gap-1.5">
                         {nearStop && (
