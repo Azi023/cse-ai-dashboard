@@ -175,8 +175,18 @@ export default function SignalsPage() {
       {/* Signal Cards */}
       {filtered.length === 0 ? (
         <Card>
-          <CardContent className="py-8 text-center text-sm text-muted-foreground">
-            No signals match the current filters.
+          <CardContent className="py-10 text-center space-y-2">
+            <Clock className="h-8 w-8 text-muted-foreground/40 mx-auto" />
+            <p className="text-sm font-medium text-muted-foreground">
+              {signals.length === 0
+                ? 'Signals generate daily at market close (2:45 PM)'
+                : 'No signals match the current filters'}
+            </p>
+            {signals.length === 0 && (
+              <p className="text-xs text-muted-foreground">
+                The AI analyses all Shariah-compliant stocks after each trading session.
+              </p>
+            )}
           </CardContent>
         </Card>
       ) : (

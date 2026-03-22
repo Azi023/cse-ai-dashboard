@@ -131,7 +131,7 @@ export function DailyBriefCard() {
 
       {expanded && (
         <CardContent className="space-y-4">
-          <div className="prose prose-sm prose-invert max-w-none text-sm leading-relaxed [&_p]:my-1.5 [&_p]:leading-relaxed [&_strong]:text-foreground [&_li]:leading-relaxed">
+          <div className="prose prose-sm dark:prose-invert max-w-none text-sm leading-relaxed [&_p]:my-1.5 [&_p]:leading-relaxed [&_strong]:text-foreground [&_li]:leading-relaxed ai-left-accent pl-3">
             <ReactMarkdown>{brief.summary}</ReactMarkdown>
           </div>
 

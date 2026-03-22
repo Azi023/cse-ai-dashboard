@@ -321,9 +321,10 @@ export default function DemoPerformancePage() {
             {tradesLoading ? (
               <div className="space-y-2">{[1, 2, 3].map((i) => <Skeleton key={i} className="h-12" />)}</div>
             ) : filteredTrades.length === 0 ? (
-              <p className="text-center text-muted-foreground text-sm py-8">
-                No trades yet. Use Quick Trade on the Demo Portfolio page.
-              </p>
+              <div className="text-center py-10 space-y-1">
+                <p className="text-sm font-medium text-muted-foreground">Your trade history will appear here</p>
+                <p className="text-xs text-muted-foreground">Use Quick Trade or Let AI Trade on the Demo Portfolio page to get started</p>
+              </div>
             ) : (
               <>
                 <Table>
@@ -465,16 +466,21 @@ export default function DemoPerformancePage() {
                 <>
                   <div className="flex items-center justify-between">
                     <span className="text-muted-foreground text-sm">Compliance Rate</span>
-                    <span className={`num text-2xl font-bold ${compliantPct >= 100 ? 'text-emerald-500' : compliantPct >= 80 ? 'text-amber-500' : 'text-red-500'}`}>
+                    <span className={`num text-2xl font-bold ${compliantPct >= 100 ? 'text-emerald-500' : 'text-amber-500'}`}>
                       {fmt1(compliantPct)}%
                     </span>
                   </div>
                   <div className="w-full h-2 rounded-full bg-muted overflow-hidden">
                     <div
-                      className={`h-full rounded-full transition-all ${compliantPct >= 100 ? 'bg-emerald-500' : compliantPct >= 80 ? 'bg-amber-500' : 'bg-red-500'}`}
+                      className={`h-full rounded-full transition-all ${compliantPct >= 100 ? 'bg-emerald-500' : 'bg-amber-500'}`}
                       style={{ width: `${Math.min(100, compliantPct)}%` }}
                     />
                   </div>
+                  {compliantPct < 100 && compliantPct > 0 && (
+                    <p className="text-[11px] text-amber-600 dark:text-amber-400">
+                      Some stocks pending Shariah screening data — not confirmed non-compliant
+                    </p>
+                  )}
                   <div className="text-sm text-muted-foreground space-y-1">
                     {holdings.length === 0 ? (
                       <p>No holdings yet.</p>

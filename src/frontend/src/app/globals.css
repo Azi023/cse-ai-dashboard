@@ -53,6 +53,15 @@
 
 /* Light theme */
 :root {
+  /* Card elevation — subtle shadows for light mode */
+  --card-shadow: 0 1px 3px rgba(0,0,0,0.04), 0 1px 2px rgba(0,0,0,0.06);
+  --card-shadow-hover: 0 4px 12px rgba(0,0,0,0.08), 0 2px 4px rgba(0,0,0,0.04);
+
+  /* Spacing scale */
+  --space-section: 2rem;
+  --space-card-gap: 1rem;
+  --space-card-padding: 1.25rem;
+
   --background: oklch(0.988 0.004 248);      /* #F8FAFC */
   --foreground: oklch(0.178 0.022 264);      /* #111827 */
   --card: oklch(1 0 0);                      /* #FFFFFF */
@@ -92,6 +101,9 @@
 
 /* Dark theme — Bloomberg Terminal meets modern fintech */
 .dark {
+  --card-shadow: 0 1px 3px rgba(0,0,0,0.3);
+  --card-shadow-hover: 0 4px 12px rgba(0,0,0,0.4);
+
   --background: oklch(0.118 0.027 264);      /* #0A0E17 deep navy */
   --foreground: oklch(0.985 0.003 248);      /* #F9FAFB */
   --card: oklch(0.178 0.022 264);            /* #111827 */
@@ -140,6 +152,15 @@
   }
 }
 
+/* ─── Card elevation ─── */
+.card-elevated {
+  box-shadow: var(--card-shadow);
+  transition: box-shadow 0.15s ease-out;
+}
+.card-elevated:hover {
+  box-shadow: var(--card-shadow-hover);
+}
+
 /* ─── Card hover lift ─── */
 .card-hover {
   transition: transform 0.15s ease-out, box-shadow 0.15s ease-out;
@@ -147,6 +168,32 @@
 .card-hover:hover {
   transform: translateY(-1px) scale(1.005);
   box-shadow: 0 8px 25px oklch(0 0 0 / 0.15);
+}
+
+/* ─── AI content accent border ─── */
+.ai-left-accent {
+  border-left: 3px solid oklch(0.564 0.225 253 / 0.7);
+}
+.dark .ai-left-accent {
+  border-left: 3px solid oklch(0.613 0.213 251 / 0.7);
+}
+
+/* ─── Warning amber tint ─── */
+.warning-tint {
+  background-color: oklch(0.697 0.185 69 / 0.08);
+  border-color: oklch(0.697 0.185 69 / 0.3);
+}
+.dark .warning-tint {
+  background-color: oklch(0.735 0.186 72 / 0.1);
+  border-color: oklch(0.735 0.186 72 / 0.3);
+}
+
+/* ─── Zebra table rows ─── */
+.zebra-row:nth-child(even) {
+  background-color: oklch(0.988 0.004 248 / 0.5);
+}
+.dark .zebra-row:nth-child(even) {
+  background-color: oklch(1 0 0 / 0.03);
 }
 
 /* ─── Shimmer skeleton ─── */

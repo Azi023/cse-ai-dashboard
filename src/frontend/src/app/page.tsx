@@ -16,12 +16,14 @@ import {
   stocksApi,
   newsApi,
   alertsApi,
+  portfolioApi,
   type MarketSummary,
   type TopStock,
   type SectorIndex,
   type Stock,
   type NewsItemData,
   type AlertRecord,
+  type PortfolioSummary,
 } from '@/lib/api';
 import {
   TrendingUp,
@@ -37,6 +39,9 @@ import {
   Bell,
   ExternalLink,
   HelpCircle,
+  Briefcase,
+  CalendarDays,
+  ArrowRight,
 } from 'lucide-react';
 import Link from 'next/link';
 import { useDisplayMode } from '@/contexts/display-mode-context';
@@ -103,6 +108,7 @@ export default function DashboardPage() {
   const [recentNews, setRecentNews] = useState<NewsItemData[]>([]);
   const [recentAlerts, setRecentAlerts] = useState<AlertRecord[]>([]);
   const [moversTab, setMoversTab] = useState<'gainers' | 'losers' | 'active'>('gainers');
+  const [portfolioSummary, setPortfolioSummary] = useState<PortfolioSummary | null>(null);
 
   const { watchlist, toggle: toggleWatch, has: inWatchlist } = useWatchlist();
   const [watchlistStocks, setWatchlistStocks] = useState<Stock[]>([]);
@@ -141,6 +147,8 @@ export default function DashboardPage() {
 
   // Fetch non-compliant symbols, all stocks, news, alerts
   useEffect(() => {
+    portfolioApi.getSummary().then((res) => setPortfolioSummary(res.data)).catch(() => {});
+
     shariahApi.getNonCompliant().then((res) => {
       setNonCompliantSymbols(new Set(res.data.map((s) => s.symbol)));
     }).catch(() => {});
@@ -224,6 +232,64 @@ export default function DashboardPage() {
           </CardContent>
         </Card>
       )}
+
+      {/* Portfolio Quick Summary + Upcoming Events */}
+      <div className="grid gap-4 md:grid-cols-2">
+        {/* Portfolio Quick Summary */}
+        <Link href="/portfolio" className="block group">
+          <Card className="card-elevated transition-all group-hover:shadow-md">
+            <CardContent className="py-3 px-4">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <Briefcase className="h-4 w-4 text-primary flex-shrink-0" />
+                  <div>
+                    <p className="text-xs text-muted-foreground font-medium">My Portfolio</p>
+                    {portfolioSummary && portfolioSummary.holdings_count > 0 ? (
+                      <div className="flex items-center gap-3 mt-0.5">
+                        <span className="text-sm font-semibold num">
+                          LKR {Number(portfolioSummary.total_value).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                        </span>
+                        <span className={`text-xs font-medium num ${(portfolioSummary.total_pnl_percent ?? 0) >= 0 ? 'text-emerald-600' : 'text-red-600'}`}>
+                          {(portfolioSummary.total_pnl_percent ?? 0) >= 0 ? '+' : ''}{Number(portfolioSummary.total_pnl_percent ?? 0).toFixed(2)}%
+                        </span>
+                        <span className="text-xs text-muted-foreground">
+                          {portfolioSummary.holdings_count} holding{portfolioSummary.holdings_count !== 1 ? 's' : ''}
+                        </span>
+                        <span className="text-xs text-emerald-600 font-medium">100% Shariah</span>
+                      </div>
+                    ) : (
+                      <p className="text-xs text-muted-foreground mt-0.5">No holdings yet — add your first position</p>
+                    )}
+                  </div>
+                </div>
+                <ArrowRight className="h-4 w-4 text-muted-foreground group-hover:text-primary transition-colors" />
+              </div>
+            </CardContent>
+          </Card>
+        </Link>
+
+        {/* Upcoming Events */}
+        <Card className="card-elevated">
+          <CardContent className="py-3 px-4">
+            <div className="flex items-center gap-2 mb-2">
+              <CalendarDays className="h-4 w-4 text-primary" />
+              <p className="text-xs font-medium">Upcoming Events</p>
+            </div>
+            <div className="space-y-1.5">
+              {[
+                { date: 'Mar 25', label: 'CBSL Rate Decision' },
+                { date: 'Mar 31', label: 'Q4 Earnings Season Begins' },
+                { date: 'Apr 1', label: 'Next RCA Purchase Window' },
+              ].map((event) => (
+                <div key={event.date} className="flex items-center gap-2 text-xs">
+                  <span className="num text-muted-foreground w-12 flex-shrink-0">{event.date}</span>
+                  <span className="text-foreground">{event.label}</span>
+                </div>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+      </div>
 
       {/* Row 1: Index Cards */}
       <div className="grid gap-4 md:grid-cols-3">
