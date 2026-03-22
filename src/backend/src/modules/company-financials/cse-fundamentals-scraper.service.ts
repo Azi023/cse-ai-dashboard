@@ -1,7 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
-import { chromium, Browser, Page, Frame } from 'playwright';
+import { chromium, Browser, BrowserContext, Page, Frame } from 'playwright';
 import * as fs from 'fs';
 import * as path from 'path';
 import { SHARIAH_WHITELIST } from '../shariah-screening/blacklist';
@@ -130,6 +130,14 @@ export class CseFundamentalsScraperService {
           'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
       });
 
+      // Login to MYCSE once — cookies persist across all pages in this context
+      const loggedIn = await this.loginToCse(context);
+      this.logger.log(
+        loggedIn
+          ? 'Proceeding with MYCSE session — full fundamental data expected'
+          : 'Proceeding without MYCSE session — partial data only (header metrics)',
+      );
+
       for (let i = 0; i < symbols.length; i++) {
         const symbol = symbols[i];
         this.logger.log(`[${i + 1}/${symbols.length}] Scraping ${symbol}...`);
@@ -183,6 +191,161 @@ export class CseFundamentalsScraperService {
       tier2TriggerStatus,
       results,
     };
+  }
+
+  // ── MYCSE login ───────────────────────────────────────────────────────────
+
+  private async loginToCse(context: BrowserContext): Promise<boolean> {
+    const username = process.env.CSE_USERNAME;
+    const password = process.env.CSE_PASSWORD;
+
+    if (!username || !password) {
+      this.logger.warn(
+        'CSE_USERNAME or CSE_PASSWORD not set — skipping MYCSE login',
+      );
+      return false;
+    }
+
+    const page = await context.newPage();
+    page.setDefaultTimeout(PAGE_TIMEOUT_MS);
+
+    try {
+      // Navigate to CSE homepage
+      await page.goto(CSE_BASE_URL, {
+        waitUntil: 'domcontentloaded',
+        timeout: PAGE_TIMEOUT_MS,
+      });
+      await page.waitForTimeout(2000);
+
+      // Click the MYCSE button (green button top right)
+      const mycseSelectors = [
+        'a:has-text("MYCSE")',
+        'button:has-text("MYCSE")',
+        '[class*="mycse"]',
+        'a[href*="mycse"]',
+        'a[href*="login"]',
+      ];
+
+      let clicked = false;
+      for (const sel of mycseSelectors) {
+        try {
+          const el = await page.$(sel);
+          if (el && (await el.isVisible())) {
+            await el.click();
+            clicked = true;
+            break;
+          }
+        } catch {
+          /* try next */
+        }
+      }
+
+      if (!clicked) {
+        this.logger.warn('Could not find MYCSE button — skipping login');
+        return false;
+      }
+
+      // Wait for login form to appear (modal or redirect)
+      await page.waitForTimeout(3000);
+
+      // Find email/username field
+      const emailSelectors = [
+        'input[type="email"]',
+        'input[name="email"]',
+        'input[name="username"]',
+        'input[id*="email"]',
+        'input[id*="user"]',
+        'input[placeholder*="email" i]',
+        'input[placeholder*="username" i]',
+      ];
+
+      let emailField = null;
+      for (const sel of emailSelectors) {
+        try {
+          const el = await page.$(sel);
+          if (el && (await el.isVisible())) {
+            emailField = el;
+            break;
+          }
+        } catch {
+          /* try next */
+        }
+      }
+
+      if (!emailField) {
+        this.logger.warn(
+          'Could not find email/username field — login form not found',
+        );
+        return false;
+      }
+
+      await emailField.fill(username);
+
+      // Find password field
+      const passField = await page.$('input[type="password"]');
+      if (!passField || !(await passField.isVisible())) {
+        this.logger.warn('Could not find password field');
+        return false;
+      }
+      await passField.fill(password);
+
+      // Submit
+      const submitSelectors = [
+        'button[type="submit"]',
+        'input[type="submit"]',
+        'button:has-text("Login")',
+        'button:has-text("Sign In")',
+        'button:has-text("Log In")',
+        'button:has-text("Submit")',
+      ];
+
+      let submitted = false;
+      for (const sel of submitSelectors) {
+        try {
+          const el = await page.$(sel);
+          if (el && (await el.isVisible())) {
+            await el.click();
+            submitted = true;
+            break;
+          }
+        } catch {
+          /* try next */
+        }
+      }
+
+      if (!submitted) {
+        this.logger.warn('Could not find submit button on login form');
+        return false;
+      }
+
+      // Wait for post-login redirect / page load
+      await page.waitForTimeout(5000);
+
+      const currentUrl = page.url();
+      const bodyText = (await page.textContent('body').catch(() => '')) ?? '';
+
+      const loginSucceeded =
+        bodyText.toLowerCase().includes('logout') ||
+        bodyText.toLowerCase().includes('sign out') ||
+        bodyText.includes(username) ||
+        (!currentUrl.toLowerCase().includes('login') &&
+          !currentUrl.toLowerCase().includes('signin'));
+
+      if (loginSucceeded) {
+        this.logger.log(`MYCSE login successful — URL: ${currentUrl}`);
+      } else {
+        this.logger.warn(
+          `MYCSE login may have failed — URL: ${currentUrl}. Will proceed without login (partial data only).`,
+        );
+      }
+
+      return loginSucceeded;
+    } catch (err) {
+      this.logger.warn(`MYCSE login error: ${String(err)}`);
+      return false;
+    } finally {
+      await page.close();
+    }
   }
 
   // ── Build target symbol list ──────────────────────────────────────────────
@@ -538,47 +701,61 @@ async function extractHeaderData(
 ): Promise<Record<string, string>> {
   const data: Record<string, string> = {};
   try {
-    // Grab the full visible text from the page header area
-    const headerSelectors = [
-      '.company-header',
-      '.stock-header',
-      '.company-info',
-      '.market-data-header',
-      '[class*="company"][class*="header"]',
-      '[class*="stock"][class*="info"]',
-      '.profile-header',
-      '#company-header',
+    // Use full page text for robust extraction — CSE renders data in various containers
+    const pageText = (await page.textContent('body')) ?? '';
+
+    // CSE Financial Highlights section patterns
+    const patterns: Array<{ key: string; regex: RegExp }> = [
+      // Market cap: "Market Capitalization LKR 66,500,000,000.00"
+      {
+        key: 'market cap',
+        regex: /market\s*cap(?:itali[sz]ation)?[\s:LKR]+([0-9,. ]+(?:[BMK])?)/i,
+      },
+      // Beta Against ASPI: "Beta Against ASPI 1.29"
+      {
+        key: 'beta against aspi',
+        regex: /beta\s+against\s+aspi[\s:]+([0-9.-]+)/i,
+      },
+      // Beta Against S&P SL20: "Beta Against S&P SL20 0.92"
+      {
+        key: 'beta against sp20',
+        regex: /beta\s+against\s+s[&a]p\s*(?:sl\s*)?20[\s:]+([0-9.-]+)/i,
+      },
+      // Generic beta fallback (first occurrence)
+      { key: 'beta', regex: /\bbeta[\s:]+([0-9.-]+)/i },
+      // 52-week high/low
+      {
+        key: '52w high',
+        regex: /52[\s-]?(?:week|wk)\s*high[\s:LKR]+([0-9,.]+)/i,
+      },
+      {
+        key: '52w low',
+        regex: /52[\s-]?(?:week|wk)\s*low[\s:LKR]+([0-9,.]+)/i,
+      },
+      // Day's range: "Day's Price Range 69.00 - 72.00"
+      {
+        key: "day's range",
+        regex: /day[''s]*\s*(?:price\s*)?range[\s:]+([0-9.,\s–-]+)/i,
+      },
+      // Turnover
+      { key: 'turnover', regex: /turnover[\s:LKR]+([0-9,.]+(?:[BMK])?)/i },
+      // Share volume
+      {
+        key: 'share volume',
+        regex: /(?:share|shares?)\s*volume[\s:]+([0-9,.]+)/i,
+      },
     ];
 
-    for (const sel of headerSelectors) {
-      const el = await page.$(sel);
-      if (!el) continue;
-
-      const text = await el.textContent();
-      if (!text) continue;
-
-      const patterns: Array<{ key: string; regex: RegExp }> = [
-        { key: 'market cap', regex: /market\s*cap[\s:]+([0-9,.BMKb]+)/i },
-        { key: 'beta', regex: /beta[\s:]+([0-9.-]+)/i },
-        {
-          key: "day's range",
-          regex: /day[''s]*\s*range[\s:]+([0-9.,\s-]+)/i,
-        },
-        {
-          key: '52w high',
-          regex: /52[\s-]?week\s*high[\s:]+([0-9,.]+)/i,
-        },
-        {
-          key: '52w low',
-          regex: /52[\s-]?week\s*low[\s:]+([0-9,.]+)/i,
-        },
-      ];
-
-      for (const { key, regex } of patterns) {
-        const match = text.match(regex);
-        if (match) data[key] = match[1].trim();
+    for (const { key, regex } of patterns) {
+      if (data[key]) continue; // don't overwrite already-found values
+      const match = pageText.match(regex);
+      if (match) {
+        data[key] = match[1].trim();
       }
-      break;
+    }
+
+    if (Object.keys(data).length > 0) {
+      logger.log(`Header data extracted: ${JSON.stringify(data)}`);
     }
   } catch (err) {
     logger.debug(`Header extraction failed: ${String(err)}`);
@@ -811,7 +988,7 @@ function mapRawToFundamentals(
     roa: pick('roa', 'return on assets'),
     roe: pick('roe', 'return on equity'),
     roic: pick('roic', 'return on invested capital'),
-    beta: pick('beta', '1-year beta'),
+    beta: pick('beta against aspi', 'beta', '1-year beta'),
     week52_high: pick('52w high', '52-week high', '52 week high'),
     week52_low: pick('52w low', '52-week low', '52 week low'),
     avg_volume: pick('average volume', 'avg volume'),
