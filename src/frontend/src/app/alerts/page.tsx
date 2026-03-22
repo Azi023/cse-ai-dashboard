@@ -7,7 +7,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { alertsApi, type AlertRecord } from '@/lib/api';
 import { Bell, Plus, Trash2, CheckCheck, TrendingUp, TrendingDown, AlertTriangle } from 'lucide-react';
 import Link from 'next/link';
-import ReactMarkdown from 'react-markdown';
+import { MarkdownRenderer } from '@/components/markdown-renderer';
 
 function formatDate(dateStr: string | null): string {
   if (!dateStr) return '--';
@@ -227,13 +227,10 @@ export default function AlertsPage() {
                             )}
                           </div>
                           {notif.message && (
-                            <div className="text-xs text-muted-foreground mt-1 leading-relaxed prose prose-xs dark:prose-invert max-w-none [&>p]:mt-1 [&>p]:mb-0 [&>ul]:mt-1 [&>ul]:mb-0 [&>h1]:text-sm [&>h2]:text-xs [&>h3]:text-xs [&>strong]:font-semibold [&>strong]:text-foreground">
-                              {notif.message.includes('\n') || notif.message.includes('#') || notif.message.includes('**') ? (
-                                <ReactMarkdown>{notif.message}</ReactMarkdown>
-                              ) : (
-                                <p>{notif.message}</p>
-                              )}
-                            </div>
+                            <MarkdownRenderer
+                              content={notif.message}
+                              className="text-xs text-muted-foreground mt-1 leading-relaxed"
+                            />
                           )}
                           <p className="text-[10px] text-muted-foreground mt-1">
                             {formatDate(notif.triggered_at)}

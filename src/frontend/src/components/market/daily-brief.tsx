@@ -5,7 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { aiApi, type DailyBrief, type AiStatus } from '@/lib/api';
 import { Sparkles, RefreshCw, ChevronDown, ChevronUp, AlertTriangle, TrendingUp, Loader2 } from 'lucide-react';
-import ReactMarkdown from 'react-markdown';
+import { MarkdownRenderer } from '@/components/markdown-renderer';
 import { format } from 'date-fns';
 
 const sentimentConfig = {
@@ -131,9 +131,10 @@ export function DailyBriefCard() {
 
       {expanded && (
         <CardContent className="space-y-4">
-          <div className="prose prose-sm dark:prose-invert max-w-none text-sm leading-relaxed [&_p]:my-1.5 [&_p]:leading-relaxed [&_strong]:text-foreground [&_li]:leading-relaxed ai-left-accent pl-3">
-            <ReactMarkdown>{brief.summary}</ReactMarkdown>
-          </div>
+          <MarkdownRenderer
+            content={brief.summary}
+            className="text-sm leading-relaxed text-muted-foreground ai-left-accent pl-3"
+          />
 
           <div className="grid gap-3 md:grid-cols-2">
             {brief.topOpportunities.length > 0 && (

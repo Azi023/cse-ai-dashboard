@@ -5,7 +5,7 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { aiApi, type AiStatus, type ChatMessage } from '@/lib/api';
 import { Send, Bot, User, Sparkles, Loader2 } from 'lucide-react';
-import ReactMarkdown from 'react-markdown';
+import { MarkdownRenderer } from '@/components/markdown-renderer';
 
 const SUGGESTED_PROMPTS = [
   'I have LKR 10,000 to invest this month — which Shariah-compliant stocks should I consider and why?',
@@ -162,9 +162,7 @@ export default function ChatPage() {
                     }`}
                   >
                     {msg.role === 'assistant' ? (
-                      <div className="prose prose-sm prose-invert max-w-none [&_p]:my-1.5 [&_ul]:my-1.5 [&_ol]:my-1.5 [&_li]:my-0.5 [&_h1]:text-base [&_h2]:text-sm [&_h3]:text-sm [&_strong]:text-foreground">
-                        <ReactMarkdown>{msg.content}</ReactMarkdown>
-                      </div>
+                      <MarkdownRenderer content={msg.content} className="text-sm" />
                     ) : (
                       <p className="whitespace-pre-wrap">{msg.content}</p>
                     )}

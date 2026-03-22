@@ -31,7 +31,7 @@ import {
   Megaphone,
 } from 'lucide-react';
 import Link from 'next/link';
-import ReactMarkdown from 'react-markdown';
+import { MarkdownRenderer } from '@/components/markdown-renderer';
 import { cn } from '@/lib/utils';
 import { format } from 'date-fns';
 import { safeNum } from '@/lib/format';
@@ -508,9 +508,10 @@ export default function StockDetailPage() {
                 </div>
 
                 {/* Analysis text */}
-                <div className="prose prose-sm prose-invert max-w-none text-sm [&_p]:my-1.5 [&_strong]:text-foreground">
-                  <ReactMarkdown>{analysis.analysis}</ReactMarkdown>
-                </div>
+                <MarkdownRenderer
+                  content={analysis.analysis}
+                  className="text-sm text-muted-foreground"
+                />
 
                 {/* Risk factors */}
                 {analysis.riskFactors.length > 0 && (
