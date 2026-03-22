@@ -493,13 +493,108 @@ export class CseFundamentalsScraperService {
         return await failStep(6, 'Username input not found on login form');
       }
 
-      await usernameField.fill(username);
+      // Log field attributes and form details for diagnostics
+      const fieldAttrs = await usernameField
+        .evaluate((el) => ({
+          name: el.getAttribute('name'),
+          id: el.getAttribute('id'),
+          type: el.getAttribute('type'),
+          placeholder: el.getAttribute('placeholder'),
+        }))
+        .catch(() => null);
+      this.logger.log(
+        `[login] Username field attrs: ${JSON.stringify(fieldAttrs)}`,
+      );
+
+      // Log hidden inputs (CSRF tokens etc.)
+      const hiddenInputs = await page
+        .$$eval('input[type="hidden"]', (els) =>
+          els.map((el) => ({
+            name: el.getAttribute('name'),
+            value: el.getAttribute('value')?.slice(0, 30),
+          })),
+        )
+        .catch(() => []);
+      this.logger.log(`[login] Hidden inputs: ${JSON.stringify(hiddenInputs)}`);
+
+      // Log form action
+      const formAction = await page
+        .$eval('form', (f) => f.getAttribute('action') ?? f.action ?? '')
+        .catch(() => '');
+      this.logger.log(`[login] Form action: ${formAction}`);
+
+      // APPROACH 1: click → clear → slow keyboard typing (triggers JS event listeners)
+      await usernameField.click();
+      await usernameField.fill('');
+      await page.keyboard.type(username, { delay: 50 });
+      await usernameField.dispatchEvent('input');
+      await usernameField.dispatchEvent('change');
+      await usernameField.dispatchEvent('blur');
 
       const passField = await page.$('input[type="password"]');
       if (!passField || !(await passField.isVisible())) {
         return await failStep(6, 'Password input not found on login form');
       }
-      await passField.fill(password);
+      await passField.click();
+      await passField.fill('');
+      await page.keyboard.type(password, { delay: 50 });
+      await passField.dispatchEvent('input');
+      await passField.dispatchEvent('change');
+      await passField.dispatchEvent('blur');
+
+      // Verify actual .value properties before submitting
+      const filledValues = await page
+        .evaluate(() => {
+          const user = document.querySelector(
+            'input[name="Username"], input[name="username"], input[type="email"], input[type="text"]:not([type="password"])',
+          ) as HTMLInputElement | null;
+          const pass = document.querySelector(
+            'input[type="password"]',
+          ) as HTMLInputElement | null;
+          return {
+            usernameLen: user?.value?.length ?? 0,
+            passwordLen: pass?.value?.length ?? 0,
+          };
+        })
+        .catch(() => ({ usernameLen: -1, passwordLen: -1 }));
+      this.logger.log(
+        `[login] Field values after fill — username length: ${filledValues.usernameLen}, password length: ${filledValues.passwordLen}`,
+      );
+
+      // APPROACH 3 fallback: if values are empty, use React/native setter trick
+      if (filledValues.usernameLen === 0 || filledValues.passwordLen === 0) {
+        this.logger.warn(
+          '[login] Field values empty after slow-type — trying native setter approach',
+        );
+        await page.evaluate(
+          (creds) => {
+            const userInput = document.querySelector(
+              'input[name="Username"], input[name="username"], input[type="email"], input[type="text"]:not([type="password"])',
+            ) as HTMLInputElement | null;
+            const passInput = document.querySelector(
+              'input[type="password"]',
+            ) as HTMLInputElement | null;
+            if (!userInput || !passInput) return;
+            const nativeInputValueSetter = Object.getOwnPropertyDescriptor(
+              window.HTMLInputElement.prototype,
+              'value',
+            )?.set;
+            if (nativeInputValueSetter) {
+              nativeInputValueSetter.call(userInput, creds.username);
+              nativeInputValueSetter.call(passInput, creds.password);
+            } else {
+              userInput.value = creds.username;
+              passInput.value = creds.password;
+            }
+            userInput.dispatchEvent(new Event('input', { bubbles: true }));
+            userInput.dispatchEvent(new Event('change', { bubbles: true }));
+            passInput.dispatchEvent(new Event('input', { bubbles: true }));
+            passInput.dispatchEvent(new Event('change', { bubbles: true }));
+          },
+          { username, password },
+        );
+      }
+
       await ss('login-step-6-creds-filled.png');
 
       // ── Step 7: Click "Sign In" + wait for redirect back to cse.lk ────────
