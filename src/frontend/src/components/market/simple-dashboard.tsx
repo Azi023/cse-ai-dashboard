@@ -47,6 +47,67 @@ function timeAgo(dateStr: string): string {
   return `${Math.floor(hours / 24)}d ago`;
 }
 
+function simplifyAIBrief(brief: { summary: string; marketSentiment: string; topOpportunities: string[] }): {
+  summary: string;
+  opportunities: string[];
+} {
+  const raw = brief.summary ?? '';
+
+  // Friendly fallback for data-constrained / unavailable sessions
+  if (!raw || raw.includes('DATA UNAVAILABLE') || raw.includes('data-constrained')) {
+    const dayOfWeek = new Date().getDay();
+    const isWeekend = dayOfWeek === 0 || dayOfWeek === 6;
+    return {
+      summary: isWeekend
+        ? 'The market is closed over the weekend. The AI will provide a fresh analysis when trading resumes on Monday at 9:30 AM.'
+        : 'Live market data is still loading. The AI will have a full analysis once today\'s trading data arrives.',
+      opportunities: [],
+    };
+  }
+
+  // Translate sentiment to plain English
+  const sentimentMap: Record<string, string> = {
+    BULLISH: 'The AI sees positive signs in the market — stocks are generally looking good.',
+    NEUTRAL: 'The market is steady with no major surprises expected.',
+    CAUTIOUS: 'The AI recommends a cautious approach — some uncertainty ahead, but nothing alarming.',
+    BEARISH: 'The AI sees some caution signs. This is normal market behavior — your long-term strategy is unchanged.',
+  };
+  const sentimentLine = sentimentMap[brief.marketSentiment] ?? 'The market is currently under review.';
+
+  // Try to extract a plain-English insight
+  // Look for "Base case", "Trading Thesis", or "Recommendation" sections
+  // Flatten multi-line content by splitting on double newline
+  let insight = '';
+  const flatRaw = raw.replace(/\r?\n/g, ' ');
+  const thesisMatch = flatRaw.match(/Base case[:\s*]*\**(.*?)(?=Bull|Bear|Risk|Key|---|$)/i);
+  const recommendMatch = flatRaw.match(/Recommendation[:\s*]*\**(.*?)(?=---|$)/i);
+  const conclusionMatch = flatRaw.match(/(?:conclusion|bottom line|summary)[:\s*]*\**(.*?)(?=---|$)/i);
+
+  const extracted = thesisMatch?.[1] ?? recommendMatch?.[1] ?? conclusionMatch?.[1] ?? '';
+
+  if (extracted.length > 20) {
+    insight = extracted
+      .replace(/\*\*/g, '')
+      .replace(/#{1,6}\s*/g, '')
+      .replace(/\|[^|]*\|/g, '')
+      .replace(/---+/g, '')
+      .replace(/⚠️/g, '')
+      .replace(/\n+/g, ' ')
+      .trim();
+  }
+
+  const summary = insight.length > 30
+    ? `${sentimentLine} ${insight.length > 200 ? insight.slice(0, 197) + '...' : insight}`
+    : sentimentLine;
+
+  // Filter real opportunities (not placeholder text)
+  const opportunities = (brief.topOpportunities ?? []).filter(
+    (o) => o && !o.toLowerCase().includes('see analysis') && o.length > 10,
+  ).slice(0, 2);
+
+  return { summary, opportunities };
+}
+
 export function SimpleDashboard() {
   const [summary, setSummary] = useState<MarketSummary | null>(null);
   const [portfolio, setPortfolio] = useState<PortfolioSummary | null>(null);
@@ -182,30 +243,33 @@ export function SimpleDashboard() {
       </Card>
 
       {/* What the AI Thinks */}
-      {brief && (
-        <Card>
-          <CardContent className="pt-4 space-y-2">
-            <div className="flex items-center gap-2">
-              <Sparkles className="h-5 w-5 text-primary" />
-              <h3 className="font-semibold text-sm">What the AI Thinks</h3>
-            </div>
-            <p className="text-sm text-muted-foreground leading-relaxed">
-              &ldquo;{brief.summary.replace(/\*\*|#{1,6}\s|`/g, '').slice(0, 320).trim()}{brief.summary.length > 320 ? '...' : ''}&rdquo;
-            </p>
-            {brief.topOpportunities.length > 0 && (
-              <div className="space-y-1">
-                <p className="text-xs font-medium">Opportunities to watch:</p>
-                {brief.topOpportunities.slice(0, 2).map((opp, i) => (
-                  <p key={i} className="text-xs text-muted-foreground pl-3">• {opp}</p>
-                ))}
+      {brief && (() => {
+        const simplified = simplifyAIBrief(brief);
+        return (
+          <Card>
+            <CardContent className="pt-4 space-y-2">
+              <div className="flex items-center gap-2">
+                <Sparkles className="h-5 w-5 text-primary" />
+                <h3 className="font-semibold text-sm">What the AI Thinks</h3>
               </div>
-            )}
-            <p className="text-[10px] text-muted-foreground border-t pt-2 mt-1">
-              ⚠️ This is educational context, not financial advice.
-            </p>
-          </CardContent>
-        </Card>
-      )}
+              <p className="text-sm text-muted-foreground leading-relaxed">
+                {simplified.summary}
+              </p>
+              {simplified.opportunities.length > 0 && (
+                <div className="space-y-1">
+                  <p className="text-xs font-medium">Opportunities to watch:</p>
+                  {simplified.opportunities.map((opp, i) => (
+                    <p key={i} className="text-xs text-muted-foreground pl-3">• {opp}</p>
+                  ))}
+                </div>
+              )}
+              <p className="text-[10px] text-muted-foreground border-t pt-2 mt-1">
+                This is educational context, not financial advice.
+              </p>
+            </CardContent>
+          </Card>
+        );
+      })()}
 
       {/* What to Do This Week */}
       <Card>
