@@ -131,6 +131,13 @@ export function DailyBriefCard() {
 
       {expanded && (
         <CardContent className="space-y-4">
+          {/* Data-constrained banner — set expectations before full analysis */}
+          {(brief.summary.includes('DATA UNAVAILABLE') || brief.summary.includes('data-constrained')) && (
+            <div className="flex items-start gap-2 rounded-md border border-blue-500/20 bg-blue-500/5 px-3 py-2 text-xs text-blue-400">
+              <span>ℹ️</span>
+              <span>Market is closed. This analysis uses the most recent available data. Real-time data resumes the next trading day at 9:30 AM SLT.</span>
+            </div>
+          )}
           <MarkdownRenderer
             content={brief.summary}
             className="text-sm leading-relaxed text-muted-foreground ai-left-accent pl-3"
