@@ -1,7 +1,6 @@
 'use client';
 
 import { useState, useEffect, useMemo, useCallback } from 'react';
-import { useRouter } from 'next/navigation';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { IndexCard } from '@/components/market/index-card';
@@ -10,6 +9,7 @@ import { TopStocksTable } from '@/components/market/top-stocks-table';
 import { DailyBriefCard } from '@/components/market/daily-brief';
 import { MacroIndicatorsCard } from '@/components/market/macro-indicators';
 import { GlobalIndicatorsCard } from '@/components/market/global-indicators';
+import { SimpleDashboard } from '@/components/market/simple-dashboard';
 import {
   marketApi,
   shariahApi,
@@ -90,14 +90,6 @@ function timeAgo(dateStr: string): string {
 
 export default function DashboardPage() {
   const { isSimple } = useDisplayMode();
-  const router = useRouter();
-
-  // Simple mode: redirect to Journey page
-  useEffect(() => {
-    if (isSimple) {
-      router.replace('/journey');
-    }
-  }, [isSimple, router]);
   const [summary, setSummary] = useState<MarketSummary | null>(null);
   const [gainers, setGainers] = useState<TopStock[]>([]);
   const [losers, setLosers] = useState<TopStock[]>([]);
@@ -192,6 +184,11 @@ export default function DashboardPage() {
   const sortedSectors = useMemo(() => {
     return [...sectors].sort((a, b) => b.percentage - a.percentage);
   }, [sectors]);
+
+  // Simple mode: render friendly beginner dashboard
+  if (isSimple) {
+    return <SimpleDashboard />;
+  }
 
   return (
     <div className="max-w-[1400px] mx-auto space-y-6">

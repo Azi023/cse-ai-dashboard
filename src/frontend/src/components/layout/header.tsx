@@ -260,8 +260,11 @@ export function Header() {
           {/* Desktop Nav */}
           <nav className="hidden md:flex items-center gap-0.5">
             {topLinks
-              .filter((link) => !(mode === 'simple' && link.href === '/signals'))
-              .filter((link) => !(mode === 'simple' && link.href === '/'))
+              .filter((link) => {
+                if (mode !== 'simple') return true;
+                // Simple mode: show only Journey, Portfolio, Settings
+                return ['/journey', '/portfolio'].includes(link.href);
+              })
               .map((link) => {
               const Icon = link.icon;
               const active = isActive(link.href);
@@ -282,14 +285,31 @@ export function Header() {
             })}
 
             {dropdownGroups
-              .filter((group) => !(mode === 'simple' && group.label === 'Analysis'))
-              .map((group) => (
-              <DropdownMenu
-                key={group.label}
-                group={group}
-                pathname={pathname}
-              />
-            ))}
+              .filter((group) => {
+                if (mode !== 'simple') return true;
+                // Simple mode: show only Intelligence (news/chat) and Settings (under Tools)
+                return group.label === 'Intelligence' || group.label === 'Tools';
+              })
+              .map((group) => {
+                // In simple mode, Intelligence = only News; Tools = only Settings
+                const filteredGroup =
+                  mode === 'simple'
+                    ? {
+                        ...group,
+                        links:
+                          group.label === 'Intelligence'
+                            ? group.links.filter((l) => l.href === '/news')
+                            : group.links.filter((l) => l.href === '/settings'),
+                      }
+                    : group;
+                return (
+                  <DropdownMenu
+                    key={group.label}
+                    group={filteredGroup}
+                    pathname={pathname}
+                  />
+                );
+              })}
           </nav>
         </div>
 
@@ -423,8 +443,10 @@ export function Header() {
             Main
           </p>
           {topLinks
-            .filter((link) => !(mode === 'simple' && link.href === '/signals'))
-            .filter((link) => !(mode === 'simple' && link.href === '/'))
+            .filter((link) => {
+              if (mode !== 'simple') return true;
+              return ['/journey', '/portfolio'].includes(link.href);
+            })
             .map((link) => {
             const Icon = link.icon;
             const active = isActive(link.href);
@@ -446,18 +468,32 @@ export function Header() {
           })}
 
           {dropdownGroups
-            .filter((group) => !(mode === 'simple' && group.label === 'Analysis'))
-            .map((group) => (
-            <div key={group.label}>
+            .filter((group) => {
+              if (mode !== 'simple') return true;
+              return group.label === 'Intelligence' || group.label === 'Tools';
+            })
+            .map((group) => {
+              const filteredGroup =
+                mode === 'simple'
+                  ? {
+                      ...group,
+                      links:
+                        group.label === 'Intelligence'
+                          ? group.links.filter((l) => l.href === '/news')
+                          : group.links.filter((l) => l.href === '/settings'),
+                    }
+                  : group;
+              return (
+            <div key={filteredGroup.label}>
               <p className="text-[10px] text-muted-foreground uppercase tracking-wider px-3 pt-2 pb-0.5 border-t mt-1 flex items-center gap-1.5">
-                {group.label}
-                {group.badge && (
+                {filteredGroup.label}
+                {filteredGroup.badge && (
                   <span className="text-[9px] font-bold bg-amber-500/20 text-amber-500 border border-amber-500/30 rounded px-1 py-px leading-none normal-case">
-                    {group.badge}
+                    {filteredGroup.badge}
                   </span>
                 )}
               </p>
-              {group.links.map((link) => {
+              {filteredGroup.links.map((link) => {
                 const Icon = link.icon;
                 const active = isActive(link.href);
                 return (
@@ -477,7 +513,8 @@ export function Header() {
                 );
               })}
             </div>
-          ))}
+          );
+        })}
 
           {/* Mobile ASPI + status */}
           <div className="flex items-center gap-4 px-3 py-2 text-xs text-muted-foreground border-t mt-1 pt-2 num">
