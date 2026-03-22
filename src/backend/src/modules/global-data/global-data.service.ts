@@ -230,12 +230,26 @@ export class GlobalDataService {
   /**
    * Get all global indicators with change data for dashboard display.
    * Uses Redis cache, falls back to DB.
+   * Auto-refreshes in background if data is older than 2 days.
    */
   async getGlobalIndicators(): Promise<GlobalIndicatorResult[]> {
     // Check Redis cache first
     const cached =
       await this.redisService.getJson<GlobalIndicatorResult[]>(REDIS_KEY);
-    if (cached) return cached;
+    if (cached) {
+      // Background refresh if cached data is stale (>2 days old)
+      const oldestDate = cached.reduce(
+        (min, r) => (r.data_date < min ? r.data_date : min),
+        cached[0]?.data_date ?? '',
+      );
+      const daysDiff = (Date.now() - new Date(oldestDate).getTime()) / 86400000;
+      if (daysDiff > 2) {
+        this.fetchAllGlobalData().catch((e) =>
+          this.logger.warn(`Background global refresh failed: ${String(e)}`),
+        );
+      }
+      return cached;
+    }
 
     const indicators = Object.values(GLOBAL_INDICATORS);
     const results: GlobalIndicatorResult[] = [];
@@ -294,6 +308,22 @@ export class GlobalDataService {
     // Cache result
     if (results.length > 0) {
       await this.redisService.setJson(REDIS_KEY, results, REDIS_TTL);
+    }
+
+    // If DB data is stale (>2 days), trigger background refresh
+    if (results.length > 0) {
+      const oldestDate = results.reduce(
+        (min, r) => (r.data_date < min ? r.data_date : min),
+        results[0].data_date,
+      );
+      const daysDiff = (Date.now() - new Date(oldestDate).getTime()) / 86400000;
+      if (daysDiff > 2) {
+        this.fetchAllGlobalData().catch((e) =>
+          this.logger.warn(
+            `Background global refresh (DB stale) failed: ${String(e)}`,
+          ),
+        );
+      }
     }
 
     return results;
