@@ -15,7 +15,6 @@ import {
   shariahApi,
   stocksApi,
   newsApi,
-  alertsApi,
   portfolioApi,
   globalApi,
   type MarketSummary,
@@ -23,7 +22,6 @@ import {
   type SectorIndex,
   type Stock,
   type NewsItemData,
-  type AlertRecord,
   type PortfolioSummary,
   type EconomicEvent,
 } from '@/lib/api';
@@ -38,9 +36,6 @@ import {
   X,
   AlertTriangle,
   Newspaper,
-  Bell,
-  ExternalLink,
-  HelpCircle,
   Briefcase,
   CalendarDays,
   ArrowRight,
@@ -100,7 +95,6 @@ export default function DashboardPage() {
   const [shariahFilter, setShariahFilter] = useState(false);
   const [nonCompliantSymbols, setNonCompliantSymbols] = useState<Set<string>>(new Set());
   const [recentNews, setRecentNews] = useState<NewsItemData[]>([]);
-  const [recentAlerts, setRecentAlerts] = useState<AlertRecord[]>([]);
   const [economicEvents, setEconomicEvents] = useState<EconomicEvent[]>([]);
   const [moversTab, setMoversTab] = useState<'gainers' | 'losers' | 'active'>('gainers');
   const [portfolioSummary, setPortfolioSummary] = useState<PortfolioSummary | null>(null);
@@ -156,7 +150,6 @@ export default function DashboardPage() {
       newsApi.getNews({ limit: 5 }).then((res) => setRecentNews(res.data)).catch(() => {});
     });
 
-    alertsApi.getNotifications(5).then((res) => setRecentAlerts(res.data)).catch(() => {});
     globalApi.getEconomicCalendar().then((res) => setEconomicEvents(res.data)).catch(() => {});
   }, []);
 
@@ -402,149 +395,109 @@ export default function DashboardPage() {
         </div>
       )}
 
-      {/* Row 4: Watchlist + Recent Alerts */}
-      <div className="grid gap-4 lg:grid-cols-3">
-        {/* Watchlist */}
-        <div className="lg:col-span-2">
-          {(watchlist.length > 0 || showWatchSearch) && (
-            <Card>
-              <CardHeader className="pb-3">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    <Star className="h-4 w-4 text-yellow-500" />
-                    <CardTitle className="text-sm">Watchlist</CardTitle>
-                  </div>
-                  <button
-                    onClick={() => setShowWatchSearch(!showWatchSearch)}
-                    className="text-xs text-muted-foreground hover:text-foreground transition-colors"
-                  >
-                    {showWatchSearch ? 'Done' : '+ Add'}
-                  </button>
-                </div>
-              </CardHeader>
-              <CardContent className="space-y-3">
-                {showWatchSearch && (
-                  <div className="relative">
-                    <Search className="absolute left-3 top-2.5 h-3.5 w-3.5 text-muted-foreground" />
-                    <input
-                      type="text"
-                      value={watchSearch}
-                      onChange={(e) => setWatchSearch(e.target.value)}
-                      placeholder="Search stocks to add..."
-                      className="w-full rounded-md border bg-background pl-9 pr-3 py-2 text-sm placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring"
-                    />
-                    {watchSearchResults.length > 0 && (
-                      <div className="absolute z-10 w-full mt-1 rounded-md border bg-popover shadow-md">
-                        {watchSearchResults.map((stock) => (
-                          <button
-                            key={stock.symbol}
-                            onClick={() => { toggleWatch(stock.symbol); setWatchSearch(''); }}
-                            className="flex items-center justify-between w-full px-3 py-2 text-sm hover:bg-muted/50 transition-colors"
-                          >
-                            <span>
-                              <span className="font-medium">{stock.symbol}</span>{' '}
-                              <span className="text-muted-foreground">{stock.name}</span>
-                            </span>
-                            <Star className="h-3 w-3 text-muted-foreground" />
-                          </button>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-                )}
-
-                {watchlistStocks.length > 0 ? (
-                  <div className="space-y-1">
-                    {watchlistStocks.map((stock) => {
-                      const change = Number(stock.change_percent) || 0;
-                      return (
-                        <div
-                          key={stock.symbol}
-                          className="flex items-center justify-between rounded-md px-2 py-1.5 hover:bg-muted/30 transition-colors"
-                        >
-                          <div className="flex items-center gap-2">
-                            <button
-                              onClick={() => toggleWatch(stock.symbol)}
-                              className="text-yellow-500 hover:text-yellow-600 transition-colors"
-                            >
-                              <Star className="h-3.5 w-3.5 fill-current" />
-                            </button>
-                            <Link
-                              href={`/stocks/${stock.symbol}`}
-                              className="font-medium text-sm hover:underline"
-                            >
-                              {stock.symbol}
-                            </Link>
-                            <span className="text-xs text-muted-foreground truncate max-w-[150px]">
-                              {stock.name}
-                            </span>
-                          </div>
-                          <div className="flex items-center gap-3">
-                            <span className="text-sm font-medium">
-                              {stock.last_price ? Number(stock.last_price).toFixed(2) : '\u2014'}
-                            </span>
-                            <span
-                              className={`text-xs font-medium num ${
-                                change > 0 ? 'text-emerald-500' : change < 0 ? 'text-red-500' : 'text-muted-foreground'
-                              }`}
-                            >
-                              {change > 0 ? '+' : ''}{safeNum(change).toFixed(2)}%
-                            </span>
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </div>
-                ) : (
-                  !showWatchSearch && (
-                    <p className="text-xs text-muted-foreground text-center py-2">
-                      Your watchlist is empty.{' '}
-                      <button onClick={() => setShowWatchSearch(true)} className="text-primary hover:underline">
-                        Add stocks
-                      </button>
-                    </p>
-                  )
-                )}
-              </CardContent>
-            </Card>
-          )}
-        </div>
-
-        {/* Recent Alerts */}
+      {/* Row 4: Watchlist (full-width, shown only when non-empty or searching) */}
+      {(watchlist.length > 0 || showWatchSearch) && (
         <Card>
-          <CardHeader className="pb-2">
+          <CardHeader className="pb-3">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
-                <Bell className="h-4 w-4 text-primary" />
-                <CardTitle className="text-sm">Recent Alerts</CardTitle>
+                <Star className="h-4 w-4 text-yellow-500" />
+                <CardTitle className="text-sm">Watchlist</CardTitle>
               </div>
-              <Link
-                href="/alerts"
+              <button
+                onClick={() => setShowWatchSearch(!showWatchSearch)}
                 className="text-xs text-muted-foreground hover:text-foreground transition-colors"
               >
-                View all
-              </Link>
+                {showWatchSearch ? 'Done' : '+ Add'}
+              </button>
             </div>
           </CardHeader>
-          <CardContent>
-            {recentAlerts.length > 0 ? (
-              <div className="space-y-2">
-                {recentAlerts.map((alert) => (
-                  <div key={alert.id} className="flex items-start gap-2 text-xs">
-                    {!alert.is_read && <span className="h-1.5 w-1.5 rounded-full bg-blue-500 mt-1.5 flex-shrink-0" />}
-                    <div className="flex-1 min-w-0">
-                      <p className="leading-tight">{alert.title}</p>
-                      <p className="text-muted-foreground">{timeAgo(alert.created_at)}</p>
-                    </div>
+          <CardContent className="space-y-3">
+            {showWatchSearch && (
+              <div className="relative">
+                <Search className="absolute left-3 top-2.5 h-3.5 w-3.5 text-muted-foreground" />
+                <input
+                  type="text"
+                  value={watchSearch}
+                  onChange={(e) => setWatchSearch(e.target.value)}
+                  placeholder="Search stocks to add..."
+                  className="w-full rounded-md border bg-background pl-9 pr-3 py-2 text-sm placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring"
+                />
+                {watchSearchResults.length > 0 && (
+                  <div className="absolute z-10 w-full mt-1 rounded-md border bg-popover shadow-md">
+                    {watchSearchResults.map((stock) => (
+                      <button
+                        key={stock.symbol}
+                        onClick={() => { toggleWatch(stock.symbol); setWatchSearch(''); }}
+                        className="flex items-center justify-between w-full px-3 py-2 text-sm hover:bg-muted/50 transition-colors"
+                      >
+                        <span>
+                          <span className="font-medium">{stock.symbol}</span>{' '}
+                          <span className="text-muted-foreground">{stock.name}</span>
+                        </span>
+                        <Star className="h-3 w-3 text-muted-foreground" />
+                      </button>
+                    ))}
                   </div>
-                ))}
+                )}
+              </div>
+            )}
+
+            {watchlistStocks.length > 0 ? (
+              <div className="grid gap-1 sm:grid-cols-2 lg:grid-cols-3">
+                {watchlistStocks.map((stock) => {
+                  const change = Number(stock.change_percent) || 0;
+                  return (
+                    <div
+                      key={stock.symbol}
+                      className="flex items-center justify-between rounded-md px-2 py-1.5 hover:bg-muted/30 transition-colors"
+                    >
+                      <div className="flex items-center gap-2">
+                        <button
+                          onClick={() => toggleWatch(stock.symbol)}
+                          className="text-yellow-500 hover:text-yellow-600 transition-colors"
+                        >
+                          <Star className="h-3.5 w-3.5 fill-current" />
+                        </button>
+                        <Link
+                          href={`/stocks/${stock.symbol}`}
+                          className="font-medium text-sm hover:underline"
+                        >
+                          {stock.symbol}
+                        </Link>
+                        <span className="text-xs text-muted-foreground truncate max-w-[120px]">
+                          {stock.name}
+                        </span>
+                      </div>
+                      <div className="flex items-center gap-3">
+                        <span className="text-sm font-medium">
+                          {stock.last_price ? Number(stock.last_price).toFixed(2) : '\u2014'}
+                        </span>
+                        <span
+                          className={`text-xs font-medium num ${
+                            change > 0 ? 'text-emerald-500' : change < 0 ? 'text-red-500' : 'text-muted-foreground'
+                          }`}
+                        >
+                          {change > 0 ? '+' : ''}{safeNum(change).toFixed(2)}%
+                        </span>
+                      </div>
+                    </div>
+                  );
+                })}
               </div>
             ) : (
-              <p className="text-xs text-muted-foreground text-center py-4">No recent alerts</p>
+              !showWatchSearch && (
+                <p className="text-xs text-muted-foreground text-center py-2">
+                  Your watchlist is empty.{' '}
+                  <button onClick={() => setShowWatchSearch(true)} className="text-primary hover:underline">
+                    Add stocks
+                  </button>
+                </p>
+              )
             )}
           </CardContent>
         </Card>
-      </div>
+      )}
 
       {/* Row 5: Top Stocks Tabs */}
       <Card>
