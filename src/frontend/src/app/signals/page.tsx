@@ -29,7 +29,7 @@ const directionConfig = {
 const confidenceColor = {
   HIGH: 'bg-emerald-600/20 text-emerald-500 border-emerald-600/30',
   MEDIUM: 'bg-yellow-600/20 text-yellow-500 border-yellow-600/30',
-  LOW: 'bg-gray-600/20 text-gray-400 border-gray-600/30',
+  LOW: 'bg-muted text-muted-foreground border-muted-foreground/30',
 };
 
 export default function SignalsPage() {

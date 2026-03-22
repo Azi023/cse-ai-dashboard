@@ -11,7 +11,7 @@ import { format } from 'date-fns';
 const sentimentConfig = {
   BULLISH: { color: 'bg-green-600/20 text-green-500 border-green-600/30', label: 'Bullish' },
   BEARISH: { color: 'bg-red-600/20 text-red-500 border-red-600/30', label: 'Bearish' },
-  NEUTRAL: { color: 'bg-gray-600/20 text-gray-400 border-gray-600/30', label: 'Neutral' },
+  NEUTRAL: { color: 'bg-muted text-muted-foreground border-muted-foreground/30', label: 'Neutral' },
   CAUTIOUS: { color: 'bg-yellow-600/20 text-yellow-500 border-yellow-600/30', label: 'Cautious' },
 };
 

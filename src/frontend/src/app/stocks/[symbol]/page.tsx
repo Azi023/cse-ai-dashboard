@@ -488,7 +488,7 @@ export default function StockDetailPage() {
                         ? 'border-green-600/30 text-green-500'
                         : analysis.technicalSignal === 'BEARISH'
                           ? 'border-red-600/30 text-red-500'
-                          : 'border-gray-600/30 text-gray-400'
+                          : 'border-muted-foreground/30 text-muted-foreground'
                     }
                   >
                     {analysis.technicalSignal}
@@ -500,7 +500,7 @@ export default function StockDetailPage() {
                         ? 'border-green-600/30 text-green-500'
                         : analysis.confidence === 'MEDIUM'
                           ? 'border-yellow-600/30 text-yellow-500'
-                          : 'border-gray-600/30 text-gray-400'
+                          : 'border-muted-foreground/30 text-muted-foreground'
                     }
                   >
                     Confidence: {analysis.confidence}

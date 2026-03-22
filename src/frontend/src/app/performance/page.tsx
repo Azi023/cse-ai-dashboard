@@ -178,7 +178,7 @@ export default function PerformancePage() {
                           ? 'border-green-600 text-green-500'
                           : conf === 'MEDIUM'
                             ? 'border-yellow-600 text-yellow-500'
-                            : 'border-gray-600 text-gray-400',
+                            : 'border-muted-foreground/40 text-muted-foreground',
                       )}
                     >
                       {conf}
@@ -269,7 +269,7 @@ export default function PerformancePage() {
                                 ? 'text-green-500'
                                 : signal.confidence === 'MEDIUM'
                                   ? 'text-yellow-500'
-                                  : 'text-gray-400',
+                                  : 'text-muted-foreground',
                             )}
                           >
                             {signal.confidence}

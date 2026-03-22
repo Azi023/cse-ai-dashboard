@@ -11,7 +11,7 @@ import { useDisplayMode } from '@/contexts/display-mode-context';
 const impactColors: Record<string, string> = {
   HIGH: 'bg-red-500/20 text-red-400 border-red-500/30',
   MEDIUM: 'bg-yellow-500/20 text-yellow-400 border-yellow-500/30',
-  LOW: 'bg-gray-500/20 text-gray-400 border-gray-500/30',
+  LOW: 'bg-muted text-muted-foreground border-muted-foreground/30',
   NEUTRAL: 'bg-blue-500/20 text-blue-400 border-blue-500/30',
 };
 
