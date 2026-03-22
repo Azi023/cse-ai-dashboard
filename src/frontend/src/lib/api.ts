@@ -370,6 +370,20 @@ export const financialsApi = {
       { headers: { 'Content-Type': 'multipart/form-data' } },
     );
   },
+  scrapeCse: () =>
+    api.post<{
+      total: number;
+      success: number;
+      partial: number;
+      failed: number;
+      tier2TriggerStatus: string;
+      results: Array<{
+        symbol: string;
+        status: 'success' | 'partial' | 'failed';
+        dbStatus?: string;
+        message?: string;
+      }>;
+    }>('/financials/scrape-cse', {}),
 };
 
 // Macro / CBSL Indicators Types

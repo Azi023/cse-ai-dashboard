@@ -13,10 +13,14 @@ import {
 import { FileInterceptor } from '@nestjs/platform-express';
 import type { Response } from 'express';
 import { CompanyFinancialsService } from './company-financials.service';
+import { CseFundamentalsScraperService } from './cse-fundamentals-scraper.service';
 
 @Controller('financials')
 export class CompanyFinancialsController {
-  constructor(private readonly financialsService: CompanyFinancialsService) {}
+  constructor(
+    private readonly financialsService: CompanyFinancialsService,
+    private readonly scraperService: CseFundamentalsScraperService,
+  ) {}
 
   /** POST /api/financials — Create a new financial record. */
   @Post()
@@ -79,6 +83,18 @@ export class CompanyFinancialsController {
   @Post('fetch-cse')
   async fetchFromCse() {
     return this.financialsService.fetchFromCse();
+  }
+
+  /**
+   * POST /api/financials/scrape-cse — Playwright scraper for CSE company profiles.
+   * Navigates to cse.lk/company-profile for each symbol, opens Financials →
+   * Fundamental Data, waits for the TradingView widget, extracts all metrics,
+   * saves screenshots + JSON to data/cse-fundamentals/, upserts into DB,
+   * and then triggers POST /api/shariah/run-tier2-screening.
+   */
+  @Post('scrape-cse')
+  async scrapeCse() {
+    return this.scraperService.scrapeAll();
   }
 
   /** POST /api/financials/import-csv — Bulk import from CSV file. */

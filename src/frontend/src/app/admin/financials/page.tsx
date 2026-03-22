@@ -157,6 +157,17 @@ export default function AdminFinancialsPage() {
   const [cseFetchResult, setCseFetchResult] = useState<{ total: number; fetched: number; failed: number } | null>(null);
   const [cseFetchError, setCseFetchError] = useState<string | null>(null);
 
+  // CSE Playwright Scraper
+  const [scrapingCse, setScrapingCse] = useState(false);
+  const [cseScrapeResult, setCseScrapeResult] = useState<{
+    total: number;
+    success: number;
+    partial: number;
+    failed: number;
+    tier2TriggerStatus: string;
+  } | null>(null);
+  const [cseScrapeError, setCseScrapeError] = useState<string | null>(null);
+
   // CSV Import
   const [csvFile, setCsvFile] = useState<File | null>(null);
   const [importingCsv, setImportingCsv] = useState(false);
@@ -326,6 +337,24 @@ export default function AdminFinancialsPage() {
     }
   };
 
+  const handleScrapeCse = async () => {
+    setScrapingCse(true);
+    setCseScrapeResult(null);
+    setCseScrapeError(null);
+    try {
+      const res = await financialsApi.scrapeCse();
+      setCseScrapeResult(res.data);
+      financialsApi.getCoverage().then((r) => setCoverage(r.data)).catch(() => {});
+    } catch (err: unknown) {
+      const msg = err && typeof err === 'object' && 'response' in err
+        ? (err as { response?: { data?: { message?: string } } }).response?.data?.message ?? 'Scrape failed'
+        : 'Scrape failed';
+      setCseScrapeError(typeof msg === 'string' ? msg : JSON.stringify(msg));
+    } finally {
+      setScrapingCse(false);
+    }
+  };
+
   const handleCsvImport = async () => {
     if (!csvFile) return;
     setImportingCsv(true);
@@ -468,6 +497,59 @@ export default function AdminFinancialsPage() {
             <div className="mt-3 flex items-center gap-2 rounded-lg border border-destructive/30 bg-destructive/5 px-4 py-3 text-sm text-destructive">
               <AlertCircle className="h-4 w-4 shrink-0" />
               {cseFetchError}
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* Section B: CSE Website Playwright Scraper */}
+      <Card>
+        <CardHeader>
+          <div className="flex items-center justify-between">
+            <CardTitle className="text-base flex items-center gap-2">
+              <Database className="h-4 w-4" />
+              Scrape CSE Fundamentals
+            </CardTitle>
+            <Button
+              onClick={handleScrapeCse}
+              disabled={scrapingCse}
+              size="sm"
+              className="gap-1.5"
+            >
+              {scrapingCse ? (
+                <RefreshCw className="h-4 w-4 animate-spin" />
+              ) : (
+                <RefreshCw className="h-4 w-4" />
+              )}
+              {scrapingCse ? 'Scraping... (may take several minutes)' : 'Scrape CSE Fundamentals'}
+            </Button>
+          </div>
+        </CardHeader>
+        <CardContent>
+          <p className="text-sm text-muted-foreground mb-3">
+            Launches a headless browser to visit each company&apos;s CSE profile page, opens the{' '}
+            <strong>Financials → Fundamental Data</strong> tab, and extracts all TradingView widget
+            metrics (valuation, income, balance sheet, cash flow, profitability, dividends) for the{' '}
+            <strong>11 Almas whitelist stocks</strong> + <strong>top 20 most-traded</strong> stocks.
+            Screenshots and JSON are saved to <code className="text-xs bg-muted px-1 rounded">data/cse-fundamentals/</code>,
+            records are upserted into the DB, and Tier 2 Shariah screening is triggered automatically.
+          </p>
+          {cseScrapeResult && (
+            <div className="mt-3 space-y-2">
+              <div className="flex items-center gap-2 rounded-lg border border-green-500/30 bg-green-500/5 px-4 py-3 text-sm text-green-500">
+                <CheckCircle2 className="h-4 w-4 shrink-0" />
+                <span>
+                  Scraped {cseScrapeResult.total} stocks — {cseScrapeResult.success} success,{' '}
+                  {cseScrapeResult.partial} partial, {cseScrapeResult.failed} failed.{' '}
+                  Tier 2 screening: {cseScrapeResult.tier2TriggerStatus}
+                </span>
+              </div>
+            </div>
+          )}
+          {cseScrapeError && (
+            <div className="mt-3 flex items-center gap-2 rounded-lg border border-destructive/30 bg-destructive/5 px-4 py-3 text-sm text-destructive">
+              <AlertCircle className="h-4 w-4 shrink-0" />
+              {cseScrapeError}
             </div>
           )}
         </CardContent>
