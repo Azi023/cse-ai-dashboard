@@ -5,6 +5,7 @@ import {
   Put,
   Param,
   Body,
+  Query,
   ParseIntPipe,
   Res,
   UseInterceptors,
@@ -93,8 +94,8 @@ export class CompanyFinancialsController {
    * and then triggers POST /api/shariah/run-tier2-screening.
    */
   @Post('scrape-cse')
-  async scrapeCse() {
-    return this.scraperService.scrapeAll();
+  async scrapeCse(@Query('symbol') symbol?: string) {
+    return this.scraperService.scrapeAll(symbol);
   }
 
   /** POST /api/financials/import-csv — Bulk import from CSV file. */

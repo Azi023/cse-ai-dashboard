@@ -10,10 +10,13 @@ import { CompanyFinancial, Stock } from '../../entities';
 // ── Constants ────────────────────────────────────────────────────────────────
 
 const CSE_BASE_URL = 'https://www.cse.lk';
-const FUNDAMENTALS_DIR = path.resolve(process.cwd(), '../../data/cse-fundamentals');
+const FUNDAMENTALS_DIR = path.resolve(
+  process.cwd(),
+  '../../data/cse-fundamentals',
+);
 const DELAY_BETWEEN_STOCKS_MS = 2000;
-const WIDGET_WAIT_MS = 5000;
-const PAGE_TIMEOUT_MS = 30_000;
+const WIDGET_WAIT_MS = 8000;
+const PAGE_TIMEOUT_MS = 45_000;
 
 // ── Interfaces ───────────────────────────────────────────────────────────────
 
@@ -97,8 +100,10 @@ export class CseFundamentalsScraperService {
     private readonly stockRepo: Repository<Stock>,
   ) {}
 
-  async scrapeAll(): Promise<ScrapeAllResult> {
-    const symbols = await this.buildTargetList();
+  async scrapeAll(singleSymbol?: string): Promise<ScrapeAllResult> {
+    const symbols = singleSymbol
+      ? [singleSymbol]
+      : await this.buildTargetList();
     this.logger.log(
       `CSE fundamentals scrape starting — ${symbols.length} symbols`,
     );
@@ -136,10 +141,7 @@ export class CseFundamentalsScraperService {
         results.push(result);
 
         if (result.data) {
-          result.dbStatus = await this.upsertFundamentals(
-            symbol,
-            result.data,
-          );
+          result.dbStatus = await this.upsertFundamentals(symbol, result.data);
         }
 
         await page.close();
@@ -173,7 +175,14 @@ export class CseFundamentalsScraperService {
       `Scrape complete — success: ${success}, partial: ${partial}, failed: ${failed}`,
     );
 
-    return { total: symbols.length, success, partial, failed, tier2TriggerStatus, results };
+    return {
+      total: symbols.length,
+      success,
+      partial,
+      failed,
+      tier2TriggerStatus,
+      results,
+    };
   }
 
   // ── Build target symbol list ──────────────────────────────────────────────
@@ -226,7 +235,10 @@ export class CseFundamentalsScraperService {
 
     try {
       const url = `${CSE_BASE_URL}/company-profile?symbol=${encodeURIComponent(symbol)}`;
-      await page.goto(url, { waitUntil: 'domcontentloaded', timeout: PAGE_TIMEOUT_MS });
+      await page.goto(url, {
+        waitUntil: 'domcontentloaded',
+        timeout: PAGE_TIMEOUT_MS,
+      });
       await page.waitForTimeout(2000);
 
       // Extract header data (market cap, day range) from the main page before tab navigation
@@ -252,12 +264,49 @@ export class CseFundamentalsScraperService {
         this.logger.warn(`${symbol}: Could not find Fundamental Data sub-tab`);
       }
 
-      // Wait for TradingView widget to fully load
-      await page.waitForTimeout(WIDGET_WAIT_MS);
+      // Scroll down so the TradingView widget (below fold) enters the viewport
+      await page.evaluate(() => window.scrollTo(0, document.body.scrollHeight));
+      await page.waitForTimeout(1000);
 
-      // Screenshot before extraction
+      // Wait for TradingView widget to load — try known content selectors first
+      await Promise.race([
+        page
+          .waitForSelector('text=P/E ratio', { timeout: 12000 })
+          .catch(() => null),
+        page
+          .waitForSelector('text=Total revenue', { timeout: 12000 })
+          .catch(() => null),
+        page
+          .waitForSelector('text=Net income', { timeout: 12000 })
+          .catch(() => null),
+        page.waitForTimeout(WIDGET_WAIT_MS),
+      ]);
+
+      // Log all frames so we can diagnose iframe structure
+      const frames = page.frames();
+      this.logger.log(`${symbol}: ${frames.length} frames on page`);
+      for (const f of frames) {
+        const fUrl = f.url();
+        if (fUrl && fUrl !== 'about:blank') {
+          this.logger.log(`  Frame: ${fUrl.slice(0, 120)}`);
+        }
+      }
+
+      // Log last 2000 chars of page body to diagnose widget content
       try {
-        await page.screenshot({ path: screenshotPath, fullPage: false });
+        const pageText = await page.textContent('body');
+        if (pageText) {
+          this.logger.log(
+            `${symbol}: Page text (last 2000 chars): ${pageText.slice(-2000).replace(/\s+/g, ' ')}`,
+          );
+        }
+      } catch {
+        /* non-critical */
+      }
+
+      // Full-page screenshot after scrolling and waiting
+      try {
+        await page.screenshot({ path: screenshotPath, fullPage: true });
       } catch {
         /* non-critical */
       }
@@ -378,10 +427,13 @@ export class CseFundamentalsScraperService {
 
   private async triggerTier2Screening(): Promise<string> {
     try {
-      const resp = await fetch('http://localhost:3001/api/shariah/run-tier2-screening', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-      });
+      const resp = await fetch(
+        'http://localhost:3001/api/shariah/run-tier2-screening',
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+        },
+      );
       if (resp.ok) {
         const body = (await resp.json()) as Record<string, unknown>;
         const screened = body['screened'] ?? body['processed'] ?? '?';
@@ -442,10 +494,7 @@ function delay(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
-async function clickTabByText(
-  page: Page,
-  labels: string[],
-): Promise<boolean> {
+async function clickTabByText(page: Page, labels: string[]): Promise<boolean> {
   for (const label of labels) {
     const selectors = [
       `a:has-text("${label}")`,
@@ -560,7 +609,11 @@ async function extractTradingViewData(
           const f = await iframeEl.contentFrame();
           if (f) {
             const content = await f.content();
-            if (/earnings|revenue|balance\s*sheet|cash\s*flow|market\s*cap/i.test(content)) {
+            if (
+              /earnings|revenue|balance\s*sheet|cash\s*flow|market\s*cap/i.test(
+                content,
+              )
+            ) {
               frame = f;
             }
           }
@@ -571,7 +624,9 @@ async function extractTradingViewData(
 
       if (!frame) continue;
 
-      logger.log(`Extracting from iframe (src: ${src.slice(0, 60) || 'inline'})`);
+      logger.log(
+        `Extracting from iframe (src: ${src.slice(0, 60) || 'inline'})`,
+      );
       const extracted = await extractFromFrame(frame);
       Object.assign(data, extracted);
 
@@ -721,38 +776,46 @@ function mapRawToFundamentals(
   };
 
   return {
-    market_cap:       pick('market cap', 'mktcap'),
+    market_cap: pick('market cap', 'mktcap'),
     enterprise_value: pick('enterprise value'),
-    pe_ratio:         pick('p/e', 'pe ratio', 'price/earning', 'pe ttm'),
-    ps_ratio:         pick('p/s', 'ps ratio', 'price/sale'),
-    pb_ratio:         pick('p/b', 'pb ratio', 'price/book'),
-    total_revenue:    pick('total revenue', 'revenue ttm', 'net revenue'),
-    revenue_per_share:pick('revenue per share'),
-    gross_profit:     pick('gross profit'),
+    pe_ratio: pick('p/e', 'pe ratio', 'price/earning', 'pe ttm'),
+    ps_ratio: pick('p/s', 'ps ratio', 'price/sale'),
+    pb_ratio: pick('p/b', 'pb ratio', 'price/book'),
+    total_revenue: pick('total revenue', 'revenue ttm', 'net revenue'),
+    revenue_per_share: pick('revenue per share'),
+    gross_profit: pick('gross profit'),
     operating_income: pick('operating income', 'ebit'),
-    net_income:       pick('net income', 'net profit', 'net earnings'),
-    eps_diluted:      pick('eps diluted', 'diluted eps', 'earnings per share'),
-    total_assets:     pick('total assets'),
-    total_liabilities:pick('total liabilities'),
-    total_equity:     pick('total equity', 'shareholders equity', "stockholders' equity"),
-    total_debt:       pick('total debt', 'long-term debt'),
-    operating_cf:     pick('operating cash', 'cash from operations', 'operating cf'),
-    investing_cf:     pick('investing cash', 'investing cf'),
-    financing_cf:     pick('financing cash', 'financing cf'),
-    free_cf:          pick('free cash', 'fcf'),
-    capex:            pick('capex', 'capital expenditure', 'capital expenditures'),
-    gross_margin:     pick('gross margin'),
+    net_income: pick('net income', 'net profit', 'net earnings'),
+    eps_diluted: pick('eps diluted', 'diluted eps', 'earnings per share'),
+    total_assets: pick('total assets'),
+    total_liabilities: pick('total liabilities'),
+    total_equity: pick(
+      'total equity',
+      'shareholders equity',
+      "stockholders' equity",
+    ),
+    total_debt: pick('total debt', 'long-term debt'),
+    operating_cf: pick(
+      'operating cash',
+      'cash from operations',
+      'operating cf',
+    ),
+    investing_cf: pick('investing cash', 'investing cf'),
+    financing_cf: pick('financing cash', 'financing cf'),
+    free_cf: pick('free cash', 'fcf'),
+    capex: pick('capex', 'capital expenditure', 'capital expenditures'),
+    gross_margin: pick('gross margin'),
     operating_margin: pick('operating margin', 'ebit margin'),
-    pretax_margin:    pick('pretax margin', 'pre-tax margin'),
-    net_margin:       pick('net margin', 'profit margin', 'net profit margin'),
-    roa:              pick('roa', 'return on assets'),
-    roe:              pick('roe', 'return on equity'),
-    roic:             pick('roic', 'return on invested capital'),
-    beta:             pick('beta', '1-year beta'),
-    week52_high:      pick('52w high', '52-week high', '52 week high'),
-    week52_low:       pick('52w low', '52-week low', '52 week low'),
-    avg_volume:       pick('average volume', 'avg volume'),
-    dividend_yield:   pick('dividend yield'),
+    pretax_margin: pick('pretax margin', 'pre-tax margin'),
+    net_margin: pick('net margin', 'profit margin', 'net profit margin'),
+    roa: pick('roa', 'return on assets'),
+    roe: pick('roe', 'return on equity'),
+    roic: pick('roic', 'return on invested capital'),
+    beta: pick('beta', '1-year beta'),
+    week52_high: pick('52w high', '52-week high', '52 week high'),
+    week52_low: pick('52w low', '52-week low', '52 week low'),
+    avg_volume: pick('average volume', 'avg volume'),
+    dividend_yield: pick('dividend yield'),
     dividends_per_share: pick('dividends per share', 'dps'),
   };
 }
