@@ -210,20 +210,21 @@ export class CseFundamentalsScraperService {
     page.setDefaultTimeout(PAGE_TIMEOUT_MS);
 
     try {
-      // Navigate to CSE homepage
+      // ── Step 1: CSE homepage ───────────────────────────────────────────────
       await page.goto(CSE_BASE_URL, {
         waitUntil: 'domcontentloaded',
         timeout: PAGE_TIMEOUT_MS,
       });
       await page.waitForTimeout(2000);
+      this.logger.log(`Login step 1 — CSE homepage loaded: ${page.url()}`);
 
-      // Click the MYCSE button (green button top right)
+      // ── Step 2: Click MYCSE button ─────────────────────────────────────────
       const mycseSelectors = [
         'a:has-text("MYCSE")',
         'button:has-text("MYCSE")',
         '[class*="mycse"]',
         'a[href*="mycse"]',
-        'a[href*="login"]',
+        'a[href*="identity.cse"]',
       ];
 
       let clicked = false;
@@ -233,6 +234,7 @@ export class CseFundamentalsScraperService {
           if (el && (await el.isVisible())) {
             await el.click();
             clicked = true;
+            this.logger.log(`Clicked MYCSE button via selector: ${sel}`);
             break;
           }
         } catch {
@@ -245,26 +247,27 @@ export class CseFundamentalsScraperService {
         return false;
       }
 
-      // Wait for login form to appear (modal or redirect)
+      // Wait for identity.cse.lk OAuth page
       await page.waitForTimeout(3000);
+      this.logger.log(`Login step 2 — after MYCSE click: ${page.url()}`);
 
-      // Find email/username field
-      const emailSelectors = [
-        'input[type="email"]',
-        'input[name="email"]',
-        'input[name="username"]',
-        'input[id*="email"]',
-        'input[id*="user"]',
-        'input[placeholder*="email" i]',
-        'input[placeholder*="username" i]',
+      // ── Step 3: Click "Continue with CSE" ─────────────────────────────────
+      // Page shows 3 options: Apple, Google, CSE — click the CSE one
+      const cseLoginSelectors = [
+        'button:has-text("Continue with CSE")',
+        'a:has-text("Continue with CSE")',
+        '[class*="cse"]:has-text("Continue")',
+        'button:has-text("CSE")',
       ];
 
-      let emailField = null;
-      for (const sel of emailSelectors) {
+      let cseClicked = false;
+      for (const sel of cseLoginSelectors) {
         try {
           const el = await page.$(sel);
           if (el && (await el.isVisible())) {
-            emailField = el;
+            await el.click();
+            cseClicked = true;
+            this.logger.log(`Clicked "Continue with CSE" via: ${sel}`);
             break;
           }
         } catch {
@@ -272,40 +275,104 @@ export class CseFundamentalsScraperService {
         }
       }
 
-      if (!emailField) {
+      // Fallback: click the third button on the page (after Apple and Google)
+      if (!cseClicked) {
+        try {
+          const buttons = await page.$$('button');
+          this.logger.log(
+            `Fallback: found ${buttons.length} buttons on OAuth page`,
+          );
+          for (const btn of buttons) {
+            const text = (await btn.textContent()) ?? '';
+            this.logger.log(`  Button text: "${text.trim()}"`);
+          }
+          // Find the button with "CSE" anywhere in its text
+          for (const btn of buttons) {
+            const text = ((await btn.textContent()) ?? '').toLowerCase();
+            if (text.includes('cse') && (await btn.isVisible())) {
+              await btn.click();
+              cseClicked = true;
+              this.logger.log(`Clicked CSE button via text search: "${text}"`);
+              break;
+            }
+          }
+        } catch (err) {
+          this.logger.warn(`Button search failed: ${String(err)}`);
+        }
+      }
+
+      if (!cseClicked) {
         this.logger.warn(
-          'Could not find email/username field — login form not found',
+          'Could not find "Continue with CSE" button — skipping login',
         );
         return false;
       }
 
-      await emailField.fill(username);
+      // Wait for idpconnect.cse.lk login form
+      await page.waitForTimeout(3000);
+      this.logger.log(`Login step 3 — after CSE option click: ${page.url()}`);
 
-      // Find password field
+      // ── Step 4: Fill Username + Password ──────────────────────────────────
+      const usernameSelectors = [
+        'input[name="username"]',
+        'input[name="Username"]',
+        'input[id="username"]',
+        'input[id="Username"]',
+        'input[type="text"]',
+        'input[type="email"]',
+        'input[placeholder*="username" i]',
+        'input[placeholder*="email" i]',
+      ];
+
+      let usernameField = null;
+      for (const sel of usernameSelectors) {
+        try {
+          const el = await page.$(sel);
+          if (el && (await el.isVisible())) {
+            usernameField = el;
+            this.logger.log(`Found username field via: ${sel}`);
+            break;
+          }
+        } catch {
+          /* try next */
+        }
+      }
+
+      if (!usernameField) {
+        // Log page content to help diagnose the form structure
+        const bodyText = (await page.textContent('body').catch(() => '')) ?? '';
+        this.logger.warn(
+          `Could not find username field on idpconnect. Page text (500 chars): ${bodyText.slice(0, 500)}`,
+        );
+        return false;
+      }
+
+      await usernameField.fill(username);
+
       const passField = await page.$('input[type="password"]');
       if (!passField || !(await passField.isVisible())) {
-        this.logger.warn('Could not find password field');
+        this.logger.warn('Could not find password field on idpconnect form');
         return false;
       }
       await passField.fill(password);
 
-      // Submit
-      const submitSelectors = [
+      // ── Step 5: Click "Sign In" ────────────────────────────────────────────
+      const signInSelectors = [
+        'button:has-text("Sign In")',
+        'button:has-text("Sign in")',
+        'input[type="submit"][value*="Sign" i]',
         'button[type="submit"]',
         'input[type="submit"]',
-        'button:has-text("Login")',
-        'button:has-text("Sign In")',
-        'button:has-text("Log In")',
-        'button:has-text("Submit")',
       ];
 
       let submitted = false;
-      for (const sel of submitSelectors) {
+      for (const sel of signInSelectors) {
         try {
           const el = await page.$(sel);
           if (el && (await el.isVisible())) {
             await el.click();
             submitted = true;
+            this.logger.log(`Clicked Sign In via: ${sel}`);
             break;
           }
         } catch {
@@ -314,32 +381,40 @@ export class CseFundamentalsScraperService {
       }
 
       if (!submitted) {
-        this.logger.warn('Could not find submit button on login form');
+        this.logger.warn('Could not find Sign In button on idpconnect form');
         return false;
       }
 
-      // Wait for post-login redirect / page load
+      // ── Step 6: Wait for redirect back to cse.lk ──────────────────────────
       await page.waitForTimeout(5000);
 
-      const currentUrl = page.url();
+      const finalUrl = page.url();
       const bodyText = (await page.textContent('body').catch(() => '')) ?? '';
+      this.logger.log(`Login step 5 — final URL: ${finalUrl}`);
 
       const loginSucceeded =
+        finalUrl.includes('cse.lk') &&
+        !finalUrl.toLowerCase().includes('login') &&
+        !finalUrl.toLowerCase().includes('idpconnect') &&
+        !finalUrl.toLowerCase().includes('identity.cse');
+
+      // Also accept if page has logout/signout indicators
+      const hasLogoutIndicator =
         bodyText.toLowerCase().includes('logout') ||
         bodyText.toLowerCase().includes('sign out') ||
-        bodyText.includes(username) ||
-        (!currentUrl.toLowerCase().includes('login') &&
-          !currentUrl.toLowerCase().includes('signin'));
+        bodyText.toLowerCase().includes('my account');
 
-      if (loginSucceeded) {
-        this.logger.log(`MYCSE login successful — URL: ${currentUrl}`);
-      } else {
-        this.logger.warn(
-          `MYCSE login may have failed — URL: ${currentUrl}. Will proceed without login (partial data only).`,
+      if (loginSucceeded || hasLogoutIndicator) {
+        this.logger.log(
+          `MYCSE login successful — URL: ${finalUrl}, logoutIndicator: ${hasLogoutIndicator}`,
         );
+        return true;
       }
 
-      return loginSucceeded;
+      this.logger.warn(
+        `MYCSE login may have failed — URL: ${finalUrl}. Will proceed without session (partial data only).`,
+      );
+      return false;
     } catch (err) {
       this.logger.warn(`MYCSE login error: ${String(err)}`);
       return false;
