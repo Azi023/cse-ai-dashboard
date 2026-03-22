@@ -53,9 +53,10 @@ export class GlobalDataService {
 
   /**
    * Fetch data from all global sources and store in DB.
-   * Runs daily at 8:00 AM SLT (2:30 AM UTC) before market open.
+   * Runs weekdays at 8:00 AM SLT (2:30 AM UTC) and 6:00 PM SLT (12:30 PM UTC).
+   * Comma-separated hours: 2 and 12 UTC.
    */
-  @Cron('0 30 2 * * 1-5', { name: 'global-data-fetch' })
+  @Cron('0 30 2,12 * * 1-5', { name: 'global-data-fetch' })
   async fetchAllGlobalData(): Promise<{ message: string; errors: string[] }> {
     this.logger.log('Fetching global market data...');
     const errors: string[] = [];
@@ -105,7 +106,12 @@ export class GlobalDataService {
     }
 
     const today = new Date().toISOString().split('T')[0];
-    await this.upsertGlobalData(GLOBAL_INDICATORS.USD_LKR, today, rate, 'er-api.com');
+    await this.upsertGlobalData(
+      GLOBAL_INDICATORS.USD_LKR,
+      today,
+      rate,
+      'er-api.com',
+    );
     this.logger.log(`USD/LKR: ${rate}`);
   }
 
@@ -114,30 +120,43 @@ export class GlobalDataService {
   private async fetchYahooChart(
     symbol: string,
   ): Promise<{ price: number; prevClose: number } | null> {
-    try {
-      const url = `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(symbol)}?interval=1d&range=5d`;
-      const response = await firstValueFrom(
-        this.httpService.get(url, {
-          timeout: 15000,
-          headers: {
-            'User-Agent': 'Mozilla/5.0 (compatible; CSE-Dashboard/1.0)',
-          },
-        }),
-      );
+    const hosts = ['query1.finance.yahoo.com', 'query2.finance.yahoo.com'];
 
-      const result = response.data?.chart?.result?.[0];
-      if (!result) return null;
+    for (const host of hosts) {
+      try {
+        const url = `https://${host}/v8/finance/chart/${encodeURIComponent(symbol)}?interval=1d&range=5d`;
+        const response = await firstValueFrom(
+          this.httpService.get(url, {
+            timeout: 15000,
+            headers: {
+              'User-Agent':
+                'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
+              Accept: 'application/json',
+            },
+          }),
+        );
 
-      const meta = result.meta;
-      const price = meta?.regularMarketPrice;
-      const prevClose = meta?.chartPreviousClose ?? meta?.previousClose ?? price;
+        const result = response.data?.chart?.result?.[0];
+        if (!result) continue;
 
-      if (typeof price !== 'number') return null;
-      return { price, prevClose: typeof prevClose === 'number' ? prevClose : price };
-    } catch (error) {
-      this.logger.warn(`Yahoo Finance fetch failed for ${symbol}: ${String(error)}`);
-      return null;
+        const meta = result.meta;
+        const price = meta?.regularMarketPrice;
+        const prevClose =
+          meta?.chartPreviousClose ?? meta?.previousClose ?? price;
+
+        if (typeof price !== 'number') continue;
+        return {
+          price,
+          prevClose: typeof prevClose === 'number' ? prevClose : price,
+        };
+      } catch (error) {
+        this.logger.warn(
+          `Yahoo Finance (${host}) failed for ${symbol}: ${String(error)}`,
+        );
+      }
     }
+
+    return null;
   }
 
   // ─── Oil (Brent Crude) ─────────────────────────────────────
@@ -147,7 +166,12 @@ export class GlobalDataService {
     if (!data) throw new Error('Could not fetch Brent Crude price');
 
     const today = new Date().toISOString().split('T')[0];
-    await this.upsertGlobalData(GLOBAL_INDICATORS.BRENT_CRUDE, today, data.price, 'yahoo');
+    await this.upsertGlobalData(
+      GLOBAL_INDICATORS.BRENT_CRUDE,
+      today,
+      data.price,
+      'yahoo',
+    );
     this.logger.log(`Brent Crude: $${data.price}`);
   }
 
@@ -158,7 +182,12 @@ export class GlobalDataService {
     if (!data) throw new Error('Could not fetch Gold price');
 
     const today = new Date().toISOString().split('T')[0];
-    await this.upsertGlobalData(GLOBAL_INDICATORS.GOLD_XAU, today, data.price, 'yahoo');
+    await this.upsertGlobalData(
+      GLOBAL_INDICATORS.GOLD_XAU,
+      today,
+      data.price,
+      'yahoo',
+    );
     this.logger.log(`Gold: $${data.price}`);
   }
 
@@ -169,7 +198,12 @@ export class GlobalDataService {
     if (!data) throw new Error('Could not fetch S&P 500');
 
     const today = new Date().toISOString().split('T')[0];
-    await this.upsertGlobalData(GLOBAL_INDICATORS.SP500, today, data.price, 'yahoo');
+    await this.upsertGlobalData(
+      GLOBAL_INDICATORS.SP500,
+      today,
+      data.price,
+      'yahoo',
+    );
     this.logger.log(`S&P 500: ${data.price}`);
   }
 
@@ -181,7 +215,8 @@ export class GlobalDataService {
    */
   async getGlobalIndicators(): Promise<GlobalIndicatorResult[]> {
     // Check Redis cache first
-    const cached = await this.redisService.getJson<GlobalIndicatorResult[]>(REDIS_KEY);
+    const cached =
+      await this.redisService.getJson<GlobalIndicatorResult[]>(REDIS_KEY);
     if (cached) return cached;
 
     const indicators = Object.values(GLOBAL_INDICATORS);
@@ -201,9 +236,14 @@ export class GlobalDataService {
       const latest = rows[0];
       const prev = rows.length > 1 ? rows[1] : null;
 
-      const value = typeof latest.value === 'string' ? parseFloat(latest.value) : Number(latest.value);
+      const value =
+        typeof latest.value === 'string'
+          ? parseFloat(latest.value)
+          : Number(latest.value);
       const prevValue = prev
-        ? typeof prev.value === 'string' ? parseFloat(prev.value) : Number(prev.value)
+        ? typeof prev.value === 'string'
+          ? parseFloat(prev.value)
+          : Number(prev.value)
         : value;
 
       const change = value - prevValue;
