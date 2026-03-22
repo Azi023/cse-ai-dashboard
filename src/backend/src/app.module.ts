@@ -29,10 +29,10 @@ import { DemoModule } from './demo/demo.module';
 
 @Module({
   imports: [
-    // Global configuration
+    // Global configuration — load project root .env first, then backend .env (overrides)
     ConfigModule.forRoot({
       isGlobal: true,
-      envFilePath: '.env',
+      envFilePath: ['../../.env', '.env'],
     }),
 
     // PostgreSQL via TypeORM

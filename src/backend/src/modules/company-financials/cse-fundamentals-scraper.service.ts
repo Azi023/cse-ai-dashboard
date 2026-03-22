@@ -209,114 +209,123 @@ export class CseFundamentalsScraperService {
     const page = await context.newPage();
     page.setDefaultTimeout(PAGE_TIMEOUT_MS);
 
-    // Helper: screenshot at each step for diagnostics
     const ss = async (name: string): Promise<void> => {
       try {
         await page.screenshot({
           path: path.join(FUNDAMENTALS_DIR, name),
           fullPage: false,
         });
-        this.logger.log(`[login] Screenshot: ${name} — URL: ${page.url()}`);
+        this.logger.log(
+          `[login] Screenshot saved: ${name} | URL: ${page.url()}`,
+        );
       } catch {
         /* non-critical */
       }
     };
 
+    const failStep = async (step: number, reason: string): Promise<false> => {
+      const url = page.url();
+      const title = await page.title().catch(() => '');
+      this.logger.error(
+        `[login] STEP ${step} FAILED: ${reason} | URL: ${url} | Title: ${title}`,
+      );
+      await ss(`login-step-${step}-FAILED.png`);
+      return false;
+    };
+
     try {
       // ── Step 1: Load CSE homepage ──────────────────────────────────────────
+      this.logger.log('LOGIN STEP 1: Navigate to CSE homepage');
       await page.goto(CSE_BASE_URL, {
-        waitUntil: 'domcontentloaded',
+        waitUntil: 'load',
         timeout: PAGE_TIMEOUT_MS,
       });
-      await page.waitForTimeout(2000);
+      await page.waitForTimeout(3000); // Wait for nav JS to render
       await ss('login-step-1-homepage.png');
 
-      // Dump every anchor's href+text so we can see what MYCSE link looks like
-      const allLinks = await page
-        .$$eval('a', (els) =>
-          els.map((el) => ({
-            href: el.getAttribute('href') ?? '',
-            text: (el.textContent ?? '').trim().slice(0, 60),
-          })),
-        )
-        .catch(() => [] as { href: string; text: string }[]);
-      const mycseLinks = allLinks.filter(
-        (l) =>
-          l.href.toLowerCase().includes('mycse') ||
-          l.href.toLowerCase().includes('identity.cse') ||
-          l.text.toLowerCase().includes('mycse'),
-      );
-      this.logger.log(
-        `[login] MYCSE-related links: ${JSON.stringify(mycseLinks)}`,
-      );
-
       // ── Step 2: Click MYCSE button ─────────────────────────────────────────
+      this.logger.log('LOGIN STEP 2: Locate and click MYCSE button');
+
       const mycseSelectors = [
         'a:has-text("MYCSE")',
         'button:has-text("MYCSE")',
         'a[href*="identity.cse"]',
         'a[href*="mycse"]',
         '[class*="mycse"]',
+        'a[href*="/login"]',
       ];
 
       let clicked = false;
       for (const sel of mycseSelectors) {
         try {
-          const el = await page.$(sel);
-          if (el && (await el.isVisible())) {
-            await el.click();
-            clicked = true;
-            this.logger.log(`[login] Clicked MYCSE via: ${sel}`);
-            break;
-          }
+          await page.waitForSelector(sel, { timeout: 3000, state: 'visible' });
+          await page.click(sel);
+          clicked = true;
+          this.logger.log(`[login] Clicked MYCSE via: ${sel}`);
+          break;
         } catch {
           /* try next */
         }
       }
 
       if (!clicked) {
-        this.logger.warn('[login] MYCSE button not found — skipping login');
-        await ss('login-step-2-mycse-not-found.png');
-        return false;
+        // Dump all links/buttons for diagnostics
+        const allLinks = await page
+          .$$eval('a, button', (els) =>
+            els.map((el) => ({
+              href: (el as HTMLAnchorElement).getAttribute('href') ?? '',
+              text: (el.textContent ?? '').trim().slice(0, 60),
+              cls: (el.className ?? '').slice(0, 40),
+            })),
+          )
+          .catch(() => []);
+        this.logger.error(
+          `[login] All links on homepage: ${JSON.stringify(allLinks)}`,
+        );
+        return await failStep(2, 'MYCSE button not found on homepage');
       }
 
-      // Wait for identity.cse.lk OAuth page
+      // Wait for cse.lk/my-cse to fully load before taking screenshot
       try {
-        await page.waitForURL('**identity.cse.lk**', { timeout: 15000 });
+        await page.waitForURL('**/my-cse**', { timeout: 15000 });
       } catch {
-        await page.waitForTimeout(4000);
+        await page.waitForTimeout(3000);
       }
-      await ss('login-step-2-identity.png');
+      // Wait for the LOGIN button to be visible (translations may load async)
+      for (const sel of [
+        'button:has-text("LOGIN")',
+        'a:has-text("LOGIN")',
+        'button:has-text("Login")',
+        'a:has-text("Login")',
+      ]) {
+        try {
+          await page.waitForSelector(sel, { timeout: 5000, state: 'visible' });
+          break;
+        } catch {
+          /* try next */
+        }
+      }
+      await ss('login-step-2-mycse-click.png');
       this.logger.log(`[login] Step 2 URL: ${page.url()}`);
 
-      // ── Step 3: Click "Continue with CSE" ─────────────────────────────────
-      // Dump all button/link texts to diagnose what options are available
-      const allButtonTexts = await page
-        .$$eval('button, a', (els) =>
-          els
-            .map((el) => (el.textContent ?? '').trim())
-            .filter((t) => t.length > 0),
-        )
-        .catch(() => [] as string[]);
-      this.logger.log(
-        `[login] Buttons on identity page: ${JSON.stringify(allButtonTexts)}`,
-      );
+      // ── Step 3: Click the "LOGIN" button on cse.lk/my-cse ─────────────────
+      // This triggers the OAuth flow to identity.cse.lk
+      this.logger.log('LOGIN STEP 3: Click LOGIN button on my-cse page');
 
-      const cseLoginSelectors = [
-        'button:has-text("Continue with CSE")',
-        'a:has-text("Continue with CSE")',
-        'button:has-text("CSE")',
-        'a:has-text("CSE")',
+      const loginBtnSelectors = [
+        'button:has-text("LOGIN")',
+        'a:has-text("LOGIN")',
+        'button:has-text("Login")',
+        'a:has-text("Login")',
       ];
-
-      let cseClicked = false;
-      for (const sel of cseLoginSelectors) {
+      let loginBtnClicked = false;
+      for (const sel of loginBtnSelectors) {
         try {
           const el = await page.$(sel);
           if (el && (await el.isVisible())) {
+            this.logger.log(`[login] Clicking LOGIN btn via: ${sel}`);
             await el.click();
-            cseClicked = true;
-            this.logger.log(`[login] Clicked "Continue with CSE" via: ${sel}`);
+            loginBtnClicked = true;
             break;
           }
         } catch {
@@ -324,62 +333,130 @@ export class CseFundamentalsScraperService {
         }
       }
 
-      // Fallback: iterate all visible buttons, pick the one with CSE (not Apple/Google)
-      if (!cseClicked) {
-        try {
-          const buttons = await page.$$(
-            'button, a[class*="btn"], [role="button"]',
-          );
-          for (const btn of buttons) {
+      await ss('login-step-3-identity.png');
+
+      if (!loginBtnClicked) {
+        const btns = await page
+          .$$eval('button, a', (els) =>
+            els.map((el) => (el.textContent ?? '').trim().slice(0, 60)),
+          )
+          .catch(() => []);
+        this.logger.error(
+          `[login] LOGIN button not found. Buttons: ${JSON.stringify(btns)}`,
+        );
+        return await failStep(
+          3,
+          'LOGIN button not found on cse.lk/my-cse page',
+        );
+      }
+
+      // After clicking LOGIN, wait for identity.cse.lk or idpconnect.cse.lk
+      let postLoginUrl = '';
+      try {
+        await page.waitForURL(
+          (url) =>
+            url.toString().includes('identity.cse.lk') ||
+            url.toString().includes('idpconnect.cse.lk'),
+          { timeout: 20000 },
+        );
+        postLoginUrl = page.url();
+      } catch {
+        await page.waitForTimeout(4000);
+        postLoginUrl = page.url();
+      }
+      this.logger.log(`[login] Step 3 post-click URL: ${postLoginUrl}`);
+
+      // ── Step 4: Handle identity.cse.lk if reached (provider selection) ────
+      if (postLoginUrl.includes('identity.cse.lk')) {
+        this.logger.log(
+          'LOGIN STEP 4: On identity.cse.lk — click "Continue with CSE"',
+        );
+
+        const identityBtns = await page
+          .$$eval('button, a', (els) =>
+            els
+              .map((el) => ({
+                text: (el.textContent ?? '').trim().slice(0, 80),
+                href: (el as HTMLAnchorElement).getAttribute('href') ?? '',
+              }))
+              .filter((e) => e.text.length > 0),
+          )
+          .catch(() => []);
+        this.logger.log(
+          `[login] identity.cse.lk buttons: ${JSON.stringify(identityBtns)}`,
+        );
+
+        const cseLoginSelectors = [
+          'button:has-text("Continue with CSE")',
+          'a:has-text("Continue with CSE")',
+          'button:has-text("Login with CSE")',
+          'a:has-text("Login with CSE")',
+          '[data-provider="cse"]',
+        ];
+        let cseClicked = false;
+        for (const sel of cseLoginSelectors) {
+          try {
+            const el = await page.$(sel);
+            if (el && (await el.isVisible())) {
+              await el.click();
+              cseClicked = true;
+              this.logger.log(`[login] Clicked Continue with CSE via: ${sel}`);
+              break;
+            }
+          } catch {
+            /* try next */
+          }
+        }
+        // Fallback: scan buttons that contain "cse" but not "apple"/"google"/"mycse"
+        if (!cseClicked) {
+          const allBtns = await page.$$('button, a, [role="button"]');
+          for (const btn of allBtns) {
             const text = ((await btn.textContent()) ?? '').toLowerCase().trim();
-            const isAppleOrGoogle =
-              text.includes('apple') || text.includes('google');
             if (
+              text.length > 0 &&
               text.includes('cse') &&
-              !isAppleOrGoogle &&
-              (await btn.isVisible())
+              !text.includes('apple') &&
+              !text.includes('google') &&
+              !text.includes('mycse') &&
+              (await btn.isVisible().catch(() => false))
             ) {
               await btn.click();
               cseClicked = true;
-              this.logger.log(
-                `[login] Clicked CSE button via fallback: "${text}"`,
-              );
+              this.logger.log(`[login] Clicked CSE via fallback: "${text}"`);
               break;
             }
           }
-        } catch (err) {
-          this.logger.warn(
-            `[login] Fallback button search failed: ${String(err)}`,
+        }
+        await ss('login-step-4-continue-cse.png');
+        if (!cseClicked) {
+          return await failStep(
+            4,
+            '"Continue with CSE" not found on identity.cse.lk',
           );
         }
+        // Wait for idpconnect.cse.lk
+        try {
+          await page.waitForURL('**idpconnect.cse.lk**', { timeout: 15000 });
+        } catch {
+          await page.waitForTimeout(4000);
+        }
+      } else {
+        // LOGIN went straight to idpconnect.cse.lk (skipping identity.cse.lk)
+        await ss('login-step-4-continue-cse.png');
       }
 
-      await ss('login-step-3-continue-cse.png');
+      // ── Step 5: At idpconnect.cse.lk ──────────────────────────────────────
+      this.logger.log('LOGIN STEP 5: Waiting for idpconnect.cse.lk login form');
+      await ss('login-step-5-idpconnect.png');
+      this.logger.log(`[login] Step 5 URL: ${page.url()}`);
 
-      if (!cseClicked) {
-        this.logger.warn(
-          '[login] "Continue with CSE" not found — skipping login',
-        );
-        return false;
-      }
+      // ── Step 6: Fill Username + Password ──────────────────────────────────
+      this.logger.log('LOGIN STEP 6: Fill username and password');
 
-      // Wait for idpconnect.cse.lk login form
-      try {
-        await page.waitForURL('**idpconnect.cse.lk**', { timeout: 15000 });
-      } catch {
-        await page.waitForTimeout(4000);
-      }
-      await ss('login-step-4-idpconnect.png');
-      this.logger.log(`[login] Step 4 URL: ${page.url()}`);
-
-      // ── Step 4: Fill Username + Password ──────────────────────────────────
-      // Wait for form inputs to appear
       await page
         .waitForSelector(
           'input[type="text"], input[type="email"], input[name="Username"]',
-          {
-            timeout: 10000,
-          },
+          { timeout: 10000 },
         )
         .catch(() => null);
 
@@ -391,7 +468,7 @@ export class CseFundamentalsScraperService {
         'input[placeholder*="username" i]',
         'input[placeholder*="email" i]',
         'input[type="email"]',
-        'input[type="text"]',
+        'input[type="text"]:not([type="password"])',
       ];
 
       let usernameField = null;
@@ -400,7 +477,7 @@ export class CseFundamentalsScraperService {
           const el = await page.$(sel);
           if (el && (await el.isVisible())) {
             usernameField = el;
-            this.logger.log(`[login] Username field via: ${sel}`);
+            this.logger.log(`[login] Username field found via: ${sel}`);
             break;
           }
         } catch {
@@ -410,29 +487,31 @@ export class CseFundamentalsScraperService {
 
       if (!usernameField) {
         const bodyText = (await page.textContent('body').catch(() => '')) ?? '';
-        this.logger.warn(
+        this.logger.error(
           `[login] No username field. Page text: ${bodyText.slice(0, 500)}`,
         );
-        await ss('login-step-4-no-form.png');
-        return false;
+        return await failStep(6, 'Username input not found on login form');
       }
 
       await usernameField.fill(username);
 
       const passField = await page.$('input[type="password"]');
       if (!passField || !(await passField.isVisible())) {
-        this.logger.warn('[login] No password field on idpconnect form');
-        return false;
+        return await failStep(6, 'Password input not found on login form');
       }
       await passField.fill(password);
+      await ss('login-step-6-creds-filled.png');
 
-      await ss('login-step-5-fill-creds.png');
+      // ── Step 7: Click "Sign In" + wait for redirect back to cse.lk ────────
+      this.logger.log(
+        'LOGIN STEP 7: Submit form and wait for redirect to cse.lk',
+      );
 
-      // ── Step 5: Click "Sign In" ────────────────────────────────────────────
       const signInSelectors = [
         'button:has-text("Sign In")',
         'button:has-text("Sign in")',
         'button:has-text("Login")',
+        'button:has-text("Log in")',
         'input[type="submit"]',
         'button[type="submit"]',
       ];
@@ -453,13 +532,18 @@ export class CseFundamentalsScraperService {
       }
 
       if (!submitted) {
-        this.logger.warn('[login] Sign In button not found');
-        return false;
+        return await failStep(7, 'Sign In button not found');
       }
 
-      // ── Step 6: Wait for redirect back to cse.lk ──────────────────────────
+      // Wait for redirect back to cse.lk (not idpconnect/identity)
       try {
-        await page.waitForURL('https://www.cse.lk/**', { timeout: 30000 });
+        await page.waitForURL(
+          (url) =>
+            url.toString().includes('cse.lk') &&
+            !url.toString().includes('idpconnect') &&
+            !url.toString().includes('identity.cse'),
+          { timeout: 30000 },
+        );
       } catch {
         try {
           await page.waitForURL('**cse.lk**', { timeout: 10000 });
@@ -468,24 +552,14 @@ export class CseFundamentalsScraperService {
         }
       }
 
-      await ss('login-step-6-post-signin.png');
+      await ss('login-step-7-post-signin.png');
 
       const finalUrl = page.url();
       const bodyText = (await page.textContent('body').catch(() => '')) ?? '';
-      this.logger.log(`[login] Step 6 final URL: ${finalUrl}`);
-
-      // Save the definitive login-result screenshot
-      try {
-        await page.screenshot({
-          path: path.join(FUNDAMENTALS_DIR, 'login-result.png'),
-        });
-      } catch {
-        /* non-critical */
-      }
+      this.logger.log(`[login] Step 7 final URL: ${finalUrl}`);
 
       const loginSucceeded =
         finalUrl.includes('cse.lk') &&
-        !finalUrl.toLowerCase().includes('/login') &&
         !finalUrl.toLowerCase().includes('idpconnect') &&
         !finalUrl.toLowerCase().includes('identity.cse');
 
@@ -502,11 +576,15 @@ export class CseFundamentalsScraperService {
       }
 
       this.logger.warn(
-        `[login] MYCSE login FAILED — URL: ${finalUrl}. Partial data only.`,
+        `[login] MYCSE login outcome uncertain — URL: ${finalUrl}. Body sample: ${bodyText.slice(0, 200)}`,
       );
       return false;
     } catch (err) {
-      this.logger.warn(`[login] MYCSE login error: ${String(err)}`);
+      const url = page.url();
+      const title = await page.title().catch(() => '');
+      this.logger.error(
+        `[login] Exception: ${String(err)} | URL: ${url} | Title: ${title}`,
+      );
       await ss('login-error.png');
       return false;
     } finally {
@@ -877,38 +955,49 @@ async function extractHeaderData(
         key: 'market cap',
         regex: /market\s*cap(?:itali[sz]ation)?[\s:LKR]+([0-9,. ]+(?:[BMK])?)/i,
       },
-      // Beta Against ASPI: "Beta Against ASPI 1.29"
+      // Total Market Cap (%): "Total Market Cap (%) 0.90%"
+      {
+        key: 'total market cap pct',
+        regex: /total\s+market\s+cap[^0-9]*([0-9,.]+)\s*%/i,
+      },
+      // Beta Values Against ASPI: "Beta Values Against Aspi1.29" (no separator in text)
       {
         key: 'beta against aspi',
-        regex: /beta\s+against\s+aspi[\s:]+([0-9.-]+)/i,
+        regex: /beta\s+(?:values?\s+)?against\s+aspi[\s:]*([0-9.-]+)/i,
       },
-      // Beta Against S&P SL20: "Beta Against S&P SL20 0.92"
+      // Beta Values Against S&P SL20: "Beta Values Against S&p Sl200.92" (no separator)
       {
         key: 'beta against sp20',
-        regex: /beta\s+against\s+s[&a]p\s*(?:sl\s*)?20[\s:]+([0-9.-]+)/i,
+        regex:
+          /beta\s+(?:values?\s+)?against\s+s[&a]p\s*(?:sl\s*)?20[\s:]*([0-9.-]+)/i,
       },
       // Generic beta fallback (first occurrence)
-      { key: 'beta', regex: /\bbeta[\s:]+([0-9.-]+)/i },
+      { key: 'beta', regex: /\bbeta[\s:]*([0-9.-]+)/i },
       // 52-week high/low
       {
         key: '52w high',
-        regex: /52[\s-]?(?:week|wk)\s*high[\s:LKR]+([0-9,.]+)/i,
+        regex: /52[\s-]?(?:week|wk)\s*high[\s:LKR]*([0-9,.]+)/i,
       },
       {
         key: '52w low',
-        regex: /52[\s-]?(?:week|wk)\s*low[\s:LKR]+([0-9,.]+)/i,
+        regex: /52[\s-]?(?:week|wk)\s*low[\s:LKR]*([0-9,.]+)/i,
       },
-      // Day's range: "Day's Price Range 69.00 - 72.00"
+      // Day's Price Range: "Day's Price Range67.20 - 64.00" (no separator in text)
       {
         key: "day's range",
-        regex: /day[''s]*\s*(?:price\s*)?range[\s:]+([0-9.,\s–-]+)/i,
+        regex: /day[''s]*\s*(?:price\s*)?range[\s:]*([0-9.,\s–-]+)/i,
       },
       // Turnover
       { key: 'turnover', regex: /turnover[\s:LKR]+([0-9,.]+(?:[BMK])?)/i },
-      // Share volume
+      // Share Volume: "Share Volume1,110,547.00" (no separator in text)
       {
         key: 'share volume',
-        regex: /(?:share|shares?)\s*volume[\s:]+([0-9,.]+)/i,
+        regex: /(?:share|shares?)\s*volume[\s:]*([0-9,.]+)/i,
+      },
+      // Trade Volume: "Trade Volume314.00" (no separator in text)
+      {
+        key: 'trade volume',
+        regex: /trade\s+volume[\s:]*([0-9,.]+)/i,
       },
     ];
 
