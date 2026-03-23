@@ -400,6 +400,26 @@ export class AiEngineService {
       signals = await this.mockGenerator.generateSignals();
     }
 
+    // Override shariahStatus with actual DB values for all signals (live or mock)
+    const symbolsToOverride = signals.map((s) => s.symbol);
+    if (symbolsToOverride.length > 0) {
+      try {
+        const dbStocks = await this.stockRepo.find({
+          where: { symbol: In(symbolsToOverride) },
+          select: ['symbol', 'shariah_status'],
+        });
+        const statusMap = new Map(
+          dbStocks.map((s) => [s.symbol, s.shariah_status]),
+        );
+        for (const signal of signals) {
+          const dbStatus = statusMap.get(signal.symbol);
+          if (dbStatus) signal.shariahStatus = dbStatus;
+        }
+      } catch (err) {
+        this.logger.warn(`Shariah status override failed: ${String(err)}`);
+      }
+    }
+
     // 4. Cache in Redis
     await this.redisService.setJson(CACHE_KEYS.SIGNALS, signals, TTL.SIGNALS);
     this.logger.log(`Signals cached for ${TTL.SIGNALS / 3600}h`);
@@ -571,7 +591,7 @@ export class AiEngineService {
 
       const response = await client.messages.create({
         model: 'claude-sonnet-4-6',
-        max_tokens: 1500,
+        max_tokens: 4096,
         system: SYSTEM_PROMPTS.signalGenerator,
         messages: [
           {
@@ -636,22 +656,6 @@ export class AiEngineService {
           'No valid signals parsed from Claude response, using mock',
         );
         return this.mockGenerator.generateSignals();
-      }
-
-      // Override shariahStatus with actual DB values — Claude's guess is unreliable
-      const symbolsToLookup = signals.map((s) => s.symbol);
-      if (symbolsToLookup.length > 0) {
-        const dbStocks = await this.stockRepo.find({
-          where: { symbol: In(symbolsToLookup) },
-          select: ['symbol', 'shariah_status'],
-        });
-        const statusMap = new Map(
-          dbStocks.map((s) => [s.symbol, s.shariah_status]),
-        );
-        for (const signal of signals) {
-          const dbStatus = statusMap.get(signal.symbol);
-          if (dbStatus) signal.shariahStatus = dbStatus;
-        }
       }
 
       this.logger.log(`Live signals generated: ${signals.length} signals`);

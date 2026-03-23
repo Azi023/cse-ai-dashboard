@@ -26,19 +26,25 @@ export class AnalysisController {
   /** GET /api/analysis/snapshots?days=30 */
   @Get('snapshots')
   async getSnapshots(@Query('days') days?: string) {
-    return this.analysisService.getMarketSnapshots(days ? parseInt(days, 10) : 30);
+    return this.analysisService.getMarketSnapshots(
+      days ? parseInt(days, 10) : 30,
+    );
   }
 
   /** GET /api/analysis/portfolio-snapshots?days=30 */
   @Get('portfolio-snapshots')
   async getPortfolioSnapshots(@Query('days') days?: string) {
-    return this.analysisService.getPortfolioSnapshots(days ? parseInt(days, 10) : 30);
+    return this.analysisService.getPortfolioSnapshots(
+      days ? parseInt(days, 10) : 30,
+    );
   }
 
   /** GET /api/analysis/scores?limit=20 */
   @Get('scores')
   async getScores(@Query('limit') limit?: string) {
-    return this.analysisService.getTodayScores(limit ? parseInt(limit, 10) : 20);
+    return this.analysisService.getTodayScores(
+      limit ? parseInt(limit, 10) : 20,
+    );
   }
 
   /** GET /api/analysis/recommendation */
@@ -53,6 +59,13 @@ export class AnalysisController {
     return this.analysisService.getDataStatus();
   }
 
+  /** POST /api/analysis/run-scoring — manual trigger for stock scoring */
+  @Post('run-scoring')
+  async runScoring() {
+    await this.analysisService.runStockScoring();
+    return { message: 'Stock scoring triggered' };
+  }
+
   // ---------------------------------------------------------------------------
   // Technical Analysis endpoints
   // IMPORTANT: fixed routes must come before :symbol param routes
@@ -61,7 +74,9 @@ export class AnalysisController {
   /** GET /api/analysis/technicals?limit=20 */
   @Get('technicals')
   async getTechnicals(@Query('limit') limit?: string) {
-    return this.technicalService.getLatestSignals(limit ? parseInt(limit, 10) : 20);
+    return this.technicalService.getLatestSignals(
+      limit ? parseInt(limit, 10) : 20,
+    );
   }
 
   /** POST /api/analysis/run-technicals — manual trigger for testing */

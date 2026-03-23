@@ -669,16 +669,33 @@ export class AnalysisService {
 
   async getTodayScores(limit = 20): Promise<StockScore[]> {
     const today = this.todayStr();
-    const rows = await this.stockScoreRepo.find({
-      where: { date: today },
-      order: { composite_score: 'DESC' },
-      take: limit,
-    });
+
+    // Only return Shariah-compliant stocks — JOIN with stocks table to filter.
+    const rows = await this.stockScoreRepo
+      .createQueryBuilder('ss')
+      .innerJoin(
+        'stocks',
+        's',
+        "s.symbol = ss.symbol AND s.shariah_status = 'compliant'",
+      )
+      .where('ss.date = :date', { date: today })
+      .orderBy('ss.composite_score', 'DESC')
+      .take(limit)
+      .getMany();
+
     if (rows.length === 0) {
-      return this.stockScoreRepo.find({
-        order: { date: 'DESC', composite_score: 'DESC' },
-        take: limit,
-      });
+      // Fallback: most recent scoring run, still compliant only
+      return this.stockScoreRepo
+        .createQueryBuilder('ss')
+        .innerJoin(
+          'stocks',
+          's',
+          "s.symbol = ss.symbol AND s.shariah_status = 'compliant'",
+        )
+        .orderBy('ss.date', 'DESC')
+        .addOrderBy('ss.composite_score', 'DESC')
+        .take(limit)
+        .getMany();
     }
     return rows;
   }
@@ -699,8 +716,14 @@ export class AnalysisService {
     last_snapshot_date: string | null;
     last_scoring_date: string | null;
   }> {
-    const [snapCount, portCount, lastSnap, lastScore] = await Promise.all([
-      this.marketSnapshotRepo.count(),
+    // Use distinct trade dates in daily_prices — this is what the scoring
+    // engine actually reads, not market_snapshots (which accumulate slowly).
+    const [dailyPriceDays, portCount, lastSnap, lastScore] = await Promise.all([
+      this.dailyPriceRepo
+        .createQueryBuilder('dp')
+        .select('COUNT(DISTINCT dp.trade_date)', 'cnt')
+        .getRawOne<{ cnt: string }>()
+        .then((r) => parseInt(r?.cnt ?? '0', 10)),
       this.portfolioSnapshotRepo.count(),
       this.marketSnapshotRepo
         .find({ order: { date: 'DESC' }, take: 1 })
@@ -710,12 +733,12 @@ export class AnalysisService {
         .then((r) => r[0] ?? null),
     ]);
 
-    const scoringReady = snapCount >= 20;
+    const scoringReady = dailyPriceDays >= 20;
     return {
-      market_snapshot_days: snapCount,
+      market_snapshot_days: dailyPriceDays,
       portfolio_snapshot_days: portCount,
       scoring_ready: scoringReady,
-      days_until_scoring_ready: Math.max(0, 20 - snapCount),
+      days_until_scoring_ready: Math.max(0, 20 - dailyPriceDays),
       last_snapshot_date: lastSnap ? String(lastSnap.date) : null,
       last_scoring_date: lastScore ? String(lastScore.date) : null,
     };
