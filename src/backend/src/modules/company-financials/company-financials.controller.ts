@@ -98,6 +98,16 @@ export class CompanyFinancialsController {
     return this.scraperService.scrapeAll(symbol);
   }
 
+  /**
+   * POST /api/financials/test-login — Isolated MYCSE login test with full logging.
+   * Launches a visible (headless: false) browser so the login flow can be watched.
+   * Takes screenshots at every step. Returns all logs + screenshot paths as JSON.
+   */
+  @Post('test-login')
+  async testLogin() {
+    return this.scraperService.testLoginFlow();
+  }
+
   /** POST /api/financials/import-csv — Bulk import from CSV file. */
   @Post('import-csv')
   @UseInterceptors(FileInterceptor('file'))

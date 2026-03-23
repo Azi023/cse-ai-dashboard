@@ -1,7 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
-import { chromium, Browser, BrowserContext, Page, Frame } from 'playwright';
+import { chromium, Browser, Page, Frame } from 'playwright';
 import * as fs from 'fs';
 import * as path from 'path';
 import { SHARIAH_WHITELIST } from '../shariah-screening/blacklist';
@@ -130,8 +130,11 @@ export class CseFundamentalsScraperService {
           'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
       });
 
-      // Login to MYCSE once — cookies persist across all pages in this context
-      const loggedIn = await this.loginToCse(context);
+      // Create ONE page for login + all scraping — keeps sessionStorage/cookies alive
+      const page = await context.newPage();
+      page.setDefaultTimeout(PAGE_TIMEOUT_MS);
+
+      const loggedIn = await this.loginToCse(page);
       this.logger.log(
         loggedIn
           ? 'Proceeding with MYCSE session — full fundamental data expected'
@@ -142,9 +145,6 @@ export class CseFundamentalsScraperService {
         const symbol = symbols[i];
         this.logger.log(`[${i + 1}/${symbols.length}] Scraping ${symbol}...`);
 
-        const page = await context.newPage();
-        page.setDefaultTimeout(PAGE_TIMEOUT_MS);
-
         const result = await this.scrapeSymbol(page, symbol);
         results.push(result);
 
@@ -152,13 +152,12 @@ export class CseFundamentalsScraperService {
           result.dbStatus = await this.upsertFundamentals(symbol, result.data);
         }
 
-        await page.close();
-
         if (i < symbols.length - 1) {
           await delay(DELAY_BETWEEN_STOCKS_MS);
         }
       }
 
+      await page.close();
       await context.close();
     } finally {
       if (browser) {
@@ -195,7 +194,7 @@ export class CseFundamentalsScraperService {
 
   // ── MYCSE login ───────────────────────────────────────────────────────────
 
-  private async loginToCse(context: BrowserContext): Promise<boolean> {
+  private async loginToCse(page: Page): Promise<boolean> {
     const username = process.env.CSE_USERNAME;
     const password = process.env.CSE_PASSWORD;
 
@@ -205,9 +204,6 @@ export class CseFundamentalsScraperService {
       );
       return false;
     }
-
-    const page = await context.newPage();
-    page.setDefaultTimeout(PAGE_TIMEOUT_MS);
 
     const ss = async (name: string): Promise<void> => {
       try {
@@ -647,6 +643,24 @@ export class CseFundamentalsScraperService {
         }
       }
 
+      // /callback is an SPA OAuth callback — it processes the auth code and redirects.
+      // Wait for it to navigate away so tokens are fully stored before we continue.
+      if (page.url().includes('/callback')) {
+        this.logger.log(
+          '[login] On /callback — waiting for SPA to process auth token and redirect',
+        );
+        try {
+          await page.waitForURL(
+            (url) => !url.toString().includes('/callback'),
+            { timeout: 15000 },
+          );
+        } catch {
+          // /callback may stay as the final URL on some flows — wait anyway
+          await page.waitForTimeout(5000);
+        }
+        this.logger.log(`[login] After /callback — URL: ${page.url()}`);
+      }
+
       await ss('login-step-7-post-signin.png');
 
       const finalUrl = page.url();
@@ -682,8 +696,536 @@ export class CseFundamentalsScraperService {
       );
       await ss('login-error.png');
       return false;
-    } finally {
+    }
+  }
+
+  // ── Isolated login test (visible browser, max logging) ───────────────────
+
+  async testLoginFlow(): Promise<Record<string, unknown>> {
+    const logs: string[] = [];
+    const screenshots: string[] = [];
+    const log = (msg: string) => {
+      this.logger.log(msg);
+      logs.push(msg);
+    };
+
+    log('=== CSE LOGIN TEST START ===');
+
+    const username = process.env.CSE_USERNAME;
+    const password = process.env.CSE_PASSWORD;
+    log(`CSE_USERNAME loaded: ${username ?? 'MISSING!'}`);
+    log(
+      `CSE_PASSWORD loaded: ${password ? `${password.length} chars` : 'MISSING!'}`,
+    );
+
+    if (!username || !password) {
+      return { ok: false, error: 'CSE_USERNAME or CSE_PASSWORD missing', logs };
+    }
+
+    ensureDir(FUNDAMENTALS_DIR);
+
+    let browser: import('playwright').Browser | null = null;
+
+    const ss = async (
+      page: import('playwright').Page,
+      name: string,
+    ): Promise<void> => {
+      const p = path.join(FUNDAMENTALS_DIR, name);
+      try {
+        await page.screenshot({ path: p, fullPage: false });
+        log(`Screenshot: ${name} | URL: ${page.url()}`);
+        screenshots.push(p);
+      } catch (e) {
+        log(`Screenshot FAILED: ${name} — ${String(e)}`);
+      }
+    };
+
+    try {
+      browser = await chromium.launch({
+        headless: false,
+        args: ['--no-sandbox', '--disable-setuid-sandbox'],
+      });
+
+      const context = await browser.newContext({
+        viewport: { width: 1920, height: 1080 },
+        userAgent:
+          'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+      });
+      const page = await context.newPage();
+      page.setDefaultTimeout(PAGE_TIMEOUT_MS);
+
+      // ── Step 1: CSE homepage ─────────────────────────────────────────────
+      log('STEP 1: Navigate to https://www.cse.lk');
+      await page.goto('https://www.cse.lk', {
+        waitUntil: 'load',
+        timeout: PAGE_TIMEOUT_MS,
+      });
+      await page.waitForTimeout(3000);
+      await ss(page, 'test-login-1-home.png');
+      log(`STEP 1 URL: ${page.url()}`);
+
+      // ── Step 2: Click MYCSE button ───────────────────────────────────────
+      log('STEP 2: Find and click MYCSE button');
+      const mycseSelectors = [
+        'a:has-text("MYCSE")',
+        'button:has-text("MYCSE")',
+        'a[href*="identity.cse"]',
+        'a[href*="mycse"]',
+        '[class*="mycse"]',
+        'a[href*="/login"]',
+      ];
+
+      let mycseClicked = false;
+      for (const sel of mycseSelectors) {
+        try {
+          await page.waitForSelector(sel, { timeout: 3000, state: 'visible' });
+          await page.click(sel);
+          mycseClicked = true;
+          log(`STEP 2: Clicked via selector: ${sel}`);
+          break;
+        } catch {
+          /* try next */
+        }
+      }
+
+      if (!mycseClicked) {
+        const allLinks = await page
+          .$$eval('a, button', (els) =>
+            els.map((el) => ({
+              href: (el as HTMLAnchorElement).getAttribute('href') ?? '',
+              text: (el.textContent ?? '').trim().slice(0, 60),
+              cls: (el.className ?? '').slice(0, 40),
+            })),
+          )
+          .catch(() => []);
+        log(`STEP 2 FAILED — all links on page: ${JSON.stringify(allLinks)}`);
+        await ss(page, 'test-login-2-mycse-FAILED.png');
+        return {
+          ok: false,
+          error: 'MYCSE button not found',
+          logs,
+          screenshots,
+        };
+      }
+
+      try {
+        await page.waitForURL('**/my-cse**', { timeout: 15000 });
+      } catch {
+        await page.waitForTimeout(3000);
+      }
+      await ss(page, 'test-login-2-after-mycse.png');
+      log(`STEP 2 URL after click: ${page.url()}`);
+
+      // ── Step 3: Click LOGIN on my-cse page ──────────────────────────────
+      log('STEP 3: Find and click LOGIN button on my-cse page');
+
+      // Log all buttons first
+      const mycseBtns = await page
+        .$$eval('button, a', (els) =>
+          els
+            .map((el) => ({
+              text: (el.textContent ?? '').trim().slice(0, 60),
+              href: (el as HTMLAnchorElement).getAttribute('href') ?? '',
+            }))
+            .filter((b) => b.text.length > 0),
+        )
+        .catch(() => []);
+      log(`STEP 3 buttons on my-cse page: ${JSON.stringify(mycseBtns)}`);
+
+      const loginBtnSelectors = [
+        'button:has-text("LOGIN")',
+        'a:has-text("LOGIN")',
+        'button:has-text("Login")',
+        'a:has-text("Login")',
+        'button:has-text("SIGN IN")',
+        'a:has-text("SIGN IN")',
+      ];
+      let loginBtnClicked = false;
+      for (const sel of loginBtnSelectors) {
+        try {
+          const el = await page.$(sel);
+          if (el && (await el.isVisible())) {
+            await el.click();
+            loginBtnClicked = true;
+            log(`STEP 3: Clicked LOGIN via: ${sel}`);
+            break;
+          }
+        } catch {
+          /* try next */
+        }
+      }
+
+      if (!loginBtnClicked) {
+        log('STEP 3 FAILED — LOGIN button not found on my-cse page');
+        await ss(page, 'test-login-3-login-FAILED.png');
+        return {
+          ok: false,
+          error: 'LOGIN button not found on my-cse page',
+          logs,
+          screenshots,
+        };
+      }
+
+      // Wait for identity.cse.lk or idpconnect.cse.lk
+      let postLoginUrl = '';
+      try {
+        await page.waitForURL(
+          (url) =>
+            url.toString().includes('identity.cse.lk') ||
+            url.toString().includes('idpconnect.cse.lk'),
+          { timeout: 20000 },
+        );
+        postLoginUrl = page.url();
+      } catch {
+        await page.waitForTimeout(4000);
+        postLoginUrl = page.url();
+      }
+      log(`STEP 3 post-click URL: ${postLoginUrl}`);
+      await ss(page, 'test-login-3-after-login-click.png');
+
+      // ── Step 4: Handle identity.cse.lk (provider selection) if present ──
+      if (postLoginUrl.includes('identity.cse.lk')) {
+        log('STEP 4: On identity.cse.lk — logging all buttons');
+
+        const identityBtns = await page
+          .$$eval('button, a', (els) =>
+            els
+              .map((el) => ({
+                text: (el.textContent ?? '').trim().slice(0, 80),
+                href: (el as HTMLAnchorElement).getAttribute('href') ?? '',
+              }))
+              .filter((e) => e.text.length > 0),
+          )
+          .catch(() => []);
+        log(`STEP 4 identity.cse.lk buttons: ${JSON.stringify(identityBtns)}`);
+
+        const cseLoginSelectors = [
+          'button:has-text("Continue with CSE")',
+          'a:has-text("Continue with CSE")',
+          'button:has-text("Login with CSE")',
+          'a:has-text("Login with CSE")',
+          '[data-provider="cse"]',
+        ];
+        let cseClicked = false;
+        for (const sel of cseLoginSelectors) {
+          try {
+            const el = await page.$(sel);
+            if (el && (await el.isVisible())) {
+              await el.click();
+              cseClicked = true;
+              log(`STEP 4: Clicked Continue with CSE via: ${sel}`);
+              break;
+            }
+          } catch {
+            /* try next */
+          }
+        }
+
+        if (!cseClicked) {
+          const allBtns = await page.$$('button, a, [role="button"]');
+          for (const btn of allBtns) {
+            const text = ((await btn.textContent()) ?? '').toLowerCase().trim();
+            if (
+              text.includes('cse') &&
+              !text.includes('apple') &&
+              !text.includes('google') &&
+              !text.includes('mycse') &&
+              (await btn.isVisible().catch(() => false))
+            ) {
+              await btn.click();
+              cseClicked = true;
+              log(`STEP 4: Clicked via fallback text: "${text}"`);
+              break;
+            }
+          }
+        }
+
+        await ss(page, 'test-login-3-after-continue.png');
+        if (!cseClicked) {
+          log('STEP 4 FAILED — "Continue with CSE" button not found');
+          return {
+            ok: false,
+            error: 'Continue with CSE not found on identity.cse.lk',
+            logs,
+            screenshots,
+          };
+        }
+
+        try {
+          await page.waitForURL('**idpconnect.cse.lk**', { timeout: 15000 });
+        } catch {
+          await page.waitForTimeout(4000);
+        }
+        log(`STEP 4 post-click URL: ${page.url()}`);
+      } else {
+        log(
+          `STEP 4: Skipped identity.cse.lk (landed directly at: ${postLoginUrl})`,
+        );
+        await ss(page, 'test-login-3-after-continue.png');
+      }
+
+      // ── Step 5: Fill credentials on idpconnect.cse.lk ───────────────────
+      log('STEP 5: Log all inputs and buttons on login form');
+      const currentUrl = page.url();
+      log(`STEP 5 current URL: ${currentUrl}`);
+
+      if (!currentUrl.includes('idpconnect.cse.lk')) {
+        log(
+          `STEP 5 WARNING: Expected idpconnect.cse.lk but got: ${currentUrl}`,
+        );
+      }
+
+      await page
+        .waitForSelector(
+          'input[type="text"], input[type="email"], input[name="Username"]',
+          { timeout: 10000 },
+        )
+        .catch(() => null);
+
+      const allInputs = await page
+        .$$eval('input', (els) =>
+          els.map((el) => ({
+            id: el.getAttribute('id'),
+            name: el.getAttribute('name'),
+            type: el.getAttribute('type'),
+            placeholder: el.getAttribute('placeholder'),
+          })),
+        )
+        .catch(() => []);
+      log(`STEP 5 all inputs: ${JSON.stringify(allInputs)}`);
+
+      const allBtnsOnForm = await page
+        .$$eval('button, input[type="submit"]', (els) =>
+          els.map((el) => ({
+            text: (el.textContent ?? '').trim().slice(0, 60),
+            type: el.getAttribute('type'),
+            id: el.getAttribute('id'),
+          })),
+        )
+        .catch(() => []);
+      log(`STEP 5 all buttons: ${JSON.stringify(allBtnsOnForm)}`);
+
+      // Find username field
+      const usernameSelectors = [
+        'input[name="Username"]',
+        'input[name="username"]',
+        'input[id="Username"]',
+        'input[type="email"]',
+        'input[placeholder*="email" i]',
+        'input[placeholder*="username" i]',
+        'input[type="text"]',
+      ];
+      let usernameField: import('playwright').ElementHandle | null = null;
+      let usernameSelUsed = '';
+      for (const sel of usernameSelectors) {
+        try {
+          const el = await page.$(sel);
+          if (el && (await el.isVisible())) {
+            usernameField = el;
+            usernameSelUsed = sel;
+            break;
+          }
+        } catch {
+          /* try next */
+        }
+      }
+
+      if (!usernameField) {
+        const bodyText = (await page.textContent('body').catch(() => '')) ?? '';
+        log(
+          `STEP 5 FAILED — username field not found. Page: ${bodyText.slice(0, 500)}`,
+        );
+        await ss(page, 'test-login-4-filled-FAILED.png');
+        return {
+          ok: false,
+          error: 'Username input not found on idpconnect login form',
+          logs,
+          screenshots,
+        };
+      }
+      log(`STEP 5: Username field found via: ${usernameSelUsed}`);
+
+      // Slow-type username
+      await usernameField.click();
+      await usernameField.fill('');
+      await page.keyboard.type(username, { delay: 50 });
+      await usernameField.dispatchEvent('input');
+      await usernameField.dispatchEvent('change');
+      await usernameField.dispatchEvent('blur');
+
+      // Slow-type password
+      const passField = await page.$('input[type="password"]');
+      if (!passField) {
+        log('STEP 5 FAILED — password field not found');
+        return {
+          ok: false,
+          error: 'Password input not found',
+          logs,
+          screenshots,
+        };
+      }
+      await passField.click();
+      await passField.fill('');
+      await page.keyboard.type(password, { delay: 50 });
+      await passField.dispatchEvent('input');
+      await passField.dispatchEvent('change');
+      await passField.dispatchEvent('blur');
+
+      // Verify actual .value of both fields
+      const filledValues = await page
+        .evaluate(() => {
+          const user = document.querySelector(
+            'input[name="Username"], input[name="username"], input[type="email"], input[type="text"]',
+          ) as HTMLInputElement | null;
+          const pass = document.querySelector(
+            'input[type="password"]',
+          ) as HTMLInputElement | null;
+          return {
+            usernameLen: user?.value?.length ?? 0,
+            passwordLen: pass?.value?.length ?? 0,
+          };
+        })
+        .catch(() => ({ usernameLen: -1, passwordLen: -1 }));
+      log(`STEP 5: Username field value length: ${filledValues.usernameLen}`);
+      log(`STEP 5: Password field value length: ${filledValues.passwordLen}`);
+
+      await ss(page, 'test-login-4-filled.png');
+
+      // ── Step 6: Submit login form ────────────────────────────────────────
+      log('STEP 6: Click Sign In button');
+
+      const signInSelectors = [
+        'button:has-text("Sign In")',
+        'button:has-text("Sign in")',
+        'button:has-text("Login")',
+        'button:has-text("Log In")',
+        'input[type="submit"]',
+        'button[type="submit"]',
+      ];
+      let submitted = false;
+      for (const sel of signInSelectors) {
+        try {
+          const el = await page.$(sel);
+          if (el && (await el.isVisible())) {
+            await el.click();
+            submitted = true;
+            log(`STEP 6: Clicked Sign In via: ${sel}`);
+            break;
+          }
+        } catch {
+          /* try next */
+        }
+      }
+
+      if (!submitted) {
+        log('STEP 6 FAILED — Sign In button not found');
+        await ss(page, 'test-login-5-result-FAILED.png');
+        return {
+          ok: false,
+          error: 'Sign In button not found',
+          logs,
+          screenshots,
+        };
+      }
+
+      // Wait 10s for redirect
+      await page.waitForTimeout(10000);
+      const resultUrl = page.url();
+      log(`STEP 6 final URL after 10s wait: ${resultUrl}`);
+
+      // Check for error text
+      const bodyText = (await page.textContent('body').catch(() => '')) ?? '';
+      const hasInvalid = bodyText.toLowerCase().includes('invalid');
+      const hasError = bodyText.toLowerCase().includes('error');
+      log(`STEP 6: Page contains "invalid": ${hasInvalid}`);
+      log(`STEP 6: Page contains "error": ${hasError}`);
+      if (hasInvalid || hasError) {
+        const errorSnippet = bodyText
+          .split('\n')
+          .find(
+            (l) =>
+              l.toLowerCase().includes('invalid') ||
+              l.toLowerCase().includes('error'),
+          );
+        log(
+          `STEP 6: Error text found: "${errorSnippet?.trim().slice(0, 200)}"`,
+        );
+      }
+
+      await ss(page, 'test-login-5-result.png');
+
+      // ── Step 7: Navigate to AEL company profile ──────────────────────────
+      log('STEP 7: Navigate to cse.lk/company-profile?symbol=AEL.N0000');
+      await page.goto('https://www.cse.lk/company-profile?symbol=AEL.N0000', {
+        waitUntil: 'domcontentloaded',
+        timeout: PAGE_TIMEOUT_MS,
+      });
+      await page.waitForTimeout(3000);
+
+      // Click Financials tab
+      for (const sel of ['text=Financials', 'text=Financial']) {
+        try {
+          await page.click(sel, { timeout: 5000 });
+          log(`STEP 7: Clicked Financials tab via: ${sel}`);
+          break;
+        } catch {
+          /* try next */
+        }
+      }
+      await page.waitForTimeout(2000);
+
+      // Click Fundamental Data sub-tab
+      for (const sel of [
+        'text=Fundamental Data',
+        'text=Fundamentals',
+        'text=Fundamental',
+      ]) {
+        try {
+          await page.click(sel, { timeout: 5000 });
+          log(`STEP 7: Clicked Fundamental Data sub-tab via: ${sel}`);
+          break;
+        } catch {
+          /* try next */
+        }
+      }
+      await page.waitForTimeout(8000);
+
+      await ss(page, 'test-login-6-fundamentals.png');
+
+      const bodyFinal = (await page.textContent('body').catch(() => '')) ?? '';
+      const hasSignUpBanner = bodyFinal.includes('SIGN UP WITH MYCSE');
+      log(`STEP 7: "SIGN UP WITH MYCSE" banner present: ${hasSignUpBanner}`);
+      log(`STEP 7 final URL: ${page.url()}`);
+
+      const loginSucceeded =
+        resultUrl.includes('cse.lk') &&
+        !resultUrl.includes('idpconnect') &&
+        !resultUrl.includes('identity.cse');
+
+      log(`=== CSE LOGIN TEST END === loginSucceeded: ${loginSucceeded}`);
+
       await page.close();
+      await context.close();
+
+      return {
+        ok: loginSucceeded && !hasSignUpBanner,
+        loginSucceeded,
+        hasSignUpBanner,
+        finalUrl: resultUrl,
+        logs,
+        screenshots,
+      };
+    } catch (err) {
+      log(`EXCEPTION: ${String(err)}`);
+      return { ok: false, error: String(err), logs, screenshots };
+    } finally {
+      if (browser) {
+        try {
+          await browser.close();
+        } catch {
+          /* ignore */
+        }
+      }
     }
   }
 
@@ -1119,51 +1661,77 @@ async function extractTradingViewData(
 ): Promise<Record<string, string>> {
   const data: Record<string, string> = {};
 
-  // Strategy 1: Find TradingView iframe and extract from it
+  // Strategy 1: Use page.frames() to find TradingView frame at any nesting depth.
+  // page.$$('iframe') only searches the top-level DOM; the TradingView widget may
+  // be nested inside an srcdoc wrapper frame, making it invisible to $$('iframe').
   try {
-    const iframes = await page.$$('iframe');
-    for (const iframeEl of iframes) {
-      const src = (await iframeEl.getAttribute('src')) ?? '';
-      const isTv = src.includes('tradingview') || src.includes('tv-widget');
+    const allFrames = page.frames();
+    const tvFrame = allFrames.find(
+      (f) => f.url().includes('tradingview') || f.url().includes('tv-widget'),
+    );
 
-      let frame: Frame | null = null;
-
-      if (isTv) {
-        frame = await iframeEl.contentFrame();
-      } else {
-        // Check any iframe that might contain financial data
-        try {
-          const f = await iframeEl.contentFrame();
-          if (f) {
-            const content = await f.content();
-            if (
-              /earnings|revenue|balance\s*sheet|cash\s*flow|market\s*cap/i.test(
-                content,
-              )
-            ) {
-              frame = f;
-            }
-          }
-        } catch {
-          /* skip inaccessible iframes */
-        }
+    if (tvFrame) {
+      logger.log(`Found TradingView frame: ${tvFrame.url().slice(0, 100)}`);
+      // Give the widget up to 12 s to render data after load
+      try {
+        await tvFrame.waitForLoadState('networkidle', { timeout: 12000 });
+      } catch {
+        /* continue with whatever is loaded */
       }
 
-      if (!frame) continue;
+      // Diagnostic: dump frame text to logs
+      try {
+        const frameText = await tvFrame.textContent('body').catch(() => '');
+        logger.log(
+          `TradingView frame text (first 500): ${(frameText ?? '').replace(/\s+/g, ' ').slice(0, 500)}`,
+        );
+      } catch {
+        /* non-critical */
+      }
 
-      logger.log(
-        `Extracting from iframe (src: ${src.slice(0, 60) || 'inline'})`,
-      );
-      const extracted = await extractFromFrame(frame);
+      const extracted = await extractFromFrame(tvFrame);
       Object.assign(data, extracted);
-
-      if (Object.keys(data).length > 3) break;
+      logger.log(
+        `TradingView frame extraction: ${Object.keys(extracted).length} fields`,
+      );
+    } else {
+      logger.warn(
+        `TradingView frame not found. All frames: ${allFrames.map((f) => f.url().slice(0, 60)).join(' | ')}`,
+      );
     }
   } catch (err) {
-    logger.warn(`Iframe extraction error: ${String(err)}`);
+    logger.warn(`TradingView frame extraction error: ${String(err)}`);
   }
 
-  // Strategy 2: Direct page table/element extraction if iframe yielded nothing
+  // Strategy 2: Fallback — check all non-blank frames for financial keywords
+  if (Object.keys(data).length === 0) {
+    try {
+      for (const frame of page.frames()) {
+        if (
+          frame.url() === 'about:blank' ||
+          frame.url().includes('tradingview')
+        )
+          continue;
+        try {
+          const content = await frame.content();
+          if (
+            /earnings|revenue|balance\s*sheet|cash\s*flow|p\/e/i.test(content)
+          ) {
+            logger.log(`Trying fallback frame: ${frame.url().slice(0, 60)}`);
+            const extracted = await extractFromFrame(frame);
+            Object.assign(data, extracted);
+            if (Object.keys(data).length > 3) break;
+          }
+        } catch {
+          /* skip inaccessible frames */
+        }
+      }
+    } catch (err) {
+      logger.warn(`Fallback frame extraction error: ${String(err)}`);
+    }
+  }
+
+  // Strategy 3: Direct page table/element extraction if all frames yielded nothing
   if (Object.keys(data).length === 0) {
     try {
       const pageData = await extractFinancialTablesFromPage(page);
