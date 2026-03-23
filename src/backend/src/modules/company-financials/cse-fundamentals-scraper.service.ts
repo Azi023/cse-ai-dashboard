@@ -2,10 +2,12 @@ import { Injectable, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { chromium, Browser, Page, Frame } from 'playwright';
+import { Cron } from '@nestjs/schedule';
 import * as fs from 'fs';
 import * as path from 'path';
 import { SHARIAH_WHITELIST } from '../shariah-screening/blacklist';
 import { CompanyFinancial, Stock } from '../../entities';
+import { RedisService } from '../cse-data/redis.service';
 
 // ── Constants ────────────────────────────────────────────────────────────────
 
@@ -98,6 +100,7 @@ export class CseFundamentalsScraperService {
     private readonly financialRepo: Repository<CompanyFinancial>,
     @InjectRepository(Stock)
     private readonly stockRepo: Repository<Stock>,
+    private readonly redisService: RedisService,
   ) {}
 
   async scrapeAll(singleSymbol?: string): Promise<ScrapeAllResult> {
@@ -190,6 +193,40 @@ export class CseFundamentalsScraperService {
       tier2TriggerStatus,
       results,
     };
+  }
+
+  // ── Scheduled weekly scrape ──────────────────────────────────────────────
+
+  // Friday 22:00 UTC = Saturday 03:30 SLT (no market activity, low risk window)
+  @Cron('0 22 * * 5')
+  async scheduledWeeklyScrape(): Promise<void> {
+    const LOCK_KEY = 'scraper:running';
+    const LOCK_TTL_S = 30 * 60; // 30 minutes
+
+    const existing = await this.redisService.get(LOCK_KEY);
+    if (existing) {
+      this.logger.warn(
+        'Weekly scrape skipped — another scrape is already in progress',
+      );
+      return;
+    }
+
+    await this.redisService.set(LOCK_KEY, '1', LOCK_TTL_S);
+    this.logger.log('Weekly CSE fundamentals scrape starting (scheduled)');
+
+    try {
+      const result = await this.scrapeAll();
+      this.logger.log(
+        `Weekly scrape complete — success: ${result.success}, partial: ${result.partial}, failed: ${result.failed}`,
+      );
+    } catch (err) {
+      this.logger.error(
+        'Weekly scrape failed',
+        err instanceof Error ? err.message : String(err),
+      );
+    } finally {
+      await this.redisService.set(LOCK_KEY, '', 1); // expire immediately
+    }
   }
 
   // ── MYCSE login ───────────────────────────────────────────────────────────
