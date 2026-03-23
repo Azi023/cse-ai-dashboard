@@ -1,11 +1,11 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { Repository, In } from 'typeorm';
 import { ConfigService } from '@nestjs/config';
 import { MockGenerator } from './mock-generator';
 import { SYSTEM_PROMPTS } from './prompts';
 import { RedisService } from '../cse-data/redis.service';
-import { MacroData } from '../../entities';
+import { MacroData, Stock } from '../../entities';
 import * as fs from 'fs';
 import * as path from 'path';
 
@@ -92,6 +92,8 @@ export class AiEngineService {
     private readonly redisService: RedisService,
     @InjectRepository(MacroData)
     private readonly macroDataRepo: Repository<MacroData>,
+    @InjectRepository(Stock)
+    private readonly stockRepo: Repository<Stock>,
   ) {
     const apiKey = this.configService.get<string>('ANTHROPIC_API_KEY');
     this.isLive = !!apiKey && apiKey.length > 0;
@@ -561,6 +563,11 @@ export class AiEngineService {
 
       const marketData = await this.mockGenerator.getMarketData();
       const macroContext = await this.buildMacroContext();
+      const compliantSymbols = await this.getCompliantSymbols();
+      const shariahContext =
+        compliantSymbols.length > 0
+          ? `\n\nShariah-compliant stocks (MUST include at least 50% of signals from these): ${compliantSymbols.join(', ')}`
+          : '';
 
       const response = await client.messages.create({
         model: 'claude-sonnet-4-6',
@@ -569,7 +576,7 @@ export class AiEngineService {
         messages: [
           {
             role: 'user',
-            content: `Respond with ONLY a raw JSON array. No markdown. No backticks. No explanation. Start your response with [ and end with ].\n\nGenerate trading signals based on today's CSE market data. Each element must match this exact structure:\n{\n  "symbol": "SYMBOL.N0000",\n  "name": "Company Name",\n  "currentPrice": 100.00,\n  "direction": "BUY|HOLD|SELL",\n  "reasoning": "2-3 technical sentences for analysts",\n  "rationale_simple": "One plain-English sentence a beginner investor can understand",\n  "confidence": "HIGH|MEDIUM|LOW",\n  "shariahStatus": "compliant|non_compliant|pending_review",\n  "suggested_holding_period": "e.g. 12-24 months, 3-6 months, Short-term: 1-4 weeks"\n}\n\nIMPORTANT: Never say 'buy' or 'sell' as direct instructions. Use 'worth considering' or 'may warrant attention'. Always include suggested_holding_period and rationale_simple.\n\nMarket data:\n${JSON.stringify(marketData, null, 2)}${macroContext}`,
+            content: `Respond with ONLY a raw JSON array. No markdown. No backticks. No explanation. Start your response with [ and end with ].\n\nGenerate trading signals based on today's CSE market data. Each element must match this exact structure:\n{\n  "symbol": "SYMBOL.N0000",\n  "name": "Company Name",\n  "currentPrice": 100.00,\n  "direction": "BUY|HOLD|SELL",\n  "reasoning": "2-3 technical sentences for analysts",\n  "rationale_simple": "One plain-English sentence a beginner investor can understand",\n  "confidence": "HIGH|MEDIUM|LOW",\n  "shariahStatus": "compliant|non_compliant|pending_review",\n  "suggested_holding_period": "e.g. 12-24 months, 3-6 months, Short-term: 1-4 weeks"\n}\n\nIMPORTANT: Never say 'buy' or 'sell' as direct instructions. Use 'worth considering' or 'may warrant attention'. Always include suggested_holding_period and rationale_simple.${shariahContext}\n\nMarket data:\n${JSON.stringify(marketData, null, 2)}${macroContext}`,
           },
         ],
       });
@@ -631,11 +638,39 @@ export class AiEngineService {
         return this.mockGenerator.generateSignals();
       }
 
+      // Override shariahStatus with actual DB values — Claude's guess is unreliable
+      const symbolsToLookup = signals.map((s) => s.symbol);
+      if (symbolsToLookup.length > 0) {
+        const dbStocks = await this.stockRepo.find({
+          where: { symbol: In(symbolsToLookup) },
+          select: ['symbol', 'shariah_status'],
+        });
+        const statusMap = new Map(
+          dbStocks.map((s) => [s.symbol, s.shariah_status]),
+        );
+        for (const signal of signals) {
+          const dbStatus = statusMap.get(signal.symbol);
+          if (dbStatus) signal.shariahStatus = dbStatus;
+        }
+      }
+
       this.logger.log(`Live signals generated: ${signals.length} signals`);
       return signals;
     } catch (error) {
       this.logger.error(`Live signals failed, falling back to mock: ${error}`);
       return this.mockGenerator.generateSignals();
+    }
+  }
+
+  private async getCompliantSymbols(): Promise<string[]> {
+    try {
+      const stocks = await this.stockRepo.find({
+        where: { shariah_status: 'compliant' },
+        select: ['symbol'],
+      });
+      return stocks.map((s) => s.symbol);
+    } catch {
+      return [];
     }
   }
 }

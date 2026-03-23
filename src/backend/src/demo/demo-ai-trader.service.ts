@@ -7,6 +7,7 @@ import { DemoHolding } from './entities/demo-holding.entity';
 import { DemoTrade } from './entities/demo-trade.entity';
 import { Stock } from '../entities/stock.entity';
 import { StockScore } from '../entities/stock-score.entity';
+import { CompanyFinancial } from '../entities/company-financial.entity';
 import { RedisService } from '../modules/cse-data/redis.service';
 import { DemoService } from './demo.service';
 
@@ -59,6 +60,8 @@ export class DemoAITraderService {
     private readonly stockRepo: Repository<Stock>,
     @InjectRepository(StockScore)
     private readonly stockScoreRepo: Repository<StockScore>,
+    @InjectRepository(CompanyFinancial)
+    private readonly financialRepo: Repository<CompanyFinancial>,
     private readonly redisService: RedisService,
     private readonly configService: ConfigService,
     private readonly demoService: DemoService,
@@ -103,7 +106,11 @@ export class DemoAITraderService {
 
     // ── Stop-loss checks ───────────────────────────────────────────────────
     for (const holding of holdings) {
-      if (tradesToday + decisions.filter((d) => d.action !== 'NO_TRADE').length >= MAX_DAILY_TRADES) break;
+      if (
+        tradesToday + decisions.filter((d) => d.action !== 'NO_TRADE').length >=
+        MAX_DAILY_TRADES
+      )
+        break;
 
       const price = await this.getPrice(holding.symbol);
       if (!price) continue;
@@ -139,9 +146,13 @@ export class DemoAITraderService {
         };
         decisions.push(decision);
         await this.appendLog(accountId, decision);
-        this.logger.log(`Stop-loss SELL: ${holding.symbol} × ${qty} @ LKR ${price.toFixed(2)}`);
+        this.logger.log(
+          `Stop-loss SELL: ${holding.symbol} × ${qty} @ LKR ${price.toFixed(2)}`,
+        );
       } catch (err) {
-        this.logger.error(`Stop-loss sell failed for ${holding.symbol}: ${err}`);
+        this.logger.error(
+          `Stop-loss sell failed for ${holding.symbol}: ${err}`,
+        );
       }
     }
 
@@ -165,6 +176,19 @@ export class DemoAITraderService {
         parseFloat(String(h.quantity));
     }
     const portfolioValue = cashBalance + holdingsValue;
+
+    // ── Daily risk budget check ────────────────────────────────────────────
+    const riskBudget = await this.checkDailyRiskBudget(
+      accountId,
+      portfolioValue,
+    );
+    if (!riskBudget.hasCapacity) {
+      return this.noTrade(
+        accountId,
+        `Daily risk budget exhausted (${riskBudget.usedPct.toFixed(1)}% of ${riskBudget.limitPct}% used). No new BUY trades today.`,
+        decisions,
+      );
+    }
 
     const maxNewTrades = Math.min(
       2,
@@ -278,7 +302,10 @@ export class DemoAITraderService {
       }
     }
 
-    if (tradesExecuted === 0 && decisions.every((d) => d.action === 'NO_TRADE')) {
+    if (
+      tradesExecuted === 0 &&
+      decisions.every((d) => d.action === 'NO_TRADE')
+    ) {
       this.logger.log(
         `Account ${accountId}: No trades executed this cycle — all signals failed constraints.`,
       );
@@ -300,23 +327,30 @@ export class DemoAITraderService {
   // ─── Signal Retrieval ──────────────────────────────────────────────────────
 
   private async getQualifyingSignals(): Promise<CachedSignal[]> {
-    // 1. Try Redis AI signals cache
-    const cached = await this.redisService.getJson<CachedSignal[]>(
-      'ai:signals:cache',
-    );
+    // 1. Try Redis AI signals cache — filter for COMPLIANT BUY signals only
+    const cached =
+      await this.redisService.getJson<CachedSignal[]>('ai:signals:cache');
     if (cached && cached.length > 0) {
-      return cached
+      const fromCache = cached
         .filter((s) => s.direction === 'BUY')
-        .filter((s) => this.normalizeShariahStatus(s.shariahStatus) === 'COMPLIANT')
-        .filter((s) => this.confidenceToScore(s.confidence) >= MIN_SCORE_THRESHOLD)
+        .filter(
+          (s) => this.normalizeShariahStatus(s.shariahStatus) === 'COMPLIANT',
+        )
+        .filter(
+          (s) => this.confidenceToScore(s.confidence) >= MIN_SCORE_THRESHOLD,
+        )
         .sort(
           (a, b) =>
             this.confidenceToScore(b.confidence) -
             this.confidenceToScore(a.confidence),
         );
+      if (fromCache.length > 0) return fromCache;
+      this.logger.warn(
+        `Cache has ${cached.length} signals but 0 compliant BUY — falling to score-based`,
+      );
     }
 
-    // 2. Fallback: top-scored compliant stocks from stock_scores table
+    // 2. Score-based: compliant stocks with today's composite scores
     const today = new Date().toISOString().split('T')[0];
     const scores = await this.stockScoreRepo
       .createQueryBuilder('ss')
@@ -330,18 +364,46 @@ export class DemoAITraderService {
       .take(5)
       .getMany();
 
-    return scores.map((s) => ({
-      symbol: s.symbol,
-      name: s.symbol,
-      currentPrice: 0,
-      direction: 'BUY' as const,
-      confidence: (Number(s.composite_score) >= 8 ? 'HIGH' : 'MEDIUM') as
-        | 'HIGH'
-        | 'MEDIUM',
-      shariahStatus: 'compliant',
-      reasoning: `Score-based signal: composite ${s.composite_score}/100`,
-      rationale_simple: `High composite score (${s.composite_score}/100)`,
-    }));
+    if (scores.length > 0) {
+      return scores.map((s) => ({
+        symbol: s.symbol,
+        name: s.symbol,
+        currentPrice: 0,
+        direction: 'BUY' as const,
+        confidence: (Number(s.composite_score) >= 8 ? 'HIGH' : 'MEDIUM') as
+          | 'HIGH'
+          | 'MEDIUM',
+        shariahStatus: 'compliant',
+        reasoning: `Score-based signal: composite ${s.composite_score}/100`,
+        rationale_simple: `High composite score (${s.composite_score}/100)`,
+      }));
+    }
+
+    // 3. Emergency fallback: any compliant stock with a live price
+    this.logger.warn(
+      'No scored signals — using compliant stock emergency fallback',
+    );
+    return this.getCompliantFallbackSignals();
+  }
+
+  private async getCompliantFallbackSignals(): Promise<CachedSignal[]> {
+    const compliantStocks = await this.stockRepo.find({
+      where: { shariah_status: 'compliant' },
+      order: { last_price: 'DESC' },
+      take: 5,
+    });
+    return compliantStocks
+      .filter((s) => s.last_price && Number(s.last_price) > 0)
+      .map((s) => ({
+        symbol: s.symbol,
+        name: s.name ?? s.symbol,
+        currentPrice: Number(s.last_price),
+        direction: 'BUY' as const,
+        confidence: 'MEDIUM' as const,
+        shariahStatus: 'compliant',
+        reasoning: 'Compliant stock — no AI signal available, using price data',
+        rationale_simple: 'Shariah-compliant stock eligible for RCA strategy',
+      }));
   }
 
   // ─── Reasoning Generation ──────────────────────────────────────────────────
@@ -354,13 +416,18 @@ export class DemoAITraderService {
     cashBalance: number,
   ): Promise<string> {
     const positionPct =
-      portfolioValue > 0
-        ? ((quantity * price) / portfolioValue) * 100
-        : 0;
+      portfolioValue > 0 ? ((quantity * price) / portfolioValue) * 100 : 0;
     const aspiValue = await this.getAspi();
+    const financials = await this.getLatestFinancials(signal.symbol);
+    const fundamentalCtx = financials
+      ? `PE: ${financials.pe_ratio != null ? Number(financials.pe_ratio).toFixed(1) : 'N/A'}, ` +
+        `EPS: ${financials.earnings_per_share != null ? Number(financials.earnings_per_share).toFixed(2) : 'N/A'}, ` +
+        `Div Yield: ${financials.dividend_yield != null ? Number(financials.dividend_yield).toFixed(2) : 'N/A'}%. `
+      : '';
     const template =
       `BUY ${signal.symbol}: Confidence ${signal.confidence} — ` +
       `${signal.rationale_simple || signal.reasoning}. ` +
+      `${fundamentalCtx}` +
       `Shariah: ${this.normalizeShariahStatus(signal.shariahStatus)}. ` +
       `ASPI: ${aspiValue > 0 ? aspiValue.toFixed(2) : 'N/A'}. ` +
       `Position: ${positionPct.toFixed(1)}% of portfolio ` +
@@ -411,9 +478,7 @@ export class DemoAITraderService {
       // Update token counter
       const used = parseInt(raw ?? '0', 10);
       const newTotal =
-        used +
-        (msg.usage?.input_tokens ?? 0) +
-        (msg.usage?.output_tokens ?? 0);
+        used + (msg.usage?.input_tokens ?? 0) + (msg.usage?.output_tokens ?? 0);
       await this.redisService.set(`ai:tokens:${month}`, String(newTotal));
 
       return enhanced;
@@ -488,13 +553,58 @@ export class DemoAITraderService {
     decision: AIDecision,
   ): Promise<void> {
     const key = AI_LOG_KEY(accountId);
-    const existing =
-      (await this.redisService.getJson<AIDecision[]>(key)) ?? [];
+    const existing = (await this.redisService.getJson<AIDecision[]>(key)) ?? [];
     existing.unshift(decision); // newest first
     await this.redisService.setJson(
       key,
       existing.slice(0, AI_LOG_MAX),
       30 * 24 * 3600,
     );
+  }
+
+  private async getLatestFinancials(
+    symbol: string,
+  ): Promise<CompanyFinancial | null> {
+    try {
+      const rows = await this.financialRepo.find({
+        where: { symbol },
+        order: { fiscal_year: 'DESC', id: 'DESC' },
+        take: 1,
+      });
+      return rows[0] ?? null;
+    } catch {
+      return null;
+    }
+  }
+
+  private async checkDailyRiskBudget(
+    accountId: number,
+    portfolioValue: number,
+  ): Promise<{ hasCapacity: boolean; usedPct: number; limitPct: number }> {
+    const DAILY_RISK_LIMIT_PCT = 5.0;
+    const STOP_LOSS_PCT_LOCAL = 0.15;
+    if (portfolioValue <= 0) {
+      return { hasCapacity: true, usedPct: 0, limitPct: DAILY_RISK_LIMIT_PCT };
+    }
+    const today = new Date().toISOString().split('T')[0];
+    const todaysBuys = await this.tradeRepo
+      .createQueryBuilder('t')
+      .where('t.demo_account_id = :id', { id: accountId })
+      .andWhere('t.direction = :dir', { dir: 'BUY' })
+      .andWhere("DATE(t.executed_at AT TIME ZONE 'UTC') = :date", {
+        date: today,
+      })
+      .getMany();
+    const usedRiskValue = todaysBuys.reduce((sum, t) => {
+      const tradeValue =
+        parseFloat(String(t.price)) * parseFloat(String(t.quantity));
+      return sum + tradeValue * STOP_LOSS_PCT_LOCAL;
+    }, 0);
+    const usedPct = (usedRiskValue / portfolioValue) * 100;
+    return {
+      hasCapacity: usedPct < DAILY_RISK_LIMIT_PCT,
+      usedPct,
+      limitPct: DAILY_RISK_LIMIT_PCT,
+    };
   }
 }

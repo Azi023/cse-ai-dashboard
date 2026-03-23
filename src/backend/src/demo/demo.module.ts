@@ -9,6 +9,7 @@ import { Stock } from '../entities/stock.entity';
 import { DailyPrice } from '../entities/daily-price.entity';
 import { StockScore } from '../entities/stock-score.entity';
 import { Announcement } from '../entities/announcement.entity';
+import { CompanyFinancial } from '../entities/company-financial.entity';
 import { CseDataModule } from '../modules/cse-data/cse-data.module';
 import { DemoService } from './demo.service';
 import { DemoAITraderService } from './demo-ai-trader.service';
@@ -27,6 +28,7 @@ import { DemoController } from './demo.controller';
       DailyPrice,
       StockScore,
       Announcement,
+      CompanyFinancial,
     ]),
     CseDataModule,
   ],

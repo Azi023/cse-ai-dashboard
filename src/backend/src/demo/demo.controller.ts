@@ -99,6 +99,13 @@ export class DemoController {
     return this.aiTraderService.getAILog(accountId);
   }
 
+  // ─── Risk Budget ───────────────────────────────────────────────────────────
+
+  @Get('risk-budget/:accountId')
+  getDailyRiskBudget(@Param('accountId', ParseIntPipe) accountId: number) {
+    return this.demoService.getDailyRiskBudget(accountId);
+  }
+
   // ─── Maintenance ───────────────────────────────────────────────────────────
 
   @Post('sync-shariah')

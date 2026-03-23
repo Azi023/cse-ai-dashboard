@@ -390,6 +390,12 @@ export class DemoService implements OnModuleInit {
       return sum + (snap?.realized_pnl ?? 0);
     }, 0);
 
+    const snapshots = await this.snapshotRepo.find({
+      where: { demo_account_id: accountId },
+      order: { snapshot_date: 'ASC' },
+    });
+    const { max_drawdown_pct, peak_value } = this.calcMaxDrawdown(snapshots);
+
     return {
       total_value: totalValue,
       cash_balance: cashBalance,
@@ -399,10 +405,15 @@ export class DemoService implements OnModuleInit {
       win_rate:
         sells.length > 0 ? (profitableSells.length / sells.length) * 100 : 0,
       total_trades: allTrades.length,
+      winning_trades: profitableSells.length,
+      losing_trades: sells.length - profitableSells.length,
       total_sell_trades: sells.length,
       profitable_trades: profitableSells.length,
       avg_return_per_trade:
         sells.length > 0 ? totalRealizedPnl / sells.length : 0,
+      max_drawdown_pct,
+      peak_value,
+      sharpe_ratio: snapshots.length >= 20 ? null : null, // populated by benchmark cron at 20+ days
       total_fees: parseFloat(String(account.total_fees_paid)),
       shariah_compliance:
         holdings.length > 0 ? (compliantCount / holdings.length) * 100 : 100,
@@ -642,6 +653,66 @@ export class DemoService implements OnModuleInit {
     }
     this.logger.log(`Synced shariah_status for ${updated} demo holdings`);
     return { updated };
+  }
+
+  async getDailyRiskBudget(accountId: number) {
+    const account = await this.accountRepo.findOneBy({ id: accountId });
+    if (!account)
+      throw new NotFoundException(`Demo account ${accountId} not found`);
+
+    const portfolioValue = await this.getPortfolioValue(accountId, account);
+    const DAILY_LIMIT_PCT = 5.0;
+    const STOP_LOSS_PCT = 0.15;
+    const dailyLimitValue = portfolioValue * (DAILY_LIMIT_PCT / 100);
+
+    const today = new Date().toISOString().split('T')[0];
+    const todaysBuys = await this.tradeRepo
+      .createQueryBuilder('t')
+      .where('t.demo_account_id = :id', { id: accountId })
+      .andWhere('t.direction = :dir', { dir: 'BUY' })
+      .andWhere("DATE(t.executed_at AT TIME ZONE 'UTC') = :date", {
+        date: today,
+      })
+      .getMany();
+
+    const usedRiskValue = todaysBuys.reduce((sum, t) => {
+      const tradeValue =
+        parseFloat(String(t.price)) * parseFloat(String(t.quantity));
+      return sum + tradeValue * STOP_LOSS_PCT;
+    }, 0);
+    const usedPct =
+      portfolioValue > 0 ? (usedRiskValue / portfolioValue) * 100 : 0;
+
+    return {
+      daily_limit_pct: DAILY_LIMIT_PCT,
+      daily_limit_value: parseFloat(dailyLimitValue.toFixed(2)),
+      used_pct: parseFloat(usedPct.toFixed(2)),
+      used_value: parseFloat(usedRiskValue.toFixed(2)),
+      remaining_pct: parseFloat(
+        Math.max(0, DAILY_LIMIT_PCT - usedPct).toFixed(2),
+      ),
+      remaining_value: parseFloat(
+        Math.max(0, dailyLimitValue - usedRiskValue).toFixed(2),
+      ),
+      trades_today: todaysBuys.length,
+      portfolio_value: parseFloat(portfolioValue.toFixed(2)),
+    };
+  }
+
+  private calcMaxDrawdown(snapshots: DemoDailySnapshot[]): {
+    max_drawdown_pct: number;
+    peak_value: number;
+  } {
+    if (snapshots.length === 0) return { max_drawdown_pct: 0, peak_value: 0 };
+    let peak = 0;
+    let maxDrawdown = 0;
+    for (const snap of snapshots) {
+      const val = parseFloat(String(snap.portfolio_value));
+      if (val > peak) peak = val;
+      const dd = peak > 0 ? ((peak - val) / peak) * 100 : 0;
+      if (dd > maxDrawdown) maxDrawdown = dd;
+    }
+    return { max_drawdown_pct: -maxDrawdown, peak_value: peak };
   }
 
   private mapShariahStatus(status: string): string {
