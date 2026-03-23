@@ -25,6 +25,7 @@ import { JourneyModule } from './modules/journey/journey.module';
 import { InsightsModule } from './modules/insights/insights.module';
 import { NotificationsModule } from './modules/notifications/notifications.module';
 import { AnalysisModule } from './modules/analysis/analysis.module';
+import { DataModule } from './modules/data/data.module';
 import { DemoModule } from './demo/demo.module';
 
 @Module({
@@ -94,6 +95,7 @@ import { DemoModule } from './demo/demo.module';
     InsightsModule,
     NotificationsModule,
     AnalysisModule,
+    DataModule,
     DemoModule,
   ],
   controllers: [AppController],
