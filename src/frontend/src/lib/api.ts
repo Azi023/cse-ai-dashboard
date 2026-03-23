@@ -1205,4 +1205,77 @@ export const demoApi = {
   getAILog: (accountId: number) => api.get(`/demo/ai-log/${accountId}`),
 };
 
+// ---------------------------------------------------------------------------
+// Trade Opportunities
+// ---------------------------------------------------------------------------
+
+export interface StrengthInfo {
+  score: number;
+  label: 'WEAK' | 'MODERATE' | 'STRONG' | 'VERY_STRONG';
+  factors: string[];
+}
+
+export interface TradeOpportunity {
+  rank: number;
+  symbol: string;
+  company_name: string;
+  sector: string | null;
+  direction: 'BUY';
+  current_price: number;
+  suggested_entry: number;
+  stop_loss: number;
+  take_profit: number;
+  risk_reward_ratio: string;
+  position_size_shares: number;
+  position_value_lkr: number;
+  risk_per_trade_lkr: number;
+  risk_per_trade_pct: number;
+  strength: StrengthInfo;
+  shariah_status: string;
+  composite_score: number;
+  technical_signal: string;
+  reasoning: string;
+}
+
+export interface RiskSummary {
+  daily_budget_pct: number;
+  daily_budget_lkr: number;
+  used_pct: number;
+  used_lkr: number;
+  remaining_pct: number;
+  remaining_lkr: number;
+  selected_trades: string[];
+  selected_risk_total_pct: number;
+}
+
+export interface SelectionPreview {
+  valid: boolean;
+  trades: Array<{
+    symbol: string;
+    quantity: number;
+    entry_price: number;
+    risk_lkr: number;
+    risk_pct: number;
+  }>;
+  total_risk_lkr: number;
+  total_risk_pct: number;
+  budget_remaining_after_lkr: number;
+  exceeds_budget: boolean;
+  message: string;
+}
+
+export const opportunitiesApi = {
+  getOpportunities: () => api.get<TradeOpportunity[]>('/trade-opportunities'),
+  getRiskSummary: (accountId = 1) =>
+    api.get<RiskSummary>('/trade-opportunities/risk-summary', { params: { accountId } }),
+  selectTrades: (symbols: string[], account_type = 'demo') =>
+    api.post<SelectionPreview>('/trade-opportunities/select', { symbols, account_type }),
+  executeTrades: (symbols: string[], account_id = 1) =>
+    api.post<{ executed: string[]; failed: string[]; total_risk_lkr: number }>(
+      '/trade-opportunities/execute',
+      { symbols, account_id },
+    ),
+};
+
 export default api;
+

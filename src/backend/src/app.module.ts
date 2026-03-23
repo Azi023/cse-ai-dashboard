@@ -27,6 +27,7 @@ import { NotificationsModule } from './modules/notifications/notifications.modul
 import { AnalysisModule } from './modules/analysis/analysis.module';
 import { DataModule } from './modules/data/data.module';
 import { DemoModule } from './demo/demo.module';
+import { TradeOpportunitiesModule } from './modules/trade-opportunities/trade-opportunities.module';
 
 @Module({
   imports: [
@@ -97,6 +98,7 @@ import { DemoModule } from './demo/demo.module';
     AnalysisModule,
     DataModule,
     DemoModule,
+    TradeOpportunitiesModule,
   ],
   controllers: [AppController],
   providers: [AppService],
