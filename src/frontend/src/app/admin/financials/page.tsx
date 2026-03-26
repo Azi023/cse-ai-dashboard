@@ -404,7 +404,7 @@ export default function AdminFinancialsPage() {
           <CardContent className="pt-4">
             <p className="text-sm text-destructive">{error}</p>
             <p className="text-xs text-muted-foreground mt-1">
-              Make sure the backend server is running on port 3001
+              Make sure the backend server is running on port 4101
             </p>
           </CardContent>
         </Card>
@@ -593,7 +593,7 @@ export default function AdminFinancialsPage() {
               download="financials-template.csv"
               onClick={(e) => {
                 e.preventDefault();
-                fetch('http://localhost:3001/api/financials/template-csv')
+                fetch('http://localhost:4101/api/financials/template-csv')
                   .then((r) => r.blob())
                   .then((blob) => {
                     const url = URL.createObjectURL(blob);

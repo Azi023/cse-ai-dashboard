@@ -1509,7 +1509,7 @@ export class CseFundamentalsScraperService {
   private async triggerTier2Screening(): Promise<string> {
     try {
       const resp = await fetch(
-        'http://localhost:3001/api/shariah/run-tier2-screening',
+        'http://localhost:4101/api/shariah/run-tier2-screening',
         {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
