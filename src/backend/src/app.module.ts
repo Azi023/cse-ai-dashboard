@@ -28,6 +28,7 @@ import { AnalysisModule } from './modules/analysis/analysis.module';
 import { DataModule } from './modules/data/data.module';
 import { DemoModule } from './demo/demo.module';
 import { TradeOpportunitiesModule } from './modules/trade-opportunities/trade-opportunities.module';
+import { ZakatModule } from './modules/zakat/zakat.module';
 
 @Module({
   imports: [
@@ -99,6 +100,7 @@ import { TradeOpportunitiesModule } from './modules/trade-opportunities/trade-op
     DataModule,
     DemoModule,
     TradeOpportunitiesModule,
+    ZakatModule,
   ],
   controllers: [AppController],
   providers: [AppService],

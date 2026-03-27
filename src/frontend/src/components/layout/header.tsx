@@ -30,6 +30,7 @@ import {
   Moon,
   ClipboardList,
   Crosshair,
+  Scale,
 } from 'lucide-react';
 import { marketApi, alertsApi } from '@/lib/api';
 import { useDisplayMode } from '@/contexts/display-mode-context';
@@ -101,6 +102,7 @@ const toolsGroup: NavGroup = {
   icon: FileSpreadsheet,
   links: [
     { href: '/dividends', label: 'Dividends', icon: CalendarDays },
+    { href: '/zakat', label: 'Zakat Calculator', icon: Scale },
     { href: '/admin/financials', label: 'Financials', icon: FileSpreadsheet },
     { href: '/settings', label: 'Settings', icon: Settings },
   ],
