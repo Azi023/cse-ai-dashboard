@@ -39,6 +39,11 @@ interface TradeItem {
 }
 
 interface MarketSummaryCache {
+  // Raw CSE marketSummery endpoint fields
+  shareVolume?: number;
+  tradeVolume?: number;
+  trades?: number;
+  // Normalised fields (used by older snapshot code — kept for compat)
   aspiIndex?: number;
   aspiChange?: number;
   aspiChangePercent?: number;
@@ -48,6 +53,12 @@ interface MarketSummaryCache {
   totalVolume?: number;
   totalTurnover?: number;
   totalTrades?: number;
+}
+
+interface IndexDataCache {
+  value?: number;
+  change?: number;
+  percentage?: number;
 }
 
 interface FinancialFactors {
@@ -749,28 +760,77 @@ export class AnalysisService {
   // ---------------------------------------------------------------------------
 
   private async saveMarketSnapshot(date: string): Promise<void> {
-    const [marketSummary, topGainers, topLosers, allSectors] =
-      await Promise.all([
-        this.redisService.getJson<MarketSummaryCache>('cse:market_summary'),
-        this.redisService.getJson<TradeItem[]>('cse:top_gainers'),
-        this.redisService.getJson<TradeItem[]>('cse:top_losers'),
-        this.redisService.getJson<unknown[]>('cse:all_sectors'),
-      ]);
+    const [
+      marketSummary,
+      aspiData,
+      snpData,
+      topGainers,
+      topLosers,
+      allSectors,
+    ] = await Promise.all([
+      this.redisService.getJson<MarketSummaryCache>('cse:market_summary'),
+      this.redisService.getJson<IndexDataCache>('cse:aspi_data'),
+      this.redisService.getJson<IndexDataCache>('cse:snp_data'),
+      this.redisService.getJson<TradeItem[]>('cse:top_gainers'),
+      this.redisService.getJson<TradeItem[]>('cse:top_losers'),
+      this.redisService.getJson<unknown[]>('cse:all_sectors'),
+    ]);
 
-    if (!marketSummary) {
-      this.logger.warn(`No market summary in Redis for ${date} — skipping`);
+    // ASPI: prefer dedicated aspi_data cache, fall back to legacy aspiIndex field,
+    // finally fall back to the most recent MarketSummary DB row.
+    let aspiClose: number | null =
+      aspiData?.value ?? marketSummary?.aspiIndex ?? null;
+    let aspiChangePct: number | null =
+      aspiData?.percentage ?? marketSummary?.aspiChangePercent ?? null;
+    let sp20Close: number | null =
+      snpData?.value ?? marketSummary?.spSl20Index ?? null;
+    let sp20ChangePct: number | null =
+      snpData?.percentage ?? marketSummary?.spSl20ChangePercent ?? null;
+
+    // Volume/turnover: raw CSE fields first, then normalised fields
+    const totalVolume: number | null =
+      marketSummary?.shareVolume ?? marketSummary?.totalVolume ?? null;
+    const totalTurnover: number | null =
+      marketSummary?.tradeVolume ?? marketSummary?.totalTurnover ?? null;
+    const totalTrades: number | null =
+      marketSummary?.trades ?? marketSummary?.totalTrades ?? null;
+
+    // If Redis is empty (off-hours/restart), carry ASPI forward from the most
+    // recent snapshot that has a value — avoids null gaps on weekends.
+    if (aspiClose == null) {
+      const lastSnap = await this.marketSnapshotRepo
+        .createQueryBuilder('snap')
+        .where('snap.aspi_close IS NOT NULL')
+        .orderBy('snap.date', 'DESC')
+        .take(1)
+        .getOne()
+        .catch(() => null);
+      if (lastSnap) {
+        aspiClose = lastSnap.aspi_close ? Number(lastSnap.aspi_close) : null;
+        sp20Close = lastSnap.sp20_close ? Number(lastSnap.sp20_close) : null;
+        // Change % is date-specific — leave null when carrying forward
+        this.logger.warn(
+          `Redis empty — carried ASPI ${aspiClose} from last snapshot (${lastSnap.date}) to ${date}`,
+        );
+      }
+    }
+
+    if (aspiClose == null && !marketSummary && !topGainers) {
+      this.logger.warn(
+        `No market data available for ${date} — skipping snapshot`,
+      );
       return;
     }
 
     const snap: Partial<MarketSnapshot> = {
       date,
-      aspi_close: marketSummary.aspiIndex ?? null,
-      aspi_change_pct: marketSummary.aspiChangePercent ?? null,
-      sp20_close: marketSummary.spSl20Index ?? null,
-      sp20_change_pct: marketSummary.spSl20ChangePercent ?? null,
-      total_volume: marketSummary.totalVolume ?? null,
-      total_turnover: marketSummary.totalTurnover ?? null,
-      total_trades: marketSummary.totalTrades ?? null,
+      aspi_close: aspiClose,
+      aspi_change_pct: aspiChangePct,
+      sp20_close: sp20Close,
+      sp20_change_pct: sp20ChangePct,
+      total_volume: totalVolume,
+      total_turnover: totalTurnover,
+      total_trades: totalTrades,
       top_gainers: (topGainers ?? []).slice(0, 5),
       top_losers: (topLosers ?? []).slice(0, 5),
       sector_performance: allSectors ?? null,

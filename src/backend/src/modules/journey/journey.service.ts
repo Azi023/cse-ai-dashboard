@@ -180,8 +180,37 @@ export class JourneyService {
       0,
     );
 
-    // Current portfolio value (live)
-    const currentPortfolioValue = await this.calculatePortfolioValue();
+    // Current portfolio value (live) = stock value + cash
+    const stockValue = await this.calculatePortfolioValue();
+
+    // Estimate cash balance: prefer ATrad sync data, fall back to
+    // (totalDeposited - totalCostBasis) so the KPIs are meaningful even
+    // when ATrad hasn't been synced yet.
+    const atradCache = await this.redisService.getJson<{
+      cashBalance?: number;
+      buyingPower?: number;
+    }>('atrad:last_sync');
+    let cashBalance =
+      atradCache?.cashBalance && Number(atradCache.cashBalance) > 0
+        ? Number(atradCache.cashBalance)
+        : atradCache?.buyingPower && Number(atradCache.buyingPower) > 0
+          ? Number(atradCache.buyingPower)
+          : 0;
+
+    if (cashBalance === 0) {
+      // Fall back: estimate from deposits minus cost of open positions
+      const openHoldings = await this.portfolioRepository.find({
+        where: { is_open: true },
+      });
+      const totalCostBasis = openHoldings.reduce(
+        (sum, h) =>
+          sum + Number(h.quantity) * Number(h.buy_price) + Number(h.fees ?? 0),
+        0,
+      );
+      cashBalance = Math.max(0, totalDeposited - totalCostBasis);
+    }
+
+    const currentPortfolioValue = stockValue + cashBalance;
 
     // Total P&L
     const totalProfitLoss = currentPortfolioValue - totalDeposited;

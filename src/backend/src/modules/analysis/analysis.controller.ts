@@ -59,6 +59,13 @@ export class AnalysisController {
     return this.analysisService.getDataStatus();
   }
 
+  /** POST /api/analysis/run-snapshot — manual trigger for daily market+portfolio snapshots */
+  @Post('run-snapshot')
+  async runSnapshot() {
+    await this.analysisService.saveDailySnapshots();
+    return { message: 'Daily snapshot triggered' };
+  }
+
   /** POST /api/analysis/run-scoring — manual trigger for stock scoring */
   @Post('run-scoring')
   async runScoring() {
