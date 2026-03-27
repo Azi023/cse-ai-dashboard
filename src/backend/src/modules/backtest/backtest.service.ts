@@ -42,7 +42,10 @@ export class BacktestService {
     private readonly stockRepo: Repository<Stock>,
   ) {}
 
-  private async getPricesForSymbol(symbol: string, limit: number): Promise<DailyPrice[]> {
+  private async getPricesForSymbol(
+    symbol: string,
+    limit: number,
+  ): Promise<DailyPrice[]> {
     const stock = await this.stockRepo.findOne({
       where: { symbol: symbol.toUpperCase() },
     });
@@ -74,11 +77,26 @@ export class BacktestService {
 
     switch (strategy) {
       case 'RSI_OVERSOLD':
-        return this.strategyRsiOversold(symbol, closePrices, dates, initialCapital);
+        return this.strategyRsiOversold(
+          symbol,
+          closePrices,
+          dates,
+          initialCapital,
+        );
       case 'SMA_CROSSOVER':
-        return this.strategySmaCrossover(symbol, closePrices, dates, initialCapital);
+        return this.strategySmaCrossover(
+          symbol,
+          closePrices,
+          dates,
+          initialCapital,
+        );
       case 'VALUE_SCREEN':
-        return this.strategyValueScreen(symbol, closePrices, dates, initialCapital);
+        return this.strategyValueScreen(
+          symbol,
+          closePrices,
+          dates,
+          initialCapital,
+        );
       default:
         return this.emptyResult(strategy, symbol, initialCapital);
     }
@@ -150,8 +168,17 @@ export class BacktestService {
       ((prices[prices.length - 1] - prices[14]) / prices[14]) * 100;
 
     return this.buildResult(
-      'RSI_OVERSOLD', symbol, dates[14], dates[dates.length - 1],
-      capital, cash, trades, wins, losses, equityCurve, buyAndHoldReturn,
+      'RSI_OVERSOLD',
+      symbol,
+      dates[14],
+      dates[dates.length - 1],
+      capital,
+      cash,
+      trades,
+      wins,
+      losses,
+      equityCurve,
+      buyAndHoldReturn,
     );
   }
 
@@ -185,20 +212,30 @@ export class BacktestService {
           entryPrice = price;
           cash -= qty * price;
           trades.push({
-            date: dates[i], type: 'BUY', price, quantity: qty,
+            date: dates[i],
+            type: 'BUY',
+            price,
+            quantity: qty,
             reason: `SMA20 (${s20.toFixed(2)}) crossed above SMA50 (${s50.toFixed(2)})`,
           });
         }
-      } else if (shares > 0 && ((!above && prevAbove) || price < entryPrice * 0.90)) {
+      } else if (
+        shares > 0 &&
+        ((!above && prevAbove) || price < entryPrice * 0.9)
+      ) {
         cash += shares * price;
         const pnl = (price - entryPrice) * shares;
         if (pnl > 0) wins++;
         else losses++;
         trades.push({
-          date: dates[i], type: 'SELL', price, quantity: shares,
-          reason: !above && prevAbove
-            ? `SMA20 (${s20.toFixed(2)}) crossed below SMA50 (${s50.toFixed(2)})`
-            : `Stop-loss hit at ${((price / entryPrice - 1) * 100).toFixed(1)}%`,
+          date: dates[i],
+          type: 'SELL',
+          price,
+          quantity: shares,
+          reason:
+            !above && prevAbove
+              ? `SMA20 (${s20.toFixed(2)}) crossed below SMA50 (${s50.toFixed(2)})`
+              : `Stop-loss hit at ${((price / entryPrice - 1) * 100).toFixed(1)}%`,
         });
         shares = 0;
       }
@@ -219,8 +256,17 @@ export class BacktestService {
       ((prices[prices.length - 1] - prices[startIdx]) / prices[startIdx]) * 100;
 
     return this.buildResult(
-      'SMA_CROSSOVER', symbol, dates[startIdx], dates[dates.length - 1],
-      capital, cash, trades, wins, losses, equityCurve, buyAndHoldReturn,
+      'SMA_CROSSOVER',
+      symbol,
+      dates[startIdx],
+      dates[dates.length - 1],
+      capital,
+      cash,
+      trades,
+      wins,
+      losses,
+      equityCurve,
+      buyAndHoldReturn,
     );
   }
 
@@ -251,7 +297,10 @@ export class BacktestService {
           entryPrice = price;
           cash -= qty * price;
           trades.push({
-            date: dates[i], type: 'BUY', price, quantity: qty,
+            date: dates[i],
+            type: 'BUY',
+            price,
+            quantity: qty,
             reason: `Price ${discountPct.toFixed(1)}% below 50-day SMA (${avg50.toFixed(2)})`,
           });
         }
@@ -262,10 +311,14 @@ export class BacktestService {
           if (returnPct > 0) wins++;
           else losses++;
           trades.push({
-            date: dates[i], type: 'SELL', price, quantity: shares,
-            reason: returnPct >= 5
-              ? `Target hit: +${returnPct.toFixed(1)}%`
-              : `Stop-loss: ${returnPct.toFixed(1)}%`,
+            date: dates[i],
+            type: 'SELL',
+            price,
+            quantity: shares,
+            reason:
+              returnPct >= 5
+                ? `Target hit: +${returnPct.toFixed(1)}%`
+                : `Stop-loss: ${returnPct.toFixed(1)}%`,
           });
           shares = 0;
         }
@@ -286,8 +339,17 @@ export class BacktestService {
       ((prices[prices.length - 1] - prices[startIdx]) / prices[startIdx]) * 100;
 
     return this.buildResult(
-      'VALUE_SCREEN', symbol, dates[startIdx], dates[dates.length - 1],
-      capital, cash, trades, wins, losses, equityCurve, buyAndHoldReturn,
+      'VALUE_SCREEN',
+      symbol,
+      dates[startIdx],
+      dates[dates.length - 1],
+      capital,
+      cash,
+      trades,
+      wins,
+      losses,
+      equityCurve,
+      buyAndHoldReturn,
     );
   }
 
@@ -360,10 +422,46 @@ export class BacktestService {
     return sma;
   }
 
+  /**
+   * Annualised Sharpe ratio using daily equity curve returns.
+   * Risk-free rate: CBSL OPR 8.5% annual = 0.0337% per trading day.
+   * Formula: (mean_daily_return - rf_daily) / std_dev * sqrt(252)
+   */
+  private calculateSharpeRatio(
+    equityCurve: Array<{ date: string; equity: number }>,
+  ): number | null {
+    if (equityCurve.length < 10) return null;
+
+    const dailyReturns: number[] = [];
+    for (let i = 1; i < equityCurve.length; i++) {
+      const prev = equityCurve[i - 1].equity;
+      const curr = equityCurve[i].equity;
+      if (prev > 0) dailyReturns.push((curr - prev) / prev);
+    }
+    if (dailyReturns.length < 5) return null;
+
+    const n = dailyReturns.length;
+    const mean = dailyReturns.reduce((s, r) => s + r, 0) / n;
+    const variance =
+      dailyReturns.reduce((s, r) => s + (r - mean) ** 2, 0) / (n - 1);
+    const stdDev = Math.sqrt(variance);
+    if (stdDev === 0) return null;
+
+    const rfDaily = 0.085 / 252; // 8.5% CBSL OPR annualised
+    const annualisedSharpe = ((mean - rfDaily) / stdDev) * Math.sqrt(252);
+    return Math.round(annualisedSharpe * 100) / 100;
+  }
+
   private buildResult(
-    strategy: string, symbol: string, startDate: string, endDate: string,
-    initialCapital: number, finalCapital: number, trades: BacktestTrade[],
-    wins: number, losses: number,
+    strategy: string,
+    symbol: string,
+    startDate: string,
+    endDate: string,
+    initialCapital: number,
+    finalCapital: number,
+    trades: BacktestTrade[],
+    wins: number,
+    losses: number,
     equityCurve: Array<{ date: string; equity: number }>,
     buyAndHoldReturn: number,
   ): BacktestResult {
@@ -381,26 +479,49 @@ export class BacktestService {
     }
 
     return {
-      strategy, symbol, startDate, endDate, initialCapital,
+      strategy,
+      symbol,
+      startDate,
+      endDate,
+      initialCapital,
       finalCapital: Math.round(finalCapital * 100) / 100,
       totalReturn: Math.round(totalReturn * 100) / 100,
       totalReturnPercent: Math.round(totalReturnPercent * 100) / 100,
-      totalTrades, winningTrades: wins, losingTrades: losses,
+      totalTrades,
+      winningTrades: wins,
+      losingTrades: losses,
       winRate: Math.round(winRate * 100) / 100,
       maxDrawdown: Math.round(maxDrawdown * 100) / 100,
-      sharpeRatio: null, trades, equityCurve,
+      sharpeRatio: this.calculateSharpeRatio(equityCurve),
+      trades,
+      equityCurve,
       buyAndHoldReturn: Math.round(buyAndHoldReturn * 100) / 100,
     };
   }
 
-  private emptyResult(strategy: string, symbol: string, capital: number): BacktestResult {
+  private emptyResult(
+    strategy: string,
+    symbol: string,
+    capital: number,
+  ): BacktestResult {
     return {
-      strategy, symbol, startDate: '', endDate: '',
-      initialCapital: capital, finalCapital: capital,
-      totalReturn: 0, totalReturnPercent: 0,
-      totalTrades: 0, winningTrades: 0, losingTrades: 0,
-      winRate: 0, maxDrawdown: 0, sharpeRatio: null,
-      trades: [], equityCurve: [], buyAndHoldReturn: 0,
+      strategy,
+      symbol,
+      startDate: '',
+      endDate: '',
+      initialCapital: capital,
+      finalCapital: capital,
+      totalReturn: 0,
+      totalReturnPercent: 0,
+      totalTrades: 0,
+      winningTrades: 0,
+      losingTrades: 0,
+      winRate: 0,
+      maxDrawdown: 0,
+      sharpeRatio: null,
+      trades: [],
+      equityCurve: [],
+      buyAndHoldReturn: 0,
     };
   }
 }

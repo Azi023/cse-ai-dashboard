@@ -158,4 +158,11 @@ export class AnalysisController {
     await this.learningService.runUpdateNow();
     return { message: 'Outcome update triggered' };
   }
+
+  /** POST /api/analysis/run-recommendation — manual trigger for weekly AI recommendation */
+  @Post('run-recommendation')
+  async runRecommendation() {
+    await this.analysisService.generateWeeklyRecommendation();
+    return { message: 'AI recommendation generation triggered' };
+  }
 }

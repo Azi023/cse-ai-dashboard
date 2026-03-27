@@ -449,7 +449,7 @@ export class AnalysisService {
           const fin = item.financial;
           const tech = techSignals.get(s.symbol);
           const techLine = tech
-            ? `  Technical signals: ${tech.overall_signal} (score ${tech.signal_score}) | RSI ${tech.rsi_14?.toFixed(1) ?? 'N/A'} (${tech.rsi_signal ?? 'N/A'}) | SMA trend: ${tech.sma_trend ?? 'N/A'} | MACD: ${tech.macd_crossover ?? 'N/A'} | Vol: ${tech.volume_trend ?? 'N/A'} | ATR: ${tech.atr_14?.toFixed(2) ?? 'N/A'} | Support: ${tech.support_20d?.toFixed(2) ?? 'N/A'} | Resistance: ${tech.resistance_20d?.toFixed(2) ?? 'N/A'}${tech.candlestick_pattern ? ` | Pattern: ${tech.candlestick_pattern}` : ''}`
+            ? `  Technical signals: ${tech.overall_signal} (score ${tech.signal_score}) | RSI ${tech.rsi_14 != null ? Number(tech.rsi_14).toFixed(1) : 'N/A'} (${tech.rsi_signal ?? 'N/A'}) | SMA trend: ${tech.sma_trend ?? 'N/A'} | MACD: ${tech.macd_crossover ?? 'N/A'} | Vol: ${tech.volume_trend ?? 'N/A'} | ATR: ${tech.atr_14 != null ? Number(tech.atr_14).toFixed(2) : 'N/A'} | Support: ${tech.support_20d != null ? Number(tech.support_20d).toFixed(2) : 'N/A'} | Resistance: ${tech.resistance_20d != null ? Number(tech.resistance_20d).toFixed(2) : 'N/A'}${tech.candlestick_pattern ? ` | Pattern: ${tech.candlestick_pattern}` : ''}`
             : '  Technical signals: Insufficient data for chart indicators';
           return [
             `${s.symbol}: Composite ${Number(s.composite_score).toFixed(1)}/100`,
