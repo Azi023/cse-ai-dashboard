@@ -59,6 +59,7 @@ export default function PortfolioPage() {
   const [riskData, setRiskData] = useState<PortfolioRiskSummary | null>(null);
   const [atradStatus, setAtradStatus] = useState<ATradSyncStatus | null>(null);
   const [syncing, setSyncing] = useState(false);
+  const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
 
   const fetchData = useCallback(async () => {
     try {
@@ -81,6 +82,7 @@ export default function PortfolioPage() {
         setPurification(purificationRes.value.data);
       if (riskRes.status === 'fulfilled')
         setRiskData(riskRes.value.data);
+      setLastUpdated(new Date());
     } catch (err) {
       setError('Failed to load portfolio data');
       console.error(err);
@@ -147,6 +149,11 @@ export default function PortfolioPage() {
           <p className="text-muted-foreground">
             Track your CSE holdings and performance
           </p>
+          {lastUpdated && (
+            <p className="text-[11px] text-muted-foreground/50 mt-0.5">
+              Refreshed {lastUpdated.toLocaleTimeString('en-LK', { hour: '2-digit', minute: '2-digit', second: '2-digit' })} SLT
+            </p>
+          )}
         </div>
         <Button
           onClick={() => {

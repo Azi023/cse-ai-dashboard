@@ -41,6 +41,7 @@ export default function SignalsPage() {
   const [dirFilter, setDirFilter] = useState<'ALL' | 'BUY' | 'HOLD' | 'SELL'>('ALL');
   const [confFilter, setConfFilter] = useState<'ALL' | 'HIGH' | 'MEDIUM' | 'LOW'>('ALL');
   const [shariahOnly, setShariahOnly] = useState(false);
+  const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
 
   useEffect(() => {
     const fetchData = async () => {
@@ -52,6 +53,7 @@ export default function SignalsPage() {
         if (signalsRes.status === 'fulfilled') setSignals(signalsRes.value.data);
         else setError('Failed to load signals');
         if (statusRes.status === 'fulfilled') setAiStatus(statusRes.value.data);
+        setLastUpdated(new Date());
       } catch {
         setError('Failed to load signals');
       } finally {
@@ -96,6 +98,11 @@ export default function SignalsPage() {
             {isSimple
               ? `${filtered.length} suggestion${filtered.length !== 1 ? 's' : ''} based on market data`
               : `${filtered.length} active signal${filtered.length !== 1 ? 's' : ''}`}
+            {lastUpdated && (
+              <span className="text-[11px] text-muted-foreground/50 ml-2">
+                · Fetched {lastUpdated.toLocaleTimeString('en-LK', { hour: '2-digit', minute: '2-digit', second: '2-digit' })} SLT
+              </span>
+            )}
           </p>
         </div>
         {aiStatus && (
