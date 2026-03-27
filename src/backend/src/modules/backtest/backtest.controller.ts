@@ -25,21 +25,21 @@ export class BacktestController {
     return [
       {
         id: 'RSI_OVERSOLD',
-        name: 'RSI Oversold Bounce',
+        name: 'Buy the Dip (RSI)',
         description:
-          'Buy when RSI(14) drops below 30 (oversold), sell when RSI exceeds 70 (overbought) or stop-loss at -8%.',
+          'Buys when a stock has fallen sharply and looks oversold. Sells when it recovers or rises too fast. Good for volatile, sideways markets.',
       },
       {
         id: 'SMA_CROSSOVER',
-        name: 'SMA Golden/Death Cross',
+        name: 'Trend Following (MA Cross)',
         description:
-          'Buy on golden cross (SMA20 crosses above SMA50), sell on death cross or stop-loss at -10%.',
+          'Buys when the short-term price trend crosses above the long-term trend (momentum). Exits when trend reverses. Better in trending markets.',
       },
       {
         id: 'VALUE_SCREEN',
-        name: 'Value Discount',
+        name: 'Buy Below Fair Value',
         description:
-          'Buy when price is 10% below 50-day SMA, sell at +5% profit target or -8% stop-loss.',
+          'Buys when a stock trades 10% below its 50-day average price. Takes a quick 5% profit or cuts loss at 8%. Conservative, mean-reversion approach.',
       },
     ];
   }

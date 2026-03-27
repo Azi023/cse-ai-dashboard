@@ -98,6 +98,7 @@ export default function DashboardPage() {
   const [economicEvents, setEconomicEvents] = useState<EconomicEvent[]>([]);
   const [moversTab, setMoversTab] = useState<'gainers' | 'losers' | 'active'>('gainers');
   const [portfolioSummary, setPortfolioSummary] = useState<PortfolioSummary | null>(null);
+  const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
 
   const { watchlist, toggle: toggleWatch, has: inWatchlist } = useWatchlist();
   const [watchlistStocks, setWatchlistStocks] = useState<Stock[]>([]);
@@ -122,6 +123,7 @@ export default function DashboardPage() {
         if (losersRes.status === 'fulfilled') setLosers(losersRes.value.data);
         if (activeRes.status === 'fulfilled') setActive(activeRes.value.data);
         if (sectorsRes.status === 'fulfilled') setSectors(sectorsRes.value.data);
+        setLastUpdated(new Date());
       } catch {
         setError('Failed to load market data');
       } finally {
@@ -217,11 +219,11 @@ export default function DashboardPage() {
       </div>
 
       {error && (
-        <Card className="border-destructive">
-          <CardContent className="pt-4">
-            <p className="text-sm text-destructive">{error}</p>
+        <Card className="border-destructive/50 bg-destructive/5">
+          <CardContent className="pt-4 pb-4">
+            <p className="text-sm text-destructive">Unable to load market data — the server may be temporarily unavailable.</p>
             <p className="text-xs text-muted-foreground mt-1">
-              Make sure the backend server is running on port 4101
+              Try refreshing in a few moments. If the problem persists, check your connection.
             </p>
           </CardContent>
         </Card>
@@ -249,7 +251,11 @@ export default function DashboardPage() {
                         <span className="text-xs text-muted-foreground">
                           {portfolioSummary.holdings_count} holding{portfolioSummary.holdings_count !== 1 ? 's' : ''}
                         </span>
-                        <span className="text-xs text-emerald-600 font-medium">100% Shariah</span>
+                        {portfolioSummary.allocation.every(a => !nonCompliantSymbols.has(a.symbol)) && (
+                          <span className="text-xs text-emerald-600 font-medium flex items-center gap-0.5">
+                            <ShieldCheck className="h-3 w-3" /> Shariah
+                          </span>
+                        )}
                       </div>
                     ) : (
                       <p className="text-xs text-muted-foreground mt-0.5">No holdings yet — add your first position</p>
@@ -289,22 +295,32 @@ export default function DashboardPage() {
                   );
                 })
               ) : (
-                // Fallback to known local events
-                [
-                  { date: 'Mar 25', label: 'CBSL Rate Decision' },
-                  { date: 'Mar 31', label: 'Q4 Earnings Season Begins' },
-                  { date: 'Apr 1', label: 'Next RCA Purchase Window' },
-                ].map((event) => (
-                  <div key={event.date} className="flex items-center gap-2 text-xs">
-                    <span className="num text-muted-foreground w-12 flex-shrink-0">{event.date}</span>
-                    <span className="text-foreground">{event.label}</span>
-                  </div>
-                ))
+                <p className="text-xs text-muted-foreground py-1">
+                  No upcoming events. Check{' '}
+                  <a href="https://www.cbsl.gov.lk" target="_blank" rel="noopener noreferrer" className="text-primary hover:underline">
+                    CBSL
+                  </a>
+                  {' '}and{' '}
+                  <a href="https://www.cse.lk" target="_blank" rel="noopener noreferrer" className="text-primary hover:underline">
+                    CSE
+                  </a>
+                  {' '}for announcements.
+                </p>
               )}
             </div>
           </CardContent>
         </Card>
       </div>
+
+      {/* Data freshness indicator */}
+      {lastUpdated && (
+        <p className="text-[11px] text-muted-foreground/60 -mt-2">
+          Market data last refreshed {lastUpdated.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false })} SLT
+          {!loading && summary == null && (
+            <span className="ml-2 text-amber-500">· Using cached data</span>
+          )}
+        </p>
+      )}
 
       {/* Row 1: Index Cards */}
       <div className="grid gap-4 md:grid-cols-3">

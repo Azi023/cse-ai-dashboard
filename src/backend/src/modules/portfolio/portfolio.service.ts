@@ -6,7 +6,7 @@ import {
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
-import { Portfolio, Stock } from '../../entities';
+import { Portfolio, Stock, MonthlyDeposit } from '../../entities';
 import { RedisService } from '../cse-data/redis.service';
 
 interface CreateHoldingDto {
@@ -83,6 +83,8 @@ export class PortfolioService {
     private readonly portfolioRepository: Repository<Portfolio>,
     @InjectRepository(Stock)
     private readonly stockRepository: Repository<Stock>,
+    @InjectRepository(MonthlyDeposit)
+    private readonly depositRepository: Repository<MonthlyDeposit>,
     private readonly redisService: RedisService,
   ) {}
 
@@ -478,6 +480,7 @@ export class PortfolioService {
 
   /**
    * Get cash balance from ATrad Redis cache.
+   * Falls back to: total_deposited - total_cost_basis when ATrad sync is unavailable.
    */
   private async getATradCashBalance(): Promise<number> {
     try {
@@ -485,7 +488,31 @@ export class PortfolioService {
         cashBalance?: number;
         buyingPower?: number;
       }>('atrad:last_sync');
-      return Number(cached?.cashBalance ?? cached?.buyingPower ?? 0);
+      const atradCash = Number(cached?.cashBalance ?? cached?.buyingPower ?? 0);
+      if (atradCash > 0) return atradCash;
+    } catch {
+      // fall through to estimated cash
+    }
+
+    // Fallback: estimate cash as totalDeposited - totalCostBasis
+    try {
+      const lastDeposit = await this.depositRepository.findOne({
+        where: {},
+        order: { deposit_date: 'DESC' },
+      });
+      if (!lastDeposit || Number(lastDeposit.cumulative_deposited) === 0)
+        return 0;
+
+      const totalDeposited = Number(lastDeposit.cumulative_deposited);
+      const openHoldings = await this.portfolioRepository.find({
+        where: { is_open: true },
+      });
+      const totalCostBasis = openHoldings.reduce(
+        (sum, h) =>
+          sum + Number(h.quantity) * Number(h.buy_price) + Number(h.fees ?? 0),
+        0,
+      );
+      return Math.max(0, totalDeposited - totalCostBasis);
     } catch {
       return 0;
     }

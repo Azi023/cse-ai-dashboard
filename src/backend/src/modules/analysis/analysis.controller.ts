@@ -165,4 +165,10 @@ export class AnalysisController {
     await this.analysisService.generateWeeklyRecommendation();
     return { message: 'AI recommendation generation triggered' };
   }
+
+  /** POST /api/analysis/run-exit-signals — manual trigger for exit signal check */
+  @Post('run-exit-signals')
+  async runExitSignals() {
+    return this.riskService.checkExitSignals();
+  }
 }

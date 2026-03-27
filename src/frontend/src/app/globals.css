@@ -330,6 +330,50 @@
   }
 }
 
+/* ─── Data freshness indicator ─── */
+.freshness-ok {
+  color: oklch(0.696 0.172 162);   /* emerald */
+}
+.freshness-warn {
+  color: oklch(0.735 0.186 72);    /* amber */
+}
+.freshness-stale {
+  color: oklch(0.632 0.225 27);    /* red */
+}
+
+/* ─── Stale data banner ─── */
+.stale-banner {
+  background-color: oklch(0.735 0.186 72 / 0.08);
+  border-color: oklch(0.735 0.186 72 / 0.3);
+  color: oklch(0.735 0.186 72);
+}
+.dark .stale-banner {
+  background-color: oklch(0.735 0.186 72 / 0.1);
+  border-color: oklch(0.735 0.186 72 / 0.25);
+}
+
+/* ─── Inline error / toast fade-in ─── */
+@keyframes fade-in-up {
+  from { opacity: 0; transform: translateY(4px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+.fade-in-up {
+  animation: fade-in-up 0.2s ease-out;
+}
+
+/* ─── Section skeleton shimmer ─── */
+.section-skeleton {
+  border-radius: var(--radius);
+  background: linear-gradient(
+    90deg,
+    var(--muted) 25%,
+    var(--accent) 50%,
+    var(--muted) 75%
+  );
+  background-size: 200% 100%;
+  animation: shimmer 1.5s infinite;
+}
+
 @media (max-width: 480px) {
   /* Stack summary cards single column on phones */
   .summary-cards {

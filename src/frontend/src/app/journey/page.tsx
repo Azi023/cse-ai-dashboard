@@ -92,12 +92,14 @@ export default function JourneyPage() {
   const [depositDate, setDepositDate] = useState(new Date().toISOString().slice(0, 10));
   const [depositNotes, setDepositNotes] = useState('');
   const [depositSubmitting, setDepositSubmitting] = useState(false);
+  const [depositError, setDepositError] = useState<string | null>(null);
 
   // Goal form state
   const [showGoalForm, setShowGoalForm] = useState(false);
   const [goalAmount, setGoalAmount] = useState('100000');
   const [goalLabel, setGoalLabel] = useState('');
   const [goalSubmitting, setGoalSubmitting] = useState(false);
+  const [goalError, setGoalError] = useState<string | null>(null);
 
   const fetchData = useCallback(async () => {
     setLoading(true);
@@ -140,6 +142,7 @@ export default function JourneyPage() {
 
   const handleDeposit = async () => {
     setDepositSubmitting(true);
+    setDepositError(null);
     try {
       await journeyApi.recordDeposit({
         month: depositMonth,
@@ -151,7 +154,7 @@ export default function JourneyPage() {
       setDepositNotes('');
       fetchData();
     } catch {
-      alert('Failed to record deposit. Please try again.');
+      setDepositError('Failed to record deposit. Please check the details and try again.');
     } finally {
       setDepositSubmitting(false);
     }
@@ -159,6 +162,7 @@ export default function JourneyPage() {
 
   const handleCreateGoal = async () => {
     setGoalSubmitting(true);
+    setGoalError(null);
     try {
       await journeyApi.createGoal({
         targetAmount: parseFloat(goalAmount),
@@ -168,22 +172,13 @@ export default function JourneyPage() {
       setGoalLabel('');
       fetchData();
     } catch {
-      alert('Failed to create goal. Please try again.');
+      setGoalError('Failed to create goal. Please try again.');
     } finally {
       setGoalSubmitting(false);
     }
   };
 
-  if (loading) {
-    return (
-      <div className="flex items-center justify-center min-h-[60vh]">
-        <div className="text-center space-y-3">
-          <Loader2 className="h-8 w-8 animate-spin text-primary mx-auto" />
-          <p className="text-muted-foreground">Loading your investment journey...</p>
-        </div>
-      </div>
-    );
-  }
+  // Removed full-page spinner — render skeleton sections immediately instead
 
   const hasDeposits = deposits.length > 0;
 
@@ -248,6 +243,21 @@ export default function JourneyPage() {
             <Plus className="h-4 w-4" />
             Record Your First Deposit
           </button>
+        </div>
+      )}
+
+      {/* KPI Hero Card — skeleton while loading */}
+      {loading && !kpis && (
+        <div className="rounded-xl border bg-card p-6 space-y-5 animate-pulse">
+          <div className="h-4 w-48 bg-muted rounded mx-auto" />
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+            {[0,1,2].map(i => (
+              <div key={i} className="rounded-lg bg-muted/30 p-4 space-y-2">
+                <div className="h-3 w-24 bg-muted rounded mx-auto" />
+                <div className="h-6 w-32 bg-muted rounded mx-auto" />
+              </div>
+            ))}
+          </div>
         </div>
       )}
 
@@ -817,6 +827,11 @@ export default function JourneyPage() {
                 />
               </div>
             </div>
+            {goalError && (
+              <div className="rounded-lg border border-red-500/30 bg-red-500/10 px-3 py-2 text-xs text-red-400 fade-in-up">
+                {goalError}
+              </div>
+            )}
             <button
               onClick={handleCreateGoal}
               disabled={goalSubmitting}
@@ -895,9 +910,14 @@ export default function JourneyPage() {
                 />
               </div>
             </div>
+            {depositError && (
+              <div className="rounded-lg border border-red-500/30 bg-red-500/10 px-3 py-2 text-xs text-red-400 fade-in-up">
+                {depositError}
+              </div>
+            )}
             <div className="flex gap-3">
               <button
-                onClick={() => setShowDepositForm(false)}
+                onClick={() => { setShowDepositForm(false); setDepositError(null); }}
                 className="flex-1 rounded-lg border px-4 py-2 text-sm hover:bg-muted/50"
               >
                 Cancel

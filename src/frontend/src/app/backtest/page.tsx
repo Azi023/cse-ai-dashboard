@@ -122,9 +122,9 @@ export default function BacktestPage() {
 
           {/* Quick-select popular stocks */}
           <div>
-            <label className="text-xs text-muted-foreground block mb-2">Popular Stocks</label>
+            <label className="text-xs text-muted-foreground block mb-2">Quick Select — Shariah Compliant</label>
             <div className="flex flex-wrap gap-2">
-              {['JKH.N0000', 'SAMP.N0000', 'COMB.N0000', 'HNB.N0000', 'DIAL.N0000'].map((s) => (
+              {['HHL.N0000', 'AEL.N0000', 'TJL.N0000', 'DIPD.N0000', 'LOLC.N0000', 'DIAL.N0000', 'JKH.N0000'].map((s) => (
                 <button
                   key={s}
                   onClick={() => setSelectedSymbol(s)}
@@ -215,7 +215,7 @@ export default function BacktestPage() {
       {result && (
         <>
           {/* Summary Stats */}
-          <div className="grid gap-3 grid-cols-2 sm:grid-cols-3 lg:grid-cols-6">
+          <div className="grid gap-3 grid-cols-2 sm:grid-cols-4 lg:grid-cols-4">
             <StatBox
               label="Final Capital"
               value={`LKR ${safeNum(result.finalCapital).toLocaleString()}`}
@@ -228,12 +228,24 @@ export default function BacktestPage() {
               color={result.totalReturnPercent >= 0 ? 'text-green-500' : 'text-red-500'}
             />
             <StatBox label="Win Rate" value={result.winRate} suffix="%" />
-            <StatBox label="Total Trades" value={result.totalTrades} />
+            <StatBox label="Trades" value={result.totalTrades} />
+          </div>
+          <div className="grid gap-3 grid-cols-2 sm:grid-cols-3">
             <StatBox
               label="Max Drawdown"
               value={result.maxDrawdown}
               suffix="%"
               color="text-red-500"
+            />
+            <StatBox
+              label="Sharpe Ratio"
+              value={result.sharpeRatio ?? '--'}
+              color={
+                result.sharpeRatio == null ? undefined
+                  : result.sharpeRatio >= 1 ? 'text-green-500'
+                  : result.sharpeRatio >= 0 ? 'text-yellow-500'
+                  : 'text-red-500'
+              }
             />
             <StatBox
               label="Buy & Hold"
@@ -290,10 +302,16 @@ export default function BacktestPage() {
                 </div>
                 <p className="text-xs text-muted-foreground">
                   {result.totalReturnPercent > result.buyAndHoldReturn
-                    ? 'Strategy outperformed buy & hold.'
+                    ? `Strategy outperformed buy & hold by ${(result.totalReturnPercent - result.buyAndHoldReturn).toFixed(1)}%.`
                     : result.totalReturnPercent < result.buyAndHoldReturn
-                      ? 'Buy & hold outperformed the strategy.'
+                      ? `Buy & hold outperformed the strategy by ${(result.buyAndHoldReturn - result.totalReturnPercent).toFixed(1)}%.`
                       : 'Strategy matched buy & hold performance.'}
+                  {result.sharpeRatio != null && (
+                    <span className="ml-2">
+                      Sharpe Ratio {result.sharpeRatio}
+                      {result.sharpeRatio >= 1 ? ' — good risk-adjusted return.' : result.sharpeRatio >= 0 ? ' — modest risk-adjusted return.' : ' — returns did not compensate for risk.'}
+                    </span>
+                  )}
                 </p>
               </div>
             </CardContent>

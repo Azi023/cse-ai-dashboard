@@ -347,16 +347,21 @@ export function Header() {
             </div>
           )}
 
-          {/* Market status */}
+          {/* Market status + data freshness */}
           {mounted && (
             <div className="hidden sm:flex items-center gap-1.5 rounded-md border px-2.5 py-1">
               <span
-                className={`h-1.5 w-1.5 rounded-full ${marketOpen ? 'bg-emerald-500' : 'bg-red-500'}`}
+                className={`h-1.5 w-1.5 rounded-full flex-shrink-0 ${marketOpen ? 'bg-emerald-500' : 'bg-red-500/70'}`}
                 style={marketOpen ? { boxShadow: '0 0 6px oklch(0.696 0.172 162)' } : undefined}
               />
               <span className="text-xs text-muted-foreground">
-                {marketOpen ? 'Open' : 'Closed'}
+                {marketOpen ? 'Live' : 'Closed'}
               </span>
+              {!marketOpen && currentTime && (
+                <span className="text-[10px] text-muted-foreground/60 border-l pl-1.5 ml-0.5">
+                  Data: 14:30 SLT
+                </span>
+              )}
             </div>
           )}
 
@@ -388,9 +393,9 @@ export function Header() {
             <button
               onClick={toggleMode}
               className="hidden sm:flex items-center gap-1 rounded-md border px-2.5 py-1 text-xs text-muted-foreground transition-all duration-150 hover:text-foreground hover:bg-accent"
-              title={mode === 'simple' ? 'Switch to Pro Mode' : 'Switch to Simple Mode'}
+              title={mode === 'simple' ? 'Switch to Pro Mode — shows all analysis tools' : 'Switch to Beginner Mode — simplified view'}
             >
-              {mode === 'simple' ? 'Simple' : 'Pro'}
+              {mode === 'simple' ? '● Beginner' : '◈ Pro'}
             </button>
           )}
 
