@@ -300,6 +300,7 @@ export const SHARIAH_BLACKLIST = {
 // Source: Almas Equities Investment Brief + CSE-listed Shariah-certified companies.
 
 export const SHARIAH_WHITELIST = [
+  // ── Previously confirmed ──────────────────────────────────────────────────
   {
     symbol: 'AEL.N0000',
     name: 'Access Engineering PLC',
@@ -347,13 +348,148 @@ export const SHARIAH_WHITELIST = [
   },
   {
     symbol: 'GRAN.N0000',
-    name: 'Granoland (Pvt) Ltd',
-    reason: 'Almas-verified — food processing',
+    name: 'Ceylon Grain Elevators PLC',
+    reason: 'Almas-verified — food processing/grain',
   },
   {
     symbol: 'DIPD.N0000',
     name: 'Dipped Products PLC',
     reason: 'Almas-verified — rubber manufacturing',
+  },
+
+  // ── Added 2026-03-27 — Almas Equities quarterly update ────────────────────
+  // Cables & Industrial
+  {
+    symbol: 'ACL.N0000',
+    name: 'ACL Cables PLC',
+    reason: 'Almas-verified — cable manufacturing',
+  },
+  {
+    symbol: 'APLA.N0000',
+    name: 'ACL Plastics PLC',
+    reason: 'Almas-verified — plastics manufacturing',
+  },
+  {
+    symbol: 'CIND.N0000',
+    name: 'Central Industries PLC',
+    reason: 'Almas-verified — industrial manufacturing',
+  },
+  {
+    symbol: 'KCAB.N0000',
+    name: 'Kelani Cables PLC',
+    reason: 'Almas-verified — cable manufacturing',
+  },
+  {
+    symbol: 'LALU.N0000',
+    name: 'Lanka Aluminium Industries PLC',
+    reason: 'Almas-verified — aluminium manufacturing',
+  },
+  {
+    symbol: 'TYRE.N0000',
+    name: 'Kelani Tyres PLC',
+    reason: 'Almas-verified — tyre manufacturing',
+  },
+  // Ceramics & Building Materials
+  {
+    symbol: 'DPL.N0000',
+    name: 'Dankotuwa Porcelain PLC',
+    reason: 'Almas-verified — porcelain/ceramics manufacturing',
+  },
+  {
+    symbol: 'REGL.N0000',
+    name: 'Regnis Lanka PLC',
+    reason: 'Almas-verified — appliance manufacturing',
+  },
+  // Property & Real Estate
+  {
+    symbol: 'CTLD.N0000',
+    name: 'CT Land Development PLC',
+    reason: 'Almas-verified — property development',
+  },
+  {
+    symbol: 'PLR.N0000',
+    name: 'Prime Lands Residencies PLC',
+    reason: 'Almas-verified — property development',
+  },
+  {
+    symbol: 'RIL.N0000',
+    name: 'RIL Property PLC',
+    reason: 'Almas-verified — property development',
+  },
+  // Food & Consumer
+  {
+    symbol: 'SOY.N0000',
+    name: 'Convenience Foods (Lanka) PLC',
+    reason: 'Almas-verified — food manufacturing',
+  },
+  {
+    symbol: 'SWAD.N0000',
+    name: 'Swadeshi Industrial Works PLC',
+    reason: 'Almas-verified — consumer goods manufacturing',
+  },
+  // Diversified Conglomerates
+  {
+    symbol: 'CIC.N0000',
+    name: 'CIC Holdings PLC',
+    reason: 'Almas-verified — agri/industrial conglomerate',
+  },
+  {
+    symbol: 'CIC.X0000',
+    name: 'CIC Holdings PLC (NV)',
+    reason: 'Almas-verified — agri/industrial conglomerate (non-voting)',
+  },
+  {
+    symbol: 'HHL.N0000',
+    name: 'Hemas Holdings PLC',
+    reason: 'Almas-verified — healthcare/consumer conglomerate',
+  },
+  {
+    symbol: 'RICH.N0000',
+    name: 'Richard Pieris and Company PLC',
+    reason: 'Almas-verified — diversified manufacturing conglomerate',
+  },
+  {
+    symbol: 'SUN.N0000',
+    name: 'Sunshine Holdings PLC',
+    reason: 'Almas-verified — agri/healthcare conglomerate',
+  },
+  {
+    symbol: 'GREG.N0000',
+    name: 'Ambeon Holdings PLC',
+    reason: 'Almas-verified — technology/industrial holdings',
+  },
+  // Chemicals & Speciality
+  {
+    symbol: 'UCAR.N0000',
+    name: 'Union Chemicals Lanka PLC',
+    reason: 'Almas-verified — chemicals manufacturing',
+  },
+  {
+    symbol: 'BOGA.N0000',
+    name: 'Bogala Graphite Lanka PLC',
+    reason: 'Almas-verified — graphite mining/export',
+  },
+  // Islamic Finance (inherently Shariah-compliant)
+  {
+    symbol: 'ABL.N0000',
+    name: 'Amana Bank PLC',
+    reason: 'Almas-verified — Islamic banking (inherently compliant)',
+  },
+  {
+    symbol: 'ATL.N0000',
+    name: 'Amana Takaful PLC',
+    reason: 'Almas-verified — Takaful insurance (inherently compliant)',
+  },
+  {
+    symbol: 'ATLL.N0000',
+    name: 'Amana Takaful Life PLC',
+    reason: 'Almas-verified — Takaful life insurance (inherently compliant)',
+  },
+  // Other
+  {
+    symbol: 'JAT.N0000',
+    name: 'JAT Holdings PLC',
+    reason: 'Almas-verified — specialty coatings/construction materials',
   },
 ];
 
