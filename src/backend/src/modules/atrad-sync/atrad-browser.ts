@@ -271,7 +271,7 @@ async function navigateToPortfolio(page: Page): Promise<boolean> {
         if (text && /buy|sell|order|place|confirm/i.test(text)) continue;
         await el.click();
         logger.log(`Clicked Stock Holding using: ${sel}`);
-        await page.waitForTimeout(4000);
+        await page.waitForTimeout(6000); // Dojo grid needs time to initialize
         await takeScreenshot(page, 'stock-holding-page');
         return true;
       }
@@ -292,14 +292,54 @@ async function navigateToPortfolio(page: Page): Promise<boolean> {
 
 async function scrapeHoldingsViaApi(page: Page): Promise<ATradHolding[]> {
   try {
-    const rawText: string = await page.evaluate(async () => {
-      const resp = await fetch('/atsweb/client', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-        body: 'action=getStockHolding&exchange=CSE&broker=FWS&stockHoldingClientAccount=&format=json',
-      });
-      return resp.text();
-    });
+    // Strategy: Intercept the real AJAX response triggered by Dojo's Refresh button.
+    // This captures the exact same payload the ATrad UI receives, including all
+    // session-specific exchange, broker, and account parameters Dojo fills in.
+    const refreshBtn = await page.$('#stockHoldingRefreshbtn');
+    if (!refreshBtn) {
+      logger.warn(
+        'stockHoldingRefreshbtn not found — skipping holdings API scrape',
+      );
+      return [];
+    }
+
+    // Register interceptor BEFORE clicking so we don't miss the response
+    const responsePromise = page.waitForResponse(
+      (resp) =>
+        resp.url().includes('/atsweb/client') &&
+        resp.request().method() === 'POST',
+      { timeout: 15_000 },
+    );
+    await refreshBtn.click();
+    logger.log('Clicked stockHoldingRefreshbtn — intercepting AJAX response');
+
+    let rawText: string;
+    try {
+      const response = await responsePromise;
+      rawText = await response.text();
+      logger.log(
+        `Intercepted holdings AJAX response (${rawText.length} bytes)`,
+      );
+    } catch {
+      // Fallback: make the API call ourselves using whatever Dojo populated
+      logger.warn('AJAX intercept timed out — falling back to direct API call');
+      await page.waitForTimeout(2000);
+      const accountNo = await page
+        .$eval(
+          '#stockHoldingClientAccount',
+          (el) => (el as HTMLInputElement).value ?? '',
+        )
+        .catch(() => '');
+      const fbBody = `action=getStockHolding&exchange=CSE&broker=FWS&stockHoldingClientAccount=${encodeURIComponent(accountNo)}&stockHoldingSecurity=&format=json`;
+      rawText = await page.evaluate(async (reqBody: string) => {
+        const resp = await fetch('/atsweb/client', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+          body: reqBody,
+        });
+        return resp.text();
+      }, fbBody);
+    }
 
     if (!rawText || rawText.trim().length === 0) {
       logger.warn('ATrad holdings API returned empty response');
@@ -311,7 +351,17 @@ async function scrapeHoldingsViaApi(page: Page): Promise<ATradHolding[]> {
     const data = JSON.parse(normalised) as Record<string, unknown>;
     logger.log(`ATrad holdings API raw keys: ${Object.keys(data).join(', ')}`);
 
-    const rows: unknown[] = (data['portfolios'] ??
+    // Log the nested data field to understand the full response shape
+    const innerData = data['data'] as Record<string, unknown> | undefined;
+    if (innerData) {
+      logger.log(`ATrad data sub-keys: ${Object.keys(innerData).join(', ')}`);
+    }
+
+    // ATrad wraps results in data.portfolios — check both top-level and nested
+    const rows: unknown[] = (innerData?.['portfolios'] ??
+      innerData?.['holdings'] ??
+      innerData?.['stockHoldings'] ??
+      data['portfolios'] ??
       data['holdings'] ??
       data['stockHoldings'] ??
       []) as unknown[];
@@ -589,6 +639,35 @@ async function scrapeAccountSummary(
   ];
 
   try {
+    // Strategy 0 (fastest): Read confirmed ATrad element IDs directly
+    // These IDs were verified from live HTML recon of the Account Summary page.
+    const atradIds: Array<{ key: keyof typeof result; id: string }> = [
+      { key: 'cashBalance', id: '#txtAccSumaryCashBalance' },
+      { key: 'buyingPower', id: '#txtAccSumaryBuyingPowr' },
+      { key: 'accountValue', id: '#txtAccSumaryTMvaluePortfolio' },
+    ];
+    const MAX_RETAIL = 50_000_000;
+    for (const { key, id } of atradIds) {
+      try {
+        const el = await page.$(id);
+        if (el) {
+          const text = await el.textContent();
+          const val = parseNumber(text);
+          if (val > 0 && val < MAX_RETAIL) {
+            result[key] = val;
+            logger.log(
+              `Account summary (Strategy 0): ${key} = ${val} via ${id}`,
+            );
+          }
+        }
+      } catch {
+        /* fallthrough to Strategy 1 */
+      }
+    }
+    if (result.cashBalance > 0 && result.buyingPower > 0) {
+      return result; // Fast path — all values found
+    }
+
     // Strategy 1: Look for label-value pairs in spans/divs
     const allText = await page.$$eval('span, div, td, label, p', (elements) =>
       elements.map((el) => ({
@@ -632,6 +711,7 @@ async function scrapeAccountSummary(
     }
 
     // Strategy 2: Look for specific element IDs/classes
+    // ATrad-confirmed IDs are listed first (verified from HTML recon)
     const specificSelectors: Array<{
       key: keyof typeof result;
       selectors: string[];
@@ -639,6 +719,7 @@ async function scrapeAccountSummary(
       {
         key: 'buyingPower',
         selectors: [
+          '#txtAccSumaryBuyingPowr', // ← confirmed ATrad ID
           '#buyingPower',
           '.buying-power',
           '[data-field="buyingPower"]',
@@ -648,6 +729,7 @@ async function scrapeAccountSummary(
       {
         key: 'accountValue',
         selectors: [
+          '#txtAccSumaryTMvaluePortfolio', // ← confirmed ATrad ID (market value of portfolio)
           '#accountValue',
           '.account-value',
           '[data-field="accountValue"]',
@@ -657,6 +739,7 @@ async function scrapeAccountSummary(
       {
         key: 'cashBalance',
         selectors: [
+          '#txtAccSumaryCashBalance', // ← confirmed ATrad ID
           '#cashBalance',
           '.cash-balance',
           '[data-field="cashBalance"]',

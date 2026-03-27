@@ -111,24 +111,54 @@ export class ATradSyncService {
             `Buying Power: ${result.buyingPower}, Account Value: ${result.accountValue}`,
         );
 
-        // Compare with portfolio table and auto-update
-        await this.reconcilePortfolio(result.holdings);
+        // ATrad returns portfolios:[] after market hours even when holdings exist
+        // (accountValue > 0 means we have positions). Preserve previous holdings
+        // in that case — only reconcile when we actually received holding data.
+        const hasHoldings = result.holdings.length > 0;
+        const holdsExistOnServer = result.accountValue > 0;
+
+        if (hasHoldings) {
+          await this.reconcilePortfolio(result.holdings);
+        } else if (holdsExistOnServer) {
+          this.logger.log(
+            'ATrad returned 0 holdings but accountValue > 0 — likely after-hours. ' +
+              'Preserving previously cached holdings, updating cash/balance only.',
+          );
+        } else {
+          // Genuine empty portfolio
+          await this.reconcilePortfolio([]);
+        }
 
         // Detect deposits via buying power changes
         await this.detectDeposit(result.buyingPower);
+
+        // Build cache payload — reuse previous holdings when ATrad returned empty after-hours
+        let holdingsToCache = result.holdings;
+        if (!hasHoldings && holdsExistOnServer) {
+          const prev = await this.redisService.getJson<{
+            holdings?: unknown[];
+          }>('atrad:last_sync');
+          holdingsToCache = (prev?.holdings ?? []) as typeof result.holdings;
+        }
 
         // Cache the result in Redis (24 hour TTL — survives backend restarts)
         await this.redisService.setJson(
           'atrad:last_sync',
           {
             ...result,
+            holdings: holdingsToCache,
+            syncedAt: result.lastSynced.toISOString(),
             lastSynced: result.lastSynced.toISOString(),
           },
           86400,
         );
 
-        // Cache holdings separately for quick access
-        await this.redisService.setJson('atrad:holdings', result.holdings, 300);
+        // Cache holdings separately for quick access (5 min TTL during market, 24h otherwise)
+        await this.redisService.setJson(
+          'atrad:holdings',
+          holdingsToCache,
+          hasHoldings ? 300 : 86400,
+        );
       } else {
         this.logger.error(`Sync failed: ${result.error}`);
       }
