@@ -8,6 +8,7 @@ import { DemoTrade } from './entities/demo-trade.entity';
 import { Stock } from '../entities/stock.entity';
 import { StockScore } from '../entities/stock-score.entity';
 import { CompanyFinancial } from '../entities/company-financial.entity';
+import { StrategySignal } from '../entities/strategy-signal.entity';
 import { RedisService } from '../modules/cse-data/redis.service';
 import { DemoService } from './demo.service';
 
@@ -62,6 +63,8 @@ export class DemoAITraderService {
     private readonly stockScoreRepo: Repository<StockScore>,
     @InjectRepository(CompanyFinancial)
     private readonly financialRepo: Repository<CompanyFinancial>,
+    @InjectRepository(StrategySignal)
+    private readonly strategySignalRepo: Repository<StrategySignal>,
     private readonly redisService: RedisService,
     private readonly configService: ConfigService,
     private readonly demoService: DemoService,
@@ -350,8 +353,30 @@ export class DemoAITraderService {
       );
     }
 
-    // 2. Score-based: compliant stocks with today's composite scores
+    // 2. Strategy Engine HIGH-confidence BUY signals (deterministic, highest priority)
     const today = new Date().toISOString().split('T')[0];
+    const strategySignals = await this.strategySignalRepo.find({
+      where: { signal_date: today, direction: 'BUY', confidence: 'HIGH' },
+      order: { score: 'DESC' },
+      take: 5,
+    });
+    if (strategySignals.length > 0) {
+      this.logger.log(
+        `Using ${strategySignals.length} HIGH-confidence strategy signal(s) for demo trading`,
+      );
+      return strategySignals.map((s) => ({
+        symbol: s.symbol,
+        name: s.symbol,
+        currentPrice: Number(s.entry_price) || 0,
+        direction: 'BUY' as const,
+        confidence: 'HIGH' as const,
+        shariahStatus: 'compliant',
+        reasoning: `Strategy: ${s.strategy_name}. ${Array.isArray(s.rules_triggered) ? s.rules_triggered.map((r) => r.rule).join(', ') : ''}`,
+        rationale_simple: `${s.strategy_name} strategy signal (score: ${s.score})`,
+      }));
+    }
+
+    // 3. Score-based: compliant stocks with today's composite scores
     const scores = await this.stockScoreRepo
       .createQueryBuilder('ss')
       .innerJoin(Stock, 'st', 'st.symbol = ss.symbol')

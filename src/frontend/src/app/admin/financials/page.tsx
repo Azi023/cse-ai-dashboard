@@ -530,7 +530,7 @@ export default function AdminFinancialsPage() {
             Launches a headless browser to visit each company&apos;s CSE profile page, opens the{' '}
             <strong>Financials → Fundamental Data</strong> tab, and extracts all TradingView widget
             metrics (valuation, income, balance sheet, cash flow, profitability, dividends) for the{' '}
-            <strong>11 Almas whitelist stocks</strong> + <strong>top 20 most-traded</strong> stocks.
+            <strong>up to 272 CSE-listed stocks</strong> (full market coverage).
             Screenshots and JSON are saved to <code className="text-xs bg-muted px-1 rounded">data/cse-fundamentals/</code>,
             records are upserted into the DB, and Tier 2 Shariah screening is triggered automatically.
           </p>

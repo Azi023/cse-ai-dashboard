@@ -8,6 +8,7 @@ import { Alert, Announcement, MarketSummary } from '../../entities';
 import { CseDataModule } from '../cse-data/cse-data.module';
 import { PortfolioModule } from '../portfolio/portfolio.module';
 import { AnalysisModule } from '../analysis/analysis.module';
+import { StrategyEngineModule } from '../strategy-engine/strategy-engine.module';
 
 @Module({
   imports: [
@@ -21,6 +22,7 @@ import { AnalysisModule } from '../analysis/analysis.module';
     CseDataModule,
     PortfolioModule,
     forwardRef(() => AnalysisModule),
+    StrategyEngineModule,
   ],
   controllers: [NotificationsController],
   providers: [NotificationsService],

@@ -71,7 +71,9 @@ export class StrategyBacktesterService {
   // ---------------------------------------------------------------------------
 
   async runAllBacktests(): Promise<StrategyBacktestResult[]> {
-    this.logger.log('[BACKTEST] Starting validation for all 5 strategy engine strategies...');
+    this.logger.log(
+      '[BACKTEST] Starting validation for all 5 strategy engine strategies...',
+    );
 
     const results = await Promise.all([
       this.backtestMeanReversion(),
@@ -100,6 +102,34 @@ export class StrategyBacktesterService {
     return results;
   }
 
+  /** Run a single strategy backtest by ID. Updates Redis activation key. */
+  async runSingleBacktest(strategyId: string): Promise<StrategyBacktestResult> {
+    const strategyMap: Record<string, () => Promise<StrategyBacktestResult>> = {
+      MEAN_REVERSION: () => this.backtestMeanReversion(),
+      VALUE_CATALYST: () => this.backtestValueCatalyst(),
+      RCA_DISCIPLINED: () => this.backtestRcaDisciplined(),
+      DIVIDEND_CAPTURE: () => this.backtestDividendCapture(),
+      SECTOR_ROTATION: () => this.backtestSectorRotation(),
+    };
+
+    const fn = strategyMap[strategyId.toUpperCase()];
+    if (!fn) throw new Error(`Unknown strategy: ${strategyId}`);
+
+    const result = await fn();
+    const isActive = Number(result.win_rate) >= this.WIN_RATE_THRESHOLD;
+    await this.redisService.set(
+      `strategy:active:${result.strategy_id}`,
+      isActive ? 'true' : 'false',
+      86400 * 7,
+    );
+    this.logger.log(
+      `[BACKTEST] ${result.strategy_id}: ${result.total_trades} trades, ` +
+        `${Number(result.win_rate).toFixed(1)}% win rate — ` +
+        `${isActive ? 'ACTIVE ✓' : 'INACTIVE'}`,
+    );
+    return result;
+  }
+
   async getLatestResults(): Promise<StrategyBacktestResult[]> {
     // One result per strategy (latest run)
     const rows = await this.resultRepo.find({
@@ -114,7 +144,9 @@ export class StrategyBacktesterService {
     });
   }
 
-  async getResultsByStrategy(strategyId: string): Promise<StrategyBacktestResult[]> {
+  async getResultsByStrategy(
+    strategyId: string,
+  ): Promise<StrategyBacktestResult[]> {
     return this.resultRepo.find({
       where: { strategy_id: strategyId },
       order: { run_date: 'DESC' },
@@ -156,7 +188,8 @@ export class StrategyBacktesterService {
       const dates = prices.map((p) => String(p.trade_date));
 
       if (!periodStart || dates[0] < periodStart) periodStart = dates[0];
-      if (!periodEnd || dates[dates.length - 1] > periodEnd) periodEnd = dates[dates.length - 1];
+      if (!periodEnd || dates[dates.length - 1] > periodEnd)
+        periodEnd = dates[dates.length - 1];
 
       const rsi14 = this.calcRSI(closes, 14);
       const sma20 = this.calcSMA(closes, 20);
@@ -223,7 +256,14 @@ export class StrategyBacktesterService {
     }
 
     return this.persistResult(
-      this.buildResult(strategyId, 'Mean Reversion', allTrades, stocksTested, periodStart, periodEnd),
+      this.buildResult(
+        strategyId,
+        'Mean Reversion',
+        allTrades,
+        stocksTested,
+        periodStart,
+        periodEnd,
+      ),
     );
   }
 
@@ -238,16 +278,20 @@ export class StrategyBacktesterService {
     const strategyId = 'VALUE_CATALYST';
     this.logger.log('[BACKTEST] Simulating VALUE_CATALYST...');
 
-    // Symbols with P/E < 12 AND div yield > 3% (latest record per symbol)
+    // Symbols with P/E < 15 AND div yield > 2% (relaxed thresholds for CSE market)
     const rawFinancials = await this.financialRepo
       .createQueryBuilder('cf')
       .select('cf.symbol', 'symbol')
       .addSelect('cf.pe_ratio', 'pe_ratio')
       .addSelect('cf.dividend_yield', 'dividend_yield')
-      .where('cf.pe_ratio IS NOT NULL AND cf.pe_ratio > 0 AND cf.pe_ratio < 12')
-      .andWhere('cf.dividend_yield IS NOT NULL AND cf.dividend_yield > 3')
+      .where('cf.pe_ratio IS NOT NULL AND cf.pe_ratio > 0 AND cf.pe_ratio < 15')
+      .andWhere('cf.dividend_yield IS NOT NULL AND cf.dividend_yield > 2')
       .orderBy('cf.created_at', 'DESC')
-      .getRawMany<{ symbol: string; pe_ratio: string; dividend_yield: string }>();
+      .getRawMany<{
+        symbol: string;
+        pe_ratio: string;
+        dividend_yield: string;
+      }>();
 
     // Deduplicate: keep latest per symbol
     const qualifiedSymbols = new Map<string, boolean>();
@@ -291,7 +335,8 @@ export class StrategyBacktesterService {
       const dates = prices.map((p) => String(p.trade_date));
 
       if (!periodStart || dates[0] < periodStart) periodStart = dates[0];
-      if (!periodEnd || dates[dates.length - 1] > periodEnd) periodEnd = dates[dates.length - 1];
+      if (!periodEnd || dates[dates.length - 1] > periodEnd)
+        periodEnd = dates[dates.length - 1];
 
       // One entry per stock: buy on day 60, hold until exit or 180 days
       const entryIdx = 60;
@@ -340,11 +385,19 @@ export class StrategyBacktesterService {
     }
 
     const notes =
-      `${stocksTested} stocks passed P/E < 12 + dividend yield > 3% + catalyst screen. ` +
+      `${stocksTested} stocks passed P/E < 15 + dividend yield > 2% + catalyst screen. ` +
       `One entry per stock at day 60. Static fundamental screen (no historical P/E series).`;
 
     return this.persistResult(
-      this.buildResult(strategyId, 'Value + Catalyst', allTrades, stocksTested, periodStart, periodEnd, notes),
+      this.buildResult(
+        strategyId,
+        'Value + Catalyst',
+        allTrades,
+        stocksTested,
+        periodStart,
+        periodEnd,
+        notes,
+      ),
     );
   }
 
@@ -370,10 +423,12 @@ export class StrategyBacktesterService {
       .getRawMany<{ symbol: string; max_yield: string }>();
 
     const compliantSymbols = new Set(
-      (await this.stockRepo.find({
-        where: { shariah_status: 'compliant', is_active: true },
-        select: ['symbol'],
-      })).map((s) => s.symbol),
+      (
+        await this.stockRepo.find({
+          where: { shariah_status: 'compliant', is_active: true },
+          select: ['symbol'],
+        })
+      ).map((s) => s.symbol),
     );
 
     const topSymbols = rawFinancials
@@ -383,84 +438,175 @@ export class StrategyBacktesterService {
 
     if (topSymbols.length === 0) {
       return this.persistResult(
-        this.buildEmptyResult(strategyId, 'Rupee Cost Averaging', 'No compliant stocks with dividend yield data'),
+        this.buildEmptyResult(
+          strategyId,
+          'Rupee Cost Averaging',
+          'No compliant stocks with dividend yield data',
+        ),
       );
     }
 
-    // Use the top-yield stock as the primary target
-    const primarySymbol = topSymbols[0];
-    const primaryStock = await this.stockRepo.findOne({ where: { symbol: primarySymbol } });
-    if (!primaryStock) {
+    // Load price data for all top symbols
+    interface SymbolPriceData {
+      symbol: string;
+      closes: number[];
+      dates: string[];
+    }
+    const symbolDataList: SymbolPriceData[] = [];
+    for (const sym of topSymbols) {
+      const stock = await this.stockRepo.findOne({ where: { symbol: sym } });
+      if (!stock) continue;
+      const prices = await this.priceRepo.find({
+        where: { stock_id: stock.id },
+        order: { trade_date: 'ASC' },
+        select: ['trade_date', 'close'],
+      });
+      if (prices.length >= 20) {
+        symbolDataList.push({
+          symbol: sym,
+          closes: prices.map((p) => Number(p.close)),
+          dates: prices.map((p) => String(p.trade_date)),
+        });
+      }
+    }
+
+    if (symbolDataList.length === 0) {
       return this.persistResult(
-        this.buildEmptyResult(strategyId, 'Rupee Cost Averaging', `Stock not found: ${primarySymbol}`),
+        this.buildEmptyResult(
+          strategyId,
+          'Rupee Cost Averaging',
+          'No compliant stocks with sufficient price data',
+        ),
       );
     }
 
-    const prices = await this.priceRepo.find({
-      where: { stock_id: primaryStock.id },
-      order: { trade_date: 'ASC' },
-      select: ['trade_date', 'close'],
-    });
+    // Build a unified date range across all symbols
+    const allDatesSet = new Set<string>();
+    for (const sd of symbolDataList) {
+      for (const d of sd.dates) allDatesSet.add(d);
+    }
+    const allDates = Array.from(allDatesSet).sort();
 
-    if (prices.length < 20) {
-      return this.persistResult(
-        this.buildEmptyResult(strategyId, 'Rupee Cost Averaging', `Insufficient price data for ${primarySymbol}`),
-      );
+    // Build price maps: symbol → date → close
+    const priceMap = new Map<string, Map<string, number>>();
+    for (const sd of symbolDataList) {
+      const m = new Map<string, number>();
+      for (let i = 0; i < sd.dates.length; i++)
+        m.set(sd.dates[i], sd.closes[i]);
+      priceMap.set(sd.symbol, m);
     }
 
-    const closes = prices.map((p) => Number(p.close));
-    const dates = prices.map((p) => String(p.trade_date));
     const MONTHLY_BUDGET = 10_000;
-
     const allTrades: TradeRecord[] = [];
     let lastBuyMonth = -1;
-    let totalShares = 0;
+    let monthIndex = 0; // round-robin counter
     let totalInvested = 0;
-    const periodStart = dates[0];
-    const periodEnd = dates[dates.length - 1];
-    const finalPrice = closes[closes.length - 1];
+    // Track shares held per symbol: symbol → { shares, avgCost }
+    const holdings = new Map<string, { shares: number; totalCost: number }>();
 
-    for (let i = 0; i < closes.length; i++) {
-      const d = new Date(dates[i]);
+    const periodStart = allDates[0];
+    const periodEnd = allDates[allDates.length - 1];
+
+    for (const dateStr of allDates) {
+      const d = new Date(dateStr);
       const dayOfMonth = d.getDate();
-      const month = d.getMonth() + d.getFullYear() * 12; // unique monthly key
+      const month = d.getMonth() + d.getFullYear() * 12;
 
       if (dayOfMonth <= 3 && month !== lastBuyMonth) {
-        const price = closes[i];
-        const shares = Math.floor(MONTHLY_BUDGET / price);
-        if (shares > 0) {
-          totalShares += shares;
-          totalInvested += shares * price;
-          lastBuyMonth = month;
+        // Rotate: pick next stock in the top-yield list that has a price today
+        let picked: string | null = null;
+        for (let attempt = 0; attempt < symbolDataList.length; attempt++) {
+          const candidate =
+            symbolDataList[(monthIndex + attempt) % symbolDataList.length]
+              .symbol;
+          if (priceMap.get(candidate)?.has(dateStr)) {
+            picked = candidate;
+            monthIndex = (monthIndex + attempt + 1) % symbolDataList.length;
+            break;
+          }
+        }
 
-          const returnPct = ((finalPrice - price) / price) * 100;
-          allTrades.push({
-            symbol: primarySymbol,
-            entry_date: dates[i],
-            entry_price: price,
-            exit_date: periodEnd,
-            exit_price: finalPrice,
-            return_pct: Math.round(returnPct * 100) / 100,
-            hold_days: closes.length - 1 - i,
-            exit_reason: 'period_end',
-          });
+        if (picked) {
+          const price = priceMap.get(picked)!.get(dateStr)!;
+          const shares = Math.floor(MONTHLY_BUDGET / price);
+          if (shares > 0) {
+            const existing = holdings.get(picked) ?? {
+              shares: 0,
+              totalCost: 0,
+            };
+            holdings.set(picked, {
+              shares: existing.shares + shares,
+              totalCost: existing.totalCost + shares * price,
+            });
+            totalInvested += shares * price;
+            lastBuyMonth = month;
+
+            // We'll compute final return after the loop
+            allTrades.push({
+              symbol: picked,
+              entry_date: dateStr,
+              entry_price: price,
+              exit_date: periodEnd, // placeholder, updated below
+              exit_price: 0, // placeholder
+              return_pct: 0, // placeholder
+              hold_days: 0, // placeholder
+              exit_reason: 'period_end',
+            });
+          }
         }
       }
     }
 
-    const finalValue = totalShares * finalPrice;
-    const portfolioReturnPct = totalInvested > 0
-      ? ((finalValue - totalInvested) / totalInvested) * 100
-      : 0;
+    // Update exit prices and returns for all trades
+    let finalPortfolioValue = 0;
+    for (const [sym, holding] of holdings) {
+      const symMap = priceMap.get(sym);
+      const lastDate = symbolDataList
+        .find((sd) => sd.symbol === sym)
+        ?.dates.at(-1);
+      const finalPrice = lastDate && symMap ? (symMap.get(lastDate) ?? 0) : 0;
+      finalPortfolioValue += holding.shares * finalPrice;
+
+      // Update trades for this symbol
+      for (const trade of allTrades) {
+        if (trade.symbol !== sym) continue;
+        const entryDateObj = new Date(trade.entry_date);
+        const exitDateObj = lastDate ? new Date(lastDate) : new Date(periodEnd);
+        const holdMs = exitDateObj.getTime() - entryDateObj.getTime();
+        const holdDays = Math.round(holdMs / (1000 * 60 * 60 * 24));
+        const returnPct =
+          trade.entry_price > 0
+            ? ((finalPrice - trade.entry_price) / trade.entry_price) * 100
+            : 0;
+        trade.exit_date = lastDate ?? periodEnd;
+        trade.exit_price = finalPrice;
+        trade.return_pct = Math.round(returnPct * 100) / 100;
+        trade.hold_days = holdDays;
+      }
+    }
+
+    const portfolioReturnPct =
+      totalInvested > 0
+        ? ((finalPortfolioValue - totalInvested) / totalInvested) * 100
+        : 0;
 
     const notes =
-      `Target: ${primarySymbol} (top-yield compliant stock). ` +
-      `Invested LKR ${totalInvested.toFixed(0)}, final value LKR ${finalValue.toFixed(0)} ` +
+      `Rotating across top ${symbolDataList.length} yield stocks: ${topSymbols.join(', ')}. ` +
+      `Round-robin monthly buys on days 1–3. ` +
+      `Invested LKR ${totalInvested.toFixed(0)}, final value LKR ${finalPortfolioValue.toFixed(0)} ` +
       `(${portfolioReturnPct.toFixed(1)}% total portfolio return). ` +
-      `${allTrades.length} monthly buys over ${dates.length} trading days.`;
+      `${allTrades.length} monthly buys over ${allDates.length} trading days.`;
 
     return this.persistResult(
-      this.buildResult(strategyId, 'Rupee Cost Averaging', allTrades, 1, periodStart, periodEnd, notes),
+      this.buildResult(
+        strategyId,
+        'Rupee Cost Averaging',
+        allTrades,
+        symbolDataList.length,
+        periodStart,
+        periodEnd,
+        notes,
+      ),
     );
   }
 
@@ -473,10 +619,12 @@ export class StrategyBacktesterService {
     const strategyId = 'DIVIDEND_CAPTURE';
     this.logger.log('[BACKTEST] Simulating DIVIDEND_CAPTURE...');
 
-    const compliantSymbols = (await this.stockRepo.find({
-      where: { shariah_status: 'compliant', is_active: true },
-      select: ['symbol'],
-    })).map((s) => s.symbol);
+    const compliantSymbols = (
+      await this.stockRepo.find({
+        where: { shariah_status: 'compliant', is_active: true },
+        select: ['symbol'],
+      })
+    ).map((s) => s.symbol);
 
     const dividends = await this.dividendRepo
       .createQueryBuilder('d')
@@ -487,7 +635,9 @@ export class StrategyBacktesterService {
       .getMany();
 
     if (dividends.length === 0) {
-      this.logger.warn('[BACKTEST] DIVIDEND_CAPTURE: skipped — no ex-date data available');
+      this.logger.warn(
+        '[BACKTEST] DIVIDEND_CAPTURE: skipped — no ex-date data available',
+      );
       return this.persistResult(
         this.buildEmptyResult(
           strategyId,
@@ -503,7 +653,9 @@ export class StrategyBacktesterService {
     let periodEnd: string | null = null;
 
     for (const div of dividends) {
-      const stock = await this.stockRepo.findOne({ where: { symbol: div.symbol } });
+      const stock = await this.stockRepo.findOne({
+        where: { symbol: div.symbol },
+      });
       if (!stock) continue;
 
       const exDate = new Date(div.ex_date);
@@ -526,7 +678,8 @@ export class StrategyBacktesterService {
 
       stocksTested++;
 
-      if (!periodStart || entryPoint.date < periodStart) periodStart = entryPoint.date;
+      if (!periodStart || entryPoint.date < periodStart)
+        periodStart = entryPoint.date;
       if (!periodEnd || exitPoint.date > periodEnd) periodEnd = exitPoint.date;
 
       const divAmount = Number(div.amount_per_share);
@@ -534,7 +687,8 @@ export class StrategyBacktesterService {
       const totalReturn = priceReturn + divAmount;
       const returnPct = (totalReturn / entryPoint.close) * 100;
       const holdDays = Math.round(
-        (new Date(exitPoint.date).getTime() - new Date(entryPoint.date).getTime()) /
+        (new Date(exitPoint.date).getTime() -
+          new Date(entryPoint.date).getTime()) /
           (1000 * 60 * 60 * 24),
       );
 
@@ -551,7 +705,14 @@ export class StrategyBacktesterService {
     }
 
     return this.persistResult(
-      this.buildResult(strategyId, 'Dividend Capture', allTrades, stocksTested, periodStart, periodEnd),
+      this.buildResult(
+        strategyId,
+        'Dividend Capture',
+        allTrades,
+        stocksTested,
+        periodStart,
+        periodEnd,
+      ),
     );
   }
 
@@ -574,10 +735,16 @@ export class StrategyBacktesterService {
 
     // Construction / infrastructure stocks (construction sector or AEL proxy)
     const sectorStocks = await this.stockRepo.find({
-      where: { shariah_status: 'compliant', is_active: true, sector: 'Construction' },
+      where: {
+        shariah_status: 'compliant',
+        is_active: true,
+        sector: 'Construction',
+      },
       select: ['id', 'symbol'],
     });
-    const ael = await this.stockRepo.findOne({ where: { symbol: 'AEL.N0000' } });
+    const ael = await this.stockRepo.findOne({
+      where: { symbol: 'AEL.N0000' },
+    });
     if (ael && !sectorStocks.find((s) => s.symbol === 'AEL.N0000')) {
       sectorStocks.push(ael);
     }
@@ -590,16 +757,17 @@ export class StrategyBacktesterService {
 
     if (allCompliant.length === 0) {
       return this.persistResult(
-        this.buildEmptyResult(strategyId, 'Sector Rotation', 'No compliant stocks found'),
+        this.buildEmptyResult(
+          strategyId,
+          'Sector Rotation',
+          'No compliant stocks found',
+        ),
       );
     }
 
     // Load price data for target and benchmark stocks
     const priceDataMap = new Map<string, PriceData>();
-    const stocksToLoad = [
-      ...sectorStocks,
-      ...allCompliant.slice(0, 25),
-    ];
+    const stocksToLoad = [...sectorStocks, ...allCompliant.slice(0, 25)];
 
     for (const stock of stocksToLoad) {
       if (priceDataMap.has(stock.symbol)) continue;
@@ -618,7 +786,11 @@ export class StrategyBacktesterService {
 
     if (priceDataMap.size === 0) {
       return this.persistResult(
-        this.buildEmptyResult(strategyId, 'Sector Rotation', 'No price data available'),
+        this.buildEmptyResult(
+          strategyId,
+          'Sector Rotation',
+          'No price data available',
+        ),
       );
     }
 
@@ -632,9 +804,13 @@ export class StrategyBacktesterService {
     }
     const sortedDates = Array.from(allDates).sort();
 
-    const targetSymbols = (isRateCutting && sectorStocks.length > 0)
-      ? sectorStocks.map((s) => s.symbol).filter((s) => priceDataMap.has(s))
-      : allCompliant.slice(0, 10).map((s) => s.symbol).filter((s) => priceDataMap.has(s));
+    const targetSymbols =
+      isRateCutting && sectorStocks.length > 0
+        ? sectorStocks.map((s) => s.symbol).filter((s) => priceDataMap.has(s))
+        : allCompliant
+            .slice(0, 10)
+            .map((s) => s.symbol)
+            .filter((s) => priceDataMap.has(s));
 
     const benchmarkSymbols = allCompliant
       .filter((s) => priceDataMap.has(s.symbol))
@@ -645,8 +821,12 @@ export class StrategyBacktesterService {
     let lastRebalanceMonth = -1;
     let rotatedCapital = this.INITIAL_CAPITAL;
     let benchmarkCapital = this.INITIAL_CAPITAL;
-    let rotatedPositions: Map<string, { shares: number; entryPrice: number }> = new Map();
-    let benchmarkPositions: Map<string, { shares: number; entryPrice: number }> = new Map();
+    let rotatedPositions: Map<string, { shares: number; entryPrice: number }> =
+      new Map();
+    let benchmarkPositions: Map<
+      string,
+      { shares: number; entryPrice: number }
+    > = new Map();
     const periodStart = sortedDates[0];
     const periodEnd = sortedDates[sortedDates.length - 1];
 
@@ -658,13 +838,23 @@ export class StrategyBacktesterService {
       if (dayOfMonth <= 3 && month !== lastRebalanceMonth) {
         lastRebalanceMonth = month;
 
-        const rotatedValue = this.calcPortfolioValue(rotatedPositions, datePriceIndex, dateStr);
-        const benchmarkValue = this.calcPortfolioValue(benchmarkPositions, datePriceIndex, dateStr);
+        const rotatedValue = this.calcPortfolioValue(
+          rotatedPositions,
+          datePriceIndex,
+          dateStr,
+        );
+        const benchmarkValue = this.calcPortfolioValue(
+          benchmarkPositions,
+          datePriceIndex,
+          dateStr,
+        );
 
         // Record monthly rebalance trade (did rotated beat benchmark?)
         if (rotatedPositions.size > 0 && benchmarkPositions.size > 0) {
-          const rotatedReturn = ((rotatedValue - rotatedCapital) / rotatedCapital) * 100;
-          const benchmarkReturn = ((benchmarkValue - benchmarkCapital) / benchmarkCapital) * 100;
+          const rotatedReturn =
+            ((rotatedValue - rotatedCapital) / rotatedCapital) * 100;
+          const benchmarkReturn =
+            ((benchmarkValue - benchmarkCapital) / benchmarkCapital) * 100;
           const outperformed = rotatedReturn > benchmarkReturn;
 
           allTrades.push({
@@ -685,14 +875,29 @@ export class StrategyBacktesterService {
         }
 
         // Rebuild equal-weight portfolios
-        rotatedPositions = this.buildEqualWeight(targetSymbols, rotatedCapital, datePriceIndex, dateStr);
-        benchmarkPositions = this.buildEqualWeight(benchmarkSymbols, benchmarkCapital, datePriceIndex, dateStr);
+        rotatedPositions = this.buildEqualWeight(
+          targetSymbols,
+          rotatedCapital,
+          datePriceIndex,
+          dateStr,
+        );
+        benchmarkPositions = this.buildEqualWeight(
+          benchmarkSymbols,
+          benchmarkCapital,
+          datePriceIndex,
+          dateStr,
+        );
       }
     }
 
     // Final portfolio value
-    const finalRotated = this.calcPortfolioValue(rotatedPositions, datePriceIndex, periodEnd);
-    const totalReturnPct = ((finalRotated - this.INITIAL_CAPITAL) / this.INITIAL_CAPITAL) * 100;
+    const finalRotated = this.calcPortfolioValue(
+      rotatedPositions,
+      datePriceIndex,
+      periodEnd,
+    );
+    const totalReturnPct =
+      ((finalRotated - this.INITIAL_CAPITAL) / this.INITIAL_CAPITAL) * 100;
 
     const notes =
       `Macro regime: ${isRateCutting ? 'RATE_CUTTING → construction overweight' : 'NEUTRAL → equal-weight'}. ` +
@@ -734,7 +939,8 @@ export class StrategyBacktesterService {
     for (let i = period + 1; i < prices.length; i++) {
       const diff = prices[i] - prices[i - 1];
       avgGain = (avgGain * (period - 1) + (diff > 0 ? diff : 0)) / period;
-      avgLoss = (avgLoss * (period - 1) + (diff < 0 ? Math.abs(diff) : 0)) / period;
+      avgLoss =
+        (avgLoss * (period - 1) + (diff < 0 ? Math.abs(diff) : 0)) / period;
       rsi.push(100 - 100 / (1 + (avgLoss === 0 ? 100 : avgGain / avgLoss)));
     }
 
@@ -765,7 +971,8 @@ export class StrategyBacktesterService {
     const targetStr = targetDate.toISOString().split('T')[0];
     for (const p of prices) {
       const dateStr = String(p.trade_date);
-      if (dateStr >= targetStr) return { date: dateStr, close: Number(p.close) };
+      if (dateStr >= targetStr)
+        return { date: dateStr, close: Number(p.close) };
     }
     return null;
   }
@@ -795,7 +1002,8 @@ export class StrategyBacktesterService {
     for (const symbol of symbols) {
       const priceMap = datePriceIndex.get(symbol);
       if (!priceMap) continue;
-      const close = priceMap.get(dateStr) ?? this.getLatestKnownPrice(priceMap, dateStr);
+      const close =
+        priceMap.get(dateStr) ?? this.getLatestKnownPrice(priceMap, dateStr);
       if (!close || close <= 0) continue;
       const shares = Math.floor(perSymbol / close);
       if (shares > 0) positions.set(symbol, { shares, entryPrice: close });
@@ -813,7 +1021,9 @@ export class StrategyBacktesterService {
     for (const [symbol, pos] of positions) {
       const priceMap = datePriceIndex.get(symbol);
       const close = priceMap
-        ? (priceMap.get(dateStr) ?? this.getLatestKnownPrice(priceMap, dateStr) ?? pos.entryPrice)
+        ? (priceMap.get(dateStr) ??
+          this.getLatestKnownPrice(priceMap, dateStr) ??
+          pos.entryPrice)
         : pos.entryPrice;
       total += pos.shares * close;
     }
@@ -842,7 +1052,9 @@ export class StrategyBacktesterService {
     if (stdDev === 0) return null;
     // Annualise using ~52 periods (assuming avg hold ~1 week)
     const rfPerPeriod = 0.085 / 52;
-    return Math.round(((mean - rfPerPeriod) / stdDev) * Math.sqrt(52) * 100) / 100;
+    return (
+      Math.round(((mean - rfPerPeriod) / stdDev) * Math.sqrt(52) * 100) / 100
+    );
   }
 
   private buildResult(
@@ -856,7 +1068,8 @@ export class StrategyBacktesterService {
   ): StrategyBacktestResult {
     const winningTrades = trades.filter((t) => t.return_pct > 0).length;
     const losingTrades = trades.filter((t) => t.return_pct <= 0).length;
-    const winRate = trades.length > 0 ? (winningTrades / trades.length) * 100 : 0;
+    const winRate =
+      trades.length > 0 ? (winningTrades / trades.length) * 100 : 0;
     const avgReturn =
       trades.length > 0
         ? trades.reduce((sum, t) => sum + t.return_pct, 0) / trades.length
@@ -876,7 +1089,8 @@ export class StrategyBacktesterService {
       if (dd > maxDrawdown) maxDrawdown = dd;
     }
 
-    const totalReturnPct = ((capital - this.INITIAL_CAPITAL) / this.INITIAL_CAPITAL) * 100;
+    const totalReturnPct =
+      ((capital - this.INITIAL_CAPITAL) / this.INITIAL_CAPITAL) * 100;
     const sharpeRatio = this.calcSharpeFromTrades(trades);
     const isActive = winRate >= this.WIN_RATE_THRESHOLD;
 
@@ -927,7 +1141,9 @@ export class StrategyBacktesterService {
     });
   }
 
-  private async persistResult(result: StrategyBacktestResult): Promise<StrategyBacktestResult> {
+  private async persistResult(
+    result: StrategyBacktestResult,
+  ): Promise<StrategyBacktestResult> {
     try {
       const today = new Date().toISOString().split('T')[0];
       await this.resultRepo
@@ -941,7 +1157,9 @@ export class StrategyBacktesterService {
         .execute();
       return await this.resultRepo.save(result);
     } catch (err) {
-      this.logger.error(`[BACKTEST] Failed to save result for ${result.strategy_id}: ${String(err)}`);
+      this.logger.error(
+        `[BACKTEST] Failed to save result for ${result.strategy_id}: ${String(err)}`,
+      );
       return result;
     }
   }

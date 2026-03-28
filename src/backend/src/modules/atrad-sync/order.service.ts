@@ -135,9 +135,11 @@ export class OrderService {
     private readonly executor: ATradOrderExecutor,
   ) {}
 
-  // ── Cron: 2:44 PM SLT — Auto-suggest TP/SL from risk analysis ────────────
+  // ── Cron: 2:47 PM SLT — Auto-suggest TP/SL from risk analysis ────────────
+  // Moved from 2:44 to avoid collision with run-risk-analysis (9:14) and
+  // check-exit-signals (9:16). Must run after risk analysis completes.
 
-  @Cron('14 9 * * 1-5', { name: 'suggest-tp-sl-orders' })
+  @Cron('17 9 * * 1-5', { name: 'suggest-tp-sl-orders' })
   async autoSuggestTpSlOrders(): Promise<void> {
     const today = new Date().toISOString().split('T')[0];
     this.logger.log(

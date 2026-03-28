@@ -35,16 +35,20 @@ export class TechnicalService {
   ) {}
 
   // ---------------------------------------------------------------------------
-  // Cron — daily at 2:41 PM SLT (9:11 AM UTC)
+  // Cron — daily at 2:39 PM SLT (9:09 AM UTC)
+  // Moved from 2:41 to avoid collision with detect-market-regime at 2:41
   // ---------------------------------------------------------------------------
 
-  @Cron('11 9 * * 1-5', { name: 'run-technical-analysis' })
+  @Cron('9 9 * * 1-5', { name: 'run-technical-analysis' })
   async runTechnicalAnalysis(): Promise<void> {
     const today = this.todayStr();
     this.logger.log(`Running technical analysis for ${today}`);
 
     const stocks = await this.stockRepo.find({
-      where: [{ shariah_status: 'compliant' }, { shariah_status: 'pending_review' }],
+      where: [
+        { shariah_status: 'compliant' },
+        { shariah_status: 'pending_review' },
+      ],
     });
 
     const tradeMap = await this.buildTradeMap();
@@ -55,10 +59,14 @@ export class TechnicalService {
         await this.computeAndSave(stock, today, tradeMap);
         computed++;
       } catch (err) {
-        this.logger.warn(`Technical analysis failed for ${stock.symbol}: ${String(err)}`);
+        this.logger.warn(
+          `Technical analysis failed for ${stock.symbol}: ${String(err)}`,
+        );
       }
     }
-    this.logger.log(`Technical analysis complete: ${computed}/${stocks.length} stocks`);
+    this.logger.log(
+      `Technical analysis complete: ${computed}/${stocks.length} stocks`,
+    );
   }
 
   // ---------------------------------------------------------------------------
@@ -87,7 +95,9 @@ export class TechnicalService {
     });
   }
 
-  async getLatestSignalForSymbol(symbol: string): Promise<TechnicalSignal | null> {
+  async getLatestSignalForSymbol(
+    symbol: string,
+  ): Promise<TechnicalSignal | null> {
     const rows = await this.techSignalRepo.find({
       where: { symbol },
       order: { date: 'DESC' },
@@ -96,7 +106,9 @@ export class TechnicalService {
     return rows[0] ?? null;
   }
 
-  async getSignalsForSymbols(symbols: string[]): Promise<Map<string, TechnicalSignal>> {
+  async getSignalsForSymbols(
+    symbols: string[],
+  ): Promise<Map<string, TechnicalSignal>> {
     const today = this.todayStr();
     const result = new Map<string, TechnicalSignal>();
     for (const symbol of symbols) {
@@ -154,7 +166,13 @@ export class TechnicalService {
           const currAbove = sma20 > sma50;
           if (!prevAbove && currAbove) smaTrend = 'GOLDEN_CROSS';
           else if (prevAbove && !currAbove) smaTrend = 'DEATH_CROSS';
-          else smaTrend = currentPrice > sma20 && sma20 > sma50 ? 'BULLISH' : currentPrice < sma20 && sma20 < sma50 ? 'BEARISH' : 'NEUTRAL';
+          else
+            smaTrend =
+              currentPrice > sma20 && sma20 > sma50
+                ? 'BULLISH'
+                : currentPrice < sma20 && sma20 < sma50
+                  ? 'BEARISH'
+                  : 'NEUTRAL';
         } else {
           smaTrend = currentPrice > sma20 ? 'BULLISH' : 'BEARISH';
         }
@@ -166,7 +184,14 @@ export class TechnicalService {
     // ── RSI(14) ──────────────────────────────────────────────────────────────
     const rsi14Raw = this.computeRSI(closes, 14);
     const rsi14 = rsi14Raw !== null ? round2(rsi14Raw) : null;
-    const rsiSignal = rsi14 !== null ? (rsi14 < 30 ? 'OVERSOLD' : rsi14 > 70 ? 'OVERBOUGHT' : 'NEUTRAL') : null;
+    const rsiSignal =
+      rsi14 !== null
+        ? rsi14 < 30
+          ? 'OVERSOLD'
+          : rsi14 > 70
+            ? 'OVERBOUGHT'
+            : 'NEUTRAL'
+        : null;
 
     // ── MACD(12,26,9) ────────────────────────────────────────────────────────
     const macdResult = this.computeMACD(closes);
@@ -187,8 +212,10 @@ export class TechnicalService {
     // ── Support & Resistance (20-day) ────────────────────────────────────────
     const last20Highs = highs.slice(-20);
     const last20Lows = lows.slice(-20);
-    const support20d = last20Lows.length > 0 ? round2(Math.min(...last20Lows)) : null;
-    const resistance20d = last20Highs.length > 0 ? round2(Math.max(...last20Highs)) : null;
+    const support20d =
+      last20Lows.length > 0 ? round2(Math.min(...last20Lows)) : null;
+    const resistance20d =
+      last20Highs.length > 0 ? round2(Math.max(...last20Highs)) : null;
 
     // ── ATR(14) — Wilder's smoothing ─────────────────────────────────────────
     const atr14Raw = this.computeATR(prices, 14);
@@ -205,7 +232,11 @@ export class TechnicalService {
     }
 
     // ── Candlestick pattern ──────────────────────────────────────────────────
-    const candlestickPattern = this.detectCandlestick(prices, support20d, resistance20d);
+    const candlestickPattern = this.detectCandlestick(
+      prices,
+      support20d,
+      resistance20d,
+    );
 
     // ── Signal Score ─────────────────────────────────────────────────────────
     let score = 0;
@@ -233,12 +264,26 @@ export class TechnicalService {
     else if (candlestickPattern?.startsWith('BEARISH')) score -= 1;
 
     const overallSignal =
-      score >= 4 ? 'STRONG_BUY' :
-      score >= 2 ? 'BUY' :
-      score >= -1 ? 'NEUTRAL' :
-      score >= -3 ? 'SELL' : 'STRONG_SELL';
+      score >= 4
+        ? 'STRONG_BUY'
+        : score >= 2
+          ? 'BUY'
+          : score >= -1
+            ? 'NEUTRAL'
+            : score >= -3
+              ? 'SELL'
+              : 'STRONG_SELL';
 
-    const signalSummary = this.buildSummary(n, rsi14, rsiSignal, smaTrend, macdCrossover, volumeTrend, volumeRatio, candlestickPattern);
+    const signalSummary = this.buildSummary(
+      n,
+      rsi14,
+      rsiSignal,
+      smaTrend,
+      macdCrossover,
+      volumeTrend,
+      volumeRatio,
+      candlestickPattern,
+    );
 
     const signal: Partial<TechnicalSignal> = {
       date,
@@ -265,7 +310,9 @@ export class TechnicalService {
       signal_summary: signalSummary,
     };
 
-    const existing = await this.techSignalRepo.findOne({ where: { date, symbol: stock.symbol } });
+    const existing = await this.techSignalRepo.findOne({
+      where: { date, symbol: stock.symbol },
+    });
     if (existing) {
       Object.assign(existing, signal);
       return this.techSignalRepo.save(existing);
@@ -282,8 +329,16 @@ export class TechnicalService {
     // changes[i] = closes[i+1] - closes[i]
     const changes = closes.slice(1).map((c, i) => c - closes[i]);
     // Initial averages over first 'period' changes
-    let avgGain = changes.slice(0, period).filter((c) => c > 0).reduce((s, v) => s + v, 0) / period;
-    let avgLoss = changes.slice(0, period).filter((c) => c < 0).reduce((s, v) => s + Math.abs(v), 0) / period;
+    let avgGain =
+      changes
+        .slice(0, period)
+        .filter((c) => c > 0)
+        .reduce((s, v) => s + v, 0) / period;
+    let avgLoss =
+      changes
+        .slice(0, period)
+        .filter((c) => c < 0)
+        .reduce((s, v) => s + Math.abs(v), 0) / period;
     // Wilder's smoothing for remaining changes
     for (let i = period; i < changes.length; i++) {
       const gain = changes[i] > 0 ? changes[i] : 0;
@@ -316,7 +371,9 @@ export class TechnicalService {
 
     // Align: both arrays end at the same close price
     const minLen = Math.min(ema12.length, ema26.length);
-    const macdSeries = ema12.slice(-minLen).map((v, i) => v - ema26.slice(-minLen)[i]);
+    const macdSeries = ema12
+      .slice(-minLen)
+      .map((v, i) => v - ema26.slice(-minLen)[i]);
 
     if (macdSeries.length < 9) return null;
 
@@ -339,7 +396,13 @@ export class TechnicalService {
       const high = Number(prices[i].high);
       const low = Number(prices[i].low);
       const prevClose = Number(prices[i - 1].close);
-      trs.push(Math.max(high - low, Math.abs(high - prevClose), Math.abs(low - prevClose)));
+      trs.push(
+        Math.max(
+          high - low,
+          Math.abs(high - prevClose),
+          Math.abs(low - prevClose),
+        ),
+      );
     }
     if (trs.length < period) return null;
     // Wilder's smoothing ATR
@@ -369,15 +432,31 @@ export class TechnicalService {
 
     const lowerWick = Math.min(todayOpen, todayClose) - todayLow;
     const upperWick = todayHigh - Math.max(todayOpen, todayClose);
-    const nearSupport = support !== null && todayClose > 0 && (todayClose - support) / todayClose < 0.05;
-    if (body > 0 && lowerWick > 2 * body && upperWick < body && nearSupport) return 'BULLISH_HAMMER';
+    const nearSupport =
+      support !== null &&
+      todayClose > 0 &&
+      (todayClose - support) / todayClose < 0.05;
+    if (body > 0 && lowerWick > 2 * body && upperWick < body && nearSupport)
+      return 'BULLISH_HAMMER';
 
     if (n < 2) return null;
     const prev = prices[n - 2];
     const prevOpen = Number(prev.open);
     const prevClose = Number(prev.close);
-    if (!( prevClose > prevOpen) && todayClose > todayOpen && todayOpen < prevClose && todayClose > prevOpen) return 'BULLISH_ENGULFING';
-    if (prevClose > prevOpen && !(todayClose > todayOpen) && todayOpen > prevClose && todayClose < prevOpen) return 'BEARISH_ENGULFING';
+    if (
+      !(prevClose > prevOpen) &&
+      todayClose > todayOpen &&
+      todayOpen < prevClose &&
+      todayClose > prevOpen
+    )
+      return 'BULLISH_ENGULFING';
+    if (
+      prevClose > prevOpen &&
+      !(todayClose > todayOpen) &&
+      todayOpen > prevClose &&
+      todayClose < prevOpen
+    )
+      return 'BEARISH_ENGULFING';
 
     return null;
   }
@@ -394,7 +473,8 @@ export class TechnicalService {
   ): string {
     const parts: string[] = [];
     if (n < 15) parts.push(`Only ${n} days of data`);
-    if (rsi !== null && rsiSignal) parts.push(`RSI ${rsi.toFixed(1)} (${rsiSignal})`);
+    if (rsi !== null && rsiSignal)
+      parts.push(`RSI ${rsi.toFixed(1)} (${rsiSignal})`);
     if (smaTrend) parts.push(`Trend: ${smaTrend}`);
     if (macdCrossover) parts.push(`MACD: ${macdCrossover}`);
     parts.push(`Vol: ${volumeTrend} (${(volumeRatio * 100).toFixed(0)}%)`);
@@ -406,11 +486,16 @@ export class TechnicalService {
   // Helpers
   // ---------------------------------------------------------------------------
 
-  private async buildTradeMap(): Promise<Map<string, { price: number; volume: number }>> {
-    const tradeSummary = await this.redisService.getJson<{ reqTradeSummery?: TradeItem[] }>('cse:trade_summary');
+  private async buildTradeMap(): Promise<
+    Map<string, { price: number; volume: number }>
+  > {
+    const tradeSummary = await this.redisService.getJson<{
+      reqTradeSummery?: TradeItem[];
+    }>('cse:trade_summary');
     const map = new Map<string, { price: number; volume: number }>();
     for (const t of tradeSummary?.reqTradeSummery ?? []) {
-      if (t.symbol) map.set(t.symbol, { price: t.price ?? 0, volume: t.volume ?? 0 });
+      if (t.symbol)
+        map.set(t.symbol, { price: t.price ?? 0, volume: t.volume ?? 0 });
     }
     return map;
   }

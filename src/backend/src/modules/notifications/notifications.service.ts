@@ -12,6 +12,7 @@ import {
   HoldingWithPnL,
 } from '../portfolio/portfolio.service';
 import { AnalysisService } from '../analysis/analysis.service';
+import { AiContextBridgeService } from '../strategy-engine/ai-context-bridge.service';
 
 const TOKEN_BUDGET_REDIS_KEY = 'ai:tokens';
 const MONTHLY_TOKEN_LIMIT = 500_000;
@@ -45,6 +46,7 @@ export class NotificationsService {
     private readonly portfolioService: PortfolioService,
     private readonly configService: ConfigService,
     private readonly analysisService: AnalysisService,
+    private readonly aiContextBridge: AiContextBridgeService,
   ) {}
 
   // ---------------------------------------------------------------------------
@@ -302,6 +304,20 @@ export class NotificationsService {
       );
     }
 
+    // Strategy context (non-blocking — degrade gracefully if unavailable)
+    let strategyBlock = '';
+    try {
+      const engineSummary = await this.aiContextBridge.getEngineSummary();
+      if (engineSummary.regime) {
+        strategyBlock =
+          `\nStrategy Engine: Market regime is ${engineSummary.regime} ` +
+          `(${engineSummary.regimeConfidence ?? '?'}% confidence). ` +
+          `${engineSummary.todaySignalCount} strategy signal(s) generated today.`;
+      }
+    } catch {
+      // Strategy context unavailable — proceed without it
+    }
+
     const context = [
       `Market Data: ${JSON.stringify(marketSummary)}`,
       `Top 3 Gainers: ${JSON.stringify((topGainers ?? []).slice(0, 3))}`,
@@ -309,6 +325,7 @@ export class NotificationsService {
       `Portfolio (${holdings.length} holdings, daily P&L: LKR ${totalDailyPnl.toFixed(0)}): ${JSON.stringify(holdingsSummary)}`,
       `Portfolio Announcements Today: ${todayAnnouncements.length > 0 ? todayAnnouncements.map((a) => `${a.symbol}: ${a.title}`).join(' | ') : 'None'}`,
       alerts.length > 0 ? `ALERTS: ${alerts.join(' | ')}` : '',
+      strategyBlock || '',
     ]
       .filter(Boolean)
       .join('\n');
@@ -320,6 +337,7 @@ export class NotificationsService {
     const prompt =
       `You are a concise market analyst. Summarize today's CSE market close in 3-4 sentences. ` +
       `Then summarize the user's portfolio performance in 2 sentences. ` +
+      (strategyBlock ? `Mention the current market regime if relevant. ` : '') +
       (crashInstruction ? crashInstruction + ' ' : '') +
       `Keep it under 150 words total. Be factual, not advisory.\n\nContext:\n${context}`;
 

@@ -35,10 +35,11 @@ export class RiskService {
   ) {}
 
   // ---------------------------------------------------------------------------
-  // Cron — daily at 2:43 PM SLT (9:13 AM UTC)
+  // Cron — daily at 2:44 PM SLT (9:14 AM UTC)
+  // Moved from 2:43 to avoid collision with generate-strategy-signals (9:13)
   // ---------------------------------------------------------------------------
 
-  @Cron('13 9 * * 1-5', { name: 'run-risk-analysis' })
+  @Cron('14 9 * * 1-5', { name: 'run-risk-analysis' })
   async runRiskAnalysis(): Promise<void> {
     const today = this.todayStr();
     this.logger.log(`Running risk analysis for ${today}`);
@@ -147,11 +148,12 @@ export class RiskService {
   }
 
   // ---------------------------------------------------------------------------
-  // Exit signal checker — runs post-close daily at 2:44 PM SLT (9:14 AM UTC)
-  // Also callable manually via analysis controller
+  // Exit signal checker — runs post-close daily at 2:46 PM SLT (9:16 AM UTC)
+  // Moved from 2:44 to avoid collision with run-risk-analysis (moved to 9:14)
+  // and generate-strategy-signals (9:13)
   // ---------------------------------------------------------------------------
 
-  @Cron('14 9 * * 1-5', { name: 'check-exit-signals' })
+  @Cron('16 9 * * 1-5', { name: 'check-exit-signals' })
   async checkExitSignals(): Promise<{ alerts: number }> {
     const holdings = await this.portfolioRepo.find({
       where: { is_open: true },

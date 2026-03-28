@@ -1,4 +1,4 @@
-import { Controller, Get, Param, Post, Logger } from '@nestjs/common';
+import { Controller, Get, Param, Post, Logger, Query } from '@nestjs/common';
 import { AiContextBridgeService } from './ai-context-bridge.service';
 import { MarketRegimeService } from './market-regime.service';
 import { SignalGeneratorService } from './signal-generator.service';
@@ -105,13 +105,19 @@ export class StrategyEngineController {
 
   /**
    * POST /api/strategy-engine/run-backtests
-   * Run all 5 strategy backtests against historical data and save results.
+   * Run strategy backtests. Pass ?strategy=STRATEGY_ID to run a single one.
    * Sets Redis strategy:active:{id} keys based on win rates.
    */
   @Post('run-backtests')
-  async runBacktests() {
-    this.logger.log('Strategy backtest run triggered');
-    const results = await this.backtester.runAllBacktests();
+  async runBacktests(@Query('strategy') strategyId?: string) {
+    this.logger.log(
+      strategyId
+        ? `Strategy backtest triggered for: ${strategyId}`
+        : 'Strategy backtest triggered for all strategies',
+    );
+    const results = strategyId
+      ? [await this.backtester.runSingleBacktest(strategyId)]
+      : await this.backtester.runAllBacktests();
     return {
       success: true,
       data: results.map((r) => ({

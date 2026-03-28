@@ -79,9 +79,10 @@ export class DemoCronService {
     }
   }
 
-  // ─── EOD Snapshot — 2:35 PM SLT (9:05 AM UTC), weekdays ──────────────────
+  // ─── EOD Snapshot — 2:36 PM SLT (9:06 AM UTC), weekdays ──────────────────
+  // Offset by 1 min from postCloseSnapshot (cse-data, 2:35 PM) to avoid collision
 
-  @Cron('5 9 * * 1-5')
+  @Cron('6 9 * * 1-5')
   async captureEODSnapshot(): Promise<void> {
     const accounts = await this.accountRepo.find({
       where: { is_active: true },
@@ -102,9 +103,10 @@ export class DemoCronService {
     }
   }
 
-  // ─── Benchmark Update — 2:40 PM SLT (9:10 AM UTC), weekdays ─────────────
+  // ─── Benchmark Update — 2:37 PM SLT (9:07 AM UTC), weekdays ─────────────
+  // Moved from 2:40 to avoid collision with save-daily-snapshots (9:10)
 
-  @Cron('10 9 * * 1-5')
+  @Cron('7 9 * * 1-5')
   async updateBenchmarks(): Promise<void> {
     const accounts = await this.accountRepo.find({
       where: { is_active: true },
