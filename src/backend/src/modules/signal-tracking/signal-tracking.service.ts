@@ -19,6 +19,23 @@ export interface PerformanceStats {
     MEDIUM: { count: number; winRate: number | null };
     LOW: { count: number; winRate: number | null };
   };
+  byDirection: {
+    BUY: { count: number; winRate: number | null; avgReturn: number | null };
+    HOLD: { count: number; winRate: number | null; avgReturn: number | null };
+    SELL: { count: number; winRate: number | null; avgReturn: number | null };
+  };
+  bestSignal: {
+    symbol: string;
+    direction: string;
+    return_30d: number;
+    signal_date: string;
+  } | null;
+  worstSignal: {
+    symbol: string;
+    direction: string;
+    return_30d: number;
+    signal_date: string;
+  } | null;
 }
 
 @Injectable()
@@ -123,17 +140,27 @@ export class SignalTrackingService {
     const completed = all.filter((s) => s.outcome !== 'pending');
     const pending = all.filter((s) => s.outcome === 'pending');
 
-    const calcWinRate = (signals: SignalRecord[], returnField: 'return_7d' | 'return_14d' | 'return_30d') => {
+    const calcWinRate = (
+      signals: SignalRecord[],
+      returnField: 'return_7d' | 'return_14d' | 'return_30d',
+    ) => {
       const withData = signals.filter((s) => s[returnField] != null);
       if (withData.length === 0) return null;
       const wins = withData.filter((s) => {
         const ret = Number(s[returnField]);
-        return s.direction === 'BUY' ? ret > 0 : s.direction === 'SELL' ? ret < 0 : Math.abs(ret) < 2;
+        return s.direction === 'BUY'
+          ? ret > 0
+          : s.direction === 'SELL'
+            ? ret < 0
+            : Math.abs(ret) < 2;
       });
       return Math.round((wins.length / withData.length) * 100);
     };
 
-    const calcAvgReturn = (signals: SignalRecord[], returnField: 'return_7d' | 'return_14d' | 'return_30d') => {
+    const calcAvgReturn = (
+      signals: SignalRecord[],
+      returnField: 'return_7d' | 'return_14d' | 'return_30d',
+    ) => {
       const withData = signals.filter((s) => s[returnField] != null);
       if (withData.length === 0) return null;
       const sum = withData.reduce((s, r) => s + Number(r[returnField]), 0);
@@ -147,6 +174,33 @@ export class SignalTrackingService {
         winRate: calcWinRate(filtered, 'return_30d'),
       };
     };
+
+    const byDirection = (dir: string) => {
+      const filtered = all.filter((s) => s.direction === dir);
+      return {
+        count: filtered.length,
+        winRate: calcWinRate(filtered, 'return_7d'),
+        avgReturn: calcAvgReturn(filtered, 'return_7d'),
+      };
+    };
+
+    // Best and worst signals (by 30d return, falling back to 7d)
+    const withReturn = all.filter(
+      (s) => s.return_30d != null || s.return_7d != null,
+    );
+    const getReturn = (s: SignalRecord) =>
+      Number(s.return_30d ?? s.return_7d ?? 0);
+    const sorted = [...withReturn].sort((a, b) => getReturn(b) - getReturn(a));
+
+    const toSignalSummary = (s: SignalRecord | undefined) =>
+      s
+        ? {
+            symbol: s.symbol,
+            direction: s.direction,
+            return_30d: getReturn(s),
+            signal_date: new Date(s.signal_date).toISOString().split('T')[0],
+          }
+        : null;
 
     return {
       totalSignals: all.length,
@@ -163,6 +217,13 @@ export class SignalTrackingService {
         MEDIUM: byConfidence('MEDIUM'),
         LOW: byConfidence('LOW'),
       },
+      byDirection: {
+        BUY: byDirection('BUY'),
+        HOLD: byDirection('HOLD'),
+        SELL: byDirection('SELL'),
+      },
+      bestSignal: toSignalSummary(sorted[0]),
+      worstSignal: toSignalSummary(sorted[sorted.length - 1]),
     };
   }
 

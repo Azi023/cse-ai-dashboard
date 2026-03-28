@@ -1,15 +1,24 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import {
+  LineChart,
+  Line,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip,
+  ResponsiveContainer,
+  ReferenceLine,
+} from 'recharts';
 import {
   signalTrackingApi,
   type PerformanceStats,
   type SignalRecordData,
 } from '@/lib/api';
-import { Target, TrendingUp, TrendingDown, Minus, RefreshCw } from 'lucide-react';
+import { Target, TrendingUp, TrendingDown, Minus, RefreshCw, Trophy, AlertTriangle } from 'lucide-react';
 import Link from 'next/link';
 import { cn } from '@/lib/utils';
 
@@ -47,6 +56,14 @@ function formatDate(dateStr: string): string {
   }
 }
 
+function formatShortDate(dateStr: string): string {
+  try {
+    return new Date(dateStr).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+  } catch {
+    return dateStr;
+  }
+}
+
 export default function PerformancePage() {
   const [stats, setStats] = useState<PerformanceStats | null>(null);
   const [signals, setSignals] = useState<SignalRecordData[]>([]);
@@ -56,7 +73,7 @@ export default function PerformancePage() {
   useEffect(() => {
     Promise.allSettled([
       signalTrackingApi.getPerformance(),
-      signalTrackingApi.getSignals(100),
+      signalTrackingApi.getSignals(200),
     ]).then(([statsRes, signalsRes]) => {
       if (statsRes.status === 'fulfilled') setStats(statsRes.value.data);
       if (signalsRes.status === 'fulfilled') setSignals(signalsRes.value.data);
@@ -70,7 +87,7 @@ export default function PerformancePage() {
       await signalTrackingApi.checkOutcomes();
       const [statsRes, signalsRes] = await Promise.allSettled([
         signalTrackingApi.getPerformance(),
-        signalTrackingApi.getSignals(100),
+        signalTrackingApi.getSignals(200),
       ]);
       if (statsRes.status === 'fulfilled') setStats(statsRes.value.data);
       if (signalsRes.status === 'fulfilled') setSignals(signalsRes.value.data);
@@ -80,6 +97,24 @@ export default function PerformancePage() {
       setChecking(false);
     }
   };
+
+  // Build cumulative return chart data from BUY signals with 7d return
+  const cumulativeChartData = useMemo(() => {
+    const buySignals = signals
+      .filter((s) => s.direction === 'BUY' && s.return_7d != null)
+      .slice()
+      .sort((a, b) => new Date(a.signal_date).getTime() - new Date(b.signal_date).getTime());
+
+    let cumulative = 0;
+    return buySignals.map((s) => {
+      cumulative += Number(s.return_7d ?? 0);
+      return {
+        date: formatShortDate(s.signal_date),
+        cumulative: Math.round(cumulative * 100) / 100,
+        symbol: s.symbol,
+      };
+    });
+  }, [signals]);
 
   return (
     <div className="max-w-[1400px] mx-auto space-y-6">
@@ -158,47 +193,185 @@ export default function PerformancePage() {
         </div>
       )}
 
-      {/* Confidence Breakdown */}
+      {/* Confidence + Direction Breakdown */}
       {stats && stats.totalSignals > 0 && (
-        <Card>
-          <CardHeader className="pb-3">
-            <CardTitle className="text-sm">Performance by Confidence Level</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="grid gap-4 grid-cols-1 sm:grid-cols-3">
-              {(['HIGH', 'MEDIUM', 'LOW'] as const).map((conf) => {
-                const data = stats.byConfidence[conf];
-                return (
-                  <div key={conf} className="rounded-lg border p-3 text-center">
-                    <Badge
-                      variant="outline"
-                      className={cn(
-                        'mb-2',
-                        conf === 'HIGH'
-                          ? 'border-green-600 text-green-500'
-                          : conf === 'MEDIUM'
-                            ? 'border-yellow-600 text-yellow-500'
-                            : 'border-muted-foreground/40 text-muted-foreground',
-                      )}
-                    >
-                      {conf}
-                    </Badge>
-                    <p className="text-2xl font-bold">{data.count}</p>
-                    <p className="text-xs text-muted-foreground">signals</p>
-                    {data.winRate != null && (
-                      <p
+        <div className="grid gap-6 grid-cols-1 lg:grid-cols-2">
+          {/* By Confidence */}
+          <Card>
+            <CardHeader className="pb-3">
+              <CardTitle className="text-sm">Performance by Confidence Level</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="grid gap-3 grid-cols-3">
+                {(['HIGH', 'MEDIUM', 'LOW'] as const).map((conf) => {
+                  const data = stats.byConfidence[conf];
+                  return (
+                    <div key={conf} className="rounded-lg border p-3 text-center">
+                      <Badge
+                        variant="outline"
                         className={cn(
-                          'text-sm font-medium mt-1',
-                          data.winRate >= 50 ? 'text-green-500' : 'text-red-500',
+                          'mb-2',
+                          conf === 'HIGH'
+                            ? 'border-green-600 text-green-500'
+                            : conf === 'MEDIUM'
+                              ? 'border-yellow-600 text-yellow-500'
+                              : 'border-muted-foreground/40 text-muted-foreground',
                         )}
                       >
-                        {data.winRate}% win rate
-                      </p>
-                    )}
+                        {conf}
+                      </Badge>
+                      <p className="text-2xl font-bold">{data.count}</p>
+                      <p className="text-xs text-muted-foreground">signals</p>
+                      {data.winRate != null && (
+                        <p className={cn('text-sm font-medium mt-1', data.winRate >= 50 ? 'text-green-500' : 'text-red-500')}>
+                          {data.winRate}% win rate
+                        </p>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* By Direction */}
+          {stats.byDirection && (
+            <Card>
+              <CardHeader className="pb-3">
+                <CardTitle className="text-sm">Performance by Signal Type</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="grid gap-3 grid-cols-3">
+                  {(['BUY', 'HOLD', 'SELL'] as const).map((dir) => {
+                    const data = stats.byDirection[dir];
+                    return (
+                      <div key={dir} className="rounded-lg border p-3 text-center">
+                        <div className="flex items-center justify-center mb-2">
+                          {dir === 'BUY' ? (
+                            <TrendingUp className="h-4 w-4 text-green-500" />
+                          ) : dir === 'SELL' ? (
+                            <TrendingDown className="h-4 w-4 text-red-500" />
+                          ) : (
+                            <Minus className="h-4 w-4 text-muted-foreground" />
+                          )}
+                          <span className={cn('ml-1 text-xs font-semibold',
+                            dir === 'BUY' ? 'text-green-500' : dir === 'SELL' ? 'text-red-500' : 'text-muted-foreground'
+                          )}>{dir}</span>
+                        </div>
+                        <p className="text-2xl font-bold">{data.count}</p>
+                        <p className="text-xs text-muted-foreground">signals</p>
+                        {data.winRate != null && (
+                          <p className={cn('text-sm font-medium mt-1', data.winRate >= 50 ? 'text-green-500' : 'text-red-500')}>
+                            {data.winRate}% win rate
+                          </p>
+                        )}
+                        {data.avgReturn != null && (
+                          <p className={cn('text-xs mt-0.5', data.avgReturn >= 0 ? 'text-green-400' : 'text-red-400')}>
+                            avg {data.avgReturn > 0 ? '+' : ''}{data.avgReturn}%
+                          </p>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              </CardContent>
+            </Card>
+          )}
+        </div>
+      )}
+
+      {/* Best & Worst Signals */}
+      {stats && (stats.bestSignal || stats.worstSignal) && (
+        <div className="grid gap-4 grid-cols-1 sm:grid-cols-2">
+          {stats.bestSignal && (
+            <Card className="border-green-600/30">
+              <CardContent className="pt-4 pb-4 flex items-center gap-4">
+                <div className="rounded-full bg-green-500/10 p-2.5">
+                  <Trophy className="h-5 w-5 text-green-500" />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="text-xs text-muted-foreground">Best Signal</p>
+                  <div className="flex items-center gap-2 mt-0.5">
+                    <Link href={`/stocks/${stats.bestSignal.symbol}`} className="font-semibold text-primary hover:underline">
+                      {stats.bestSignal.symbol}
+                    </Link>
+                    <Badge variant="outline" className="text-[10px] h-4 px-1 text-green-500 border-green-600/40">
+                      {stats.bestSignal.direction}
+                    </Badge>
                   </div>
-                );
-              })}
-            </div>
+                  <p className="text-xs text-muted-foreground mt-0.5">{formatDate(stats.bestSignal.signal_date)}</p>
+                </div>
+                <p className="text-xl font-bold text-green-500">
+                  +{Number(stats.bestSignal.return_30d).toFixed(2)}%
+                </p>
+              </CardContent>
+            </Card>
+          )}
+          {stats.worstSignal && stats.worstSignal.symbol !== stats.bestSignal?.symbol && (
+            <Card className="border-red-600/30">
+              <CardContent className="pt-4 pb-4 flex items-center gap-4">
+                <div className="rounded-full bg-red-500/10 p-2.5">
+                  <AlertTriangle className="h-5 w-5 text-red-500" />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="text-xs text-muted-foreground">Worst Signal</p>
+                  <div className="flex items-center gap-2 mt-0.5">
+                    <Link href={`/stocks/${stats.worstSignal.symbol}`} className="font-semibold text-primary hover:underline">
+                      {stats.worstSignal.symbol}
+                    </Link>
+                    <Badge variant="outline" className="text-[10px] h-4 px-1 text-red-500 border-red-600/40">
+                      {stats.worstSignal.direction}
+                    </Badge>
+                  </div>
+                  <p className="text-xs text-muted-foreground mt-0.5">{formatDate(stats.worstSignal.signal_date)}</p>
+                </div>
+                <p className="text-xl font-bold text-red-500">
+                  {Number(stats.worstSignal.return_30d).toFixed(2)}%
+                </p>
+              </CardContent>
+            </Card>
+          )}
+        </div>
+      )}
+
+      {/* Cumulative BUY Return Chart */}
+      {cumulativeChartData.length >= 2 && (
+        <Card>
+          <CardHeader className="pb-3">
+            <CardTitle className="text-sm">Cumulative Return — Following All BUY Signals (7-day)</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <ResponsiveContainer width="100%" height={200}>
+              <LineChart data={cumulativeChartData} margin={{ top: 5, right: 10, left: 10, bottom: 5 }}>
+                <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" opacity={0.4} />
+                <XAxis dataKey="date" tick={{ fontSize: 11 }} stroke="hsl(var(--muted-foreground))" />
+                <YAxis
+                  tick={{ fontSize: 11 }}
+                  stroke="hsl(var(--muted-foreground))"
+                  tickFormatter={(v) => `${v.toFixed(1)}%`}
+                />
+                <Tooltip
+                  contentStyle={{ background: 'hsl(var(--card))', border: '1px solid hsl(var(--border))', borderRadius: '8px' }}
+                  formatter={(v: unknown, _name: unknown, props: { payload?: { symbol?: string } }) => [
+                    `${Number(v).toFixed(2)}%`,
+                    props.payload?.symbol ?? 'Cumulative',
+                  ]}
+                />
+                <ReferenceLine y={0} stroke="hsl(var(--muted-foreground))" strokeDasharray="4 2" />
+                <Line
+                  type="monotone"
+                  dataKey="cumulative"
+                  name="Cumulative Return"
+                  stroke="#3B82F6"
+                  strokeWidth={2.5}
+                  dot={false}
+                  activeDot={{ r: 4 }}
+                />
+              </LineChart>
+            </ResponsiveContainer>
+            <p className="text-xs text-muted-foreground mt-2 text-center">
+              Sum of 7-day returns from all BUY signals in order. Assumes equal allocation to each signal.
+            </p>
           </CardContent>
         </Card>
       )}

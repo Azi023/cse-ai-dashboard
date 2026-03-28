@@ -435,6 +435,13 @@ export interface PerformanceStats {
     MEDIUM: { count: number; winRate: number | null };
     LOW: { count: number; winRate: number | null };
   };
+  byDirection: {
+    BUY: { count: number; winRate: number | null; avgReturn: number | null };
+    HOLD: { count: number; winRate: number | null; avgReturn: number | null };
+    SELL: { count: number; winRate: number | null; avgReturn: number | null };
+  };
+  bestSignal: { symbol: string; direction: string; return_30d: number; signal_date: string } | null;
+  worstSignal: { symbol: string; direction: string; return_30d: number; signal_date: string } | null;
 }
 
 export const signalTrackingApi = {

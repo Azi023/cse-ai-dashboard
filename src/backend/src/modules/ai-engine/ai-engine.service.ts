@@ -5,6 +5,7 @@ import { ConfigService } from '@nestjs/config';
 import { MockGenerator } from './mock-generator';
 import { SYSTEM_PROMPTS } from './prompts';
 import { RedisService } from '../cse-data/redis.service';
+import { SignalTrackingService } from '../signal-tracking/signal-tracking.service';
 import { MacroData, Stock } from '../../entities';
 import * as fs from 'fs';
 import * as path from 'path';
@@ -90,6 +91,7 @@ export class AiEngineService {
     private readonly configService: ConfigService,
     private readonly mockGenerator: MockGenerator,
     private readonly redisService: RedisService,
+    private readonly signalTrackingService: SignalTrackingService,
     @InjectRepository(MacroData)
     private readonly macroDataRepo: Repository<MacroData>,
     @InjectRepository(Stock)
@@ -156,6 +158,45 @@ export class AiEngineService {
 - CSE market P/E: ${marketPE ?? 'N/A'}x
 - Foreign net buying MTD: LKR ${foreignNet ?? 'N/A'}M
 - Upcoming: CBSL rate decision March 25, 2026`;
+    } catch {
+      return '';
+    }
+  }
+
+  // --- Performance context for signal generation feedback loop ---
+
+  private async buildPerformanceContext(): Promise<string> {
+    try {
+      const stats = await this.signalTrackingService.getPerformanceStats();
+      if (stats.totalSignals < 10) return '';
+
+      const lines: string[] = [
+        '\n\nYour signal track record (use this to self-calibrate confidence):',
+        `- Total signals tracked: ${stats.totalSignals} (${stats.completedSignals} evaluated, ${stats.pendingSignals} pending)`,
+      ];
+      if (stats.winRate7d != null)
+        lines.push(`- Win rate (7-day): ${stats.winRate7d}%`);
+      if (stats.winRate30d != null)
+        lines.push(`- Win rate (30-day): ${stats.winRate30d}%`);
+      if (stats.avgReturn30d != null)
+        lines.push(
+          `- Avg return (30d): ${stats.avgReturn30d > 0 ? '+' : ''}${stats.avgReturn30d}%`,
+        );
+      const high = stats.byConfidence.HIGH;
+      const med = stats.byConfidence.MEDIUM;
+      if (high.count > 0)
+        lines.push(
+          `- HIGH confidence signals: ${high.count} signals, ${high.winRate ?? 'N/A'}% win rate`,
+        );
+      if (med.count > 0)
+        lines.push(
+          `- MEDIUM confidence signals: ${med.count} signals, ${med.winRate ?? 'N/A'}% win rate`,
+        );
+      lines.push(
+        'If HIGH confidence win rate < 60%, be more selective. If > 70%, maintain standards.',
+      );
+
+      return lines.join('\n');
     } catch {
       return '';
     }
@@ -420,11 +461,54 @@ export class AiEngineService {
       }
     }
 
-    // 4. Cache in Redis
+    // 4. Auto-record fresh signals for outcome tracking (once per day)
+    void this.autoRecordSignals(signals);
+
+    // 5. Cache in Redis
     await this.redisService.setJson(CACHE_KEYS.SIGNALS, signals, TTL.SIGNALS);
     this.logger.log(`Signals cached for ${TTL.SIGNALS / 3600}h`);
 
     return signals;
+  }
+
+  /**
+   * Auto-record fresh signals to signal_records for outcome tracking.
+   * Uses a Redis dedup key to ensure we only record once per calendar day.
+   */
+  private async autoRecordSignals(signals: TradingSignal[]): Promise<void> {
+    try {
+      const today = new Date().toISOString().split('T')[0];
+      const dedupKey = `ai:signals:recorded:${today}`;
+      const alreadyRecorded = await this.redisService.get(dedupKey);
+      if (alreadyRecorded) return;
+
+      let recorded = 0;
+      for (const signal of signals) {
+        if (!signal.currentPrice || signal.currentPrice <= 0) continue;
+        try {
+          await this.signalTrackingService.recordSignal({
+            symbol: signal.symbol,
+            direction: signal.direction,
+            confidence: signal.confidence,
+            price_at_signal: signal.currentPrice,
+            reasoning: signal.reasoning ?? undefined,
+          });
+          recorded++;
+        } catch (err) {
+          this.logger.warn(
+            `Failed to record signal for ${signal.symbol}: ${err}`,
+          );
+        }
+      }
+
+      // Mark recorded for today (25h TTL covers edge cases around midnight)
+      await this.redisService.set(dedupKey, '1', 25 * 3600);
+      this.logger.log(
+        `Auto-recorded ${recorded}/${signals.length} signals to signal_records`,
+      );
+    } catch (err) {
+      this.logger.warn(`Signal auto-recording failed (non-fatal): ${err}`);
+    }
   }
 
   // --- Live mode methods (Claude API) ---
@@ -583,6 +667,7 @@ export class AiEngineService {
 
       const marketData = await this.mockGenerator.getMarketData();
       const macroContext = await this.buildMacroContext();
+      const performanceContext = await this.buildPerformanceContext();
       const compliantSymbols = await this.getCompliantSymbols();
       const shariahContext =
         compliantSymbols.length > 0
@@ -596,7 +681,7 @@ export class AiEngineService {
         messages: [
           {
             role: 'user',
-            content: `Respond with ONLY a raw JSON array. No markdown. No backticks. No explanation. Start your response with [ and end with ].\n\nGenerate trading signals based on today's CSE market data. Each element must match this exact structure:\n{\n  "symbol": "SYMBOL.N0000",\n  "name": "Company Name",\n  "currentPrice": 100.00,\n  "direction": "BUY|HOLD|SELL",\n  "reasoning": "2-3 technical sentences for analysts",\n  "rationale_simple": "One plain-English sentence a beginner investor can understand",\n  "confidence": "HIGH|MEDIUM|LOW",\n  "shariahStatus": "compliant|non_compliant|pending_review",\n  "suggested_holding_period": "e.g. 12-24 months, 3-6 months, Short-term: 1-4 weeks"\n}\n\nIMPORTANT: Never say 'buy' or 'sell' as direct instructions. Use 'worth considering' or 'may warrant attention'. Always include suggested_holding_period and rationale_simple.${shariahContext}\n\nMarket data:\n${JSON.stringify(marketData, null, 2)}${macroContext}`,
+            content: `Respond with ONLY a raw JSON array. No markdown. No backticks. No explanation. Start your response with [ and end with ].\n\nGenerate trading signals based on today's CSE market data. Each element must match this exact structure:\n{\n  "symbol": "SYMBOL.N0000",\n  "name": "Company Name",\n  "currentPrice": 100.00,\n  "direction": "BUY|HOLD|SELL",\n  "reasoning": "2-3 technical sentences for analysts",\n  "rationale_simple": "One plain-English sentence a beginner investor can understand",\n  "confidence": "HIGH|MEDIUM|LOW",\n  "shariahStatus": "compliant|non_compliant|pending_review",\n  "suggested_holding_period": "e.g. 12-24 months, 3-6 months, Short-term: 1-4 weeks"\n}\n\nIMPORTANT: Never say 'buy' or 'sell' as direct instructions. Use 'worth considering' or 'may warrant attention'. Always include suggested_holding_period and rationale_simple.${shariahContext}${performanceContext}\n\nMarket data:\n${JSON.stringify(marketData, null, 2)}${macroContext}`,
           },
         ],
       });
