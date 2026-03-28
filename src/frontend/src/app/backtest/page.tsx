@@ -8,7 +8,7 @@ import {
   type BacktestResult,
   type BacktestStrategy,
 } from '@/lib/api';
-import { FlaskConical, TrendingUp, TrendingDown, Loader2 } from 'lucide-react';
+import { FlaskConical, TrendingUp, TrendingDown, Loader2, AlertCircle, Info } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { safeNum } from '@/lib/format';
 
@@ -37,6 +37,7 @@ function StatBox({
 export default function BacktestPage() {
   const [strategies, setStrategies] = useState<BacktestStrategy[]>([]);
   const [symbols, setSymbols] = useState<string[]>([]);
+  const [compliantChips, setCompliantChips] = useState<string[]>([]);
   const [selectedStrategy, setSelectedStrategy] = useState('RSI_OVERSOLD');
   const [selectedSymbol, setSelectedSymbol] = useState('');
   const [symbolSearch, setSymbolSearch] = useState('');
@@ -50,11 +51,15 @@ export default function BacktestPage() {
     Promise.allSettled([
       backtestApi.getStrategies(),
       backtestApi.getSymbols(),
-    ]).then(([stratRes, symRes]) => {
+      backtestApi.getCompliantSymbols(),
+    ]).then(([stratRes, symRes, compliantRes]) => {
       if (stratRes.status === 'fulfilled') setStrategies(stratRes.value.data);
       if (symRes.status === 'fulfilled') {
         setSymbols(symRes.value.data);
         if (symRes.value.data.length > 0) setSelectedSymbol(symRes.value.data[0]);
+      }
+      if (compliantRes.status === 'fulfilled' && compliantRes.value.data.length > 0) {
+        setCompliantChips(compliantRes.value.data);
       }
       setInitialLoading(false);
     });
@@ -120,24 +125,32 @@ export default function BacktestPage() {
             ))}
           </div>
 
-          {/* Quick-select popular stocks */}
+          {/* Quick-select: Shariah-compliant stocks with sufficient price history */}
           <div>
-            <label className="text-xs text-muted-foreground block mb-2">Quick Select — Shariah Compliant</label>
+            <label className="text-xs text-muted-foreground block mb-2">
+              Quick Select — Shariah Compliant (with price history)
+            </label>
             <div className="flex flex-wrap gap-2">
-              {['HHL.N0000', 'AEL.N0000', 'TJL.N0000', 'DIPD.N0000', 'LOLC.N0000', 'DIAL.N0000', 'JKH.N0000'].map((s) => (
-                <button
-                  key={s}
-                  onClick={() => setSelectedSymbol(s)}
-                  className={cn(
-                    'rounded-md border px-3 py-1 text-xs font-medium transition-colors',
-                    selectedSymbol === s
-                      ? 'border-primary bg-primary/10 text-primary'
-                      : 'hover:bg-muted/50 text-muted-foreground',
-                  )}
-                >
-                  {s.replace('.N0000', '')}
-                </button>
-              ))}
+              {initialLoading ? (
+                <span className="text-xs text-muted-foreground">Loading compliant stocks...</span>
+              ) : compliantChips.length === 0 ? (
+                <span className="text-xs text-muted-foreground">No compliant stocks with sufficient data yet</span>
+              ) : (
+                compliantChips.map((s) => (
+                  <button
+                    key={s}
+                    onClick={() => setSelectedSymbol(s)}
+                    className={cn(
+                      'rounded-md border px-3 py-1 text-xs font-medium transition-colors',
+                      selectedSymbol === s
+                        ? 'border-primary bg-primary/10 text-primary'
+                        : 'hover:bg-muted/50 text-muted-foreground',
+                    )}
+                  >
+                    {s.replace('.N0000', '')}
+                  </button>
+                ))
+              )}
             </div>
           </div>
 
@@ -212,7 +225,15 @@ export default function BacktestPage() {
       </Card>
 
       {/* Results */}
-      {result && (
+      {result && result.error && (
+        <Card className="border-yellow-500/30 bg-yellow-500/5">
+          <CardContent className="flex items-start gap-3 pt-4">
+            <AlertCircle className="h-4 w-4 text-yellow-500 mt-0.5 shrink-0" />
+            <p className="text-sm text-yellow-200">{result.errorMessage}</p>
+          </CardContent>
+        </Card>
+      )}
+      {result && !result.error && (
         <>
           {/* Summary Stats */}
           <div className="grid gap-3 grid-cols-2 sm:grid-cols-4 lg:grid-cols-4">
@@ -312,6 +333,9 @@ export default function BacktestPage() {
                       {result.sharpeRatio >= 1 ? ' — good risk-adjusted return.' : result.sharpeRatio >= 0 ? ' — modest risk-adjusted return.' : ' — returns did not compensate for risk.'}
                     </span>
                   )}
+                  {result.sharpeNote && (
+                    <span className="block mt-1 text-yellow-400/80">{result.sharpeNote}</span>
+                  )}
                 </p>
               </div>
             </CardContent>
@@ -326,9 +350,31 @@ export default function BacktestPage() {
             </CardHeader>
             <CardContent>
               {result.trades.length === 0 ? (
-                <p className="text-sm text-muted-foreground text-center py-4">
-                  No trades generated. The strategy criteria were not met during this period.
-                </p>
+                <div className="space-y-3 py-2">
+                  <div className="flex items-start gap-3 rounded-lg border border-blue-500/20 bg-blue-500/5 p-3">
+                    <Info className="h-4 w-4 text-blue-400 mt-0.5 shrink-0" />
+                    <div className="text-sm space-y-1">
+                      <p className="font-medium text-blue-200">No trades triggered</p>
+                      <p className="text-muted-foreground">
+                        {result.strategy === 'RSI_OVERSOLD' &&
+                          `The RSI strategy looks for RSI < 30 (oversold). ${result.symbol} never reached oversold conditions during this period — it was in a sustained trend throughout.`}
+                        {result.strategy === 'SMA_CROSSOVER' &&
+                          `The Trend Following strategy looks for a golden cross (20-day MA crossing above 50-day MA). No trend reversal was detected for ${result.symbol} during this period.`}
+                        {result.strategy === 'VALUE_SCREEN' &&
+                          `The Buy Below SMA50 strategy looks for the price to drop 10%+ below its 50-day average. ${result.symbol} didn't dip that far during this period.`}
+                        {!['RSI_OVERSOLD', 'SMA_CROSSOVER', 'VALUE_SCREEN'].includes(result.strategy) &&
+                          'The strategy criteria were not met during this period.'}
+                      </p>
+                    </div>
+                  </div>
+                  <p className="text-xs text-muted-foreground">
+                    Buy & hold comparison: if you had bought and held {result.symbol} throughout, return would have been{' '}
+                    <span className={result.buyAndHoldReturn >= 0 ? 'text-green-400' : 'text-red-400'}>
+                      {result.buyAndHoldReturn > 0 ? '+' : ''}{result.buyAndHoldReturn}%
+                    </span>
+                    . Try a different time window or stock to find more signal activity.
+                  </p>
+                </div>
               ) : (
                 <div className="overflow-x-auto">
                   <table className="w-full text-sm">

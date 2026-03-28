@@ -26,9 +26,13 @@ export interface BacktestResult {
   winRate: number;
   maxDrawdown: number;
   sharpeRatio: number | null;
+  sharpeNote?: string;
   trades: BacktestTrade[];
   equityCurve: Array<{ date: string; equity: number }>;
   buyAndHoldReturn: number;
+  error?: boolean;
+  errorMessage?: string;
+  dataPoints?: number;
 }
 
 @Injectable()
@@ -68,8 +72,33 @@ export class BacktestService {
 
     const prices = await this.getPricesForSymbol(symbol, days);
 
-    if (prices.length < 30) {
-      return this.emptyResult(strategy, symbol, initialCapital);
+    if (prices.length === 0) {
+      return {
+        ...this.emptyResult(strategy, symbol, initialCapital),
+        error: true,
+        errorMessage: `No historical price data available for ${symbol}. Data collection started recently — try again in a few weeks.`,
+        dataPoints: 0,
+      };
+    }
+
+    const strategyMinimums: Record<string, number> = {
+      RSI_OVERSOLD: 14,
+      SMA_CROSSOVER: 50,
+      VALUE_SCREEN: 50,
+    };
+    const strategyLabels: Record<string, string> = {
+      RSI_OVERSOLD: 'Buy the Dip (RSI)',
+      SMA_CROSSOVER: 'Trend Following (MA Cross)',
+      VALUE_SCREEN: 'Buy Below SMA50',
+    };
+    const minRequired = strategyMinimums[strategy] ?? 30;
+    if (prices.length < minRequired) {
+      return {
+        ...this.emptyResult(strategy, symbol, initialCapital),
+        error: true,
+        errorMessage: `Only ${prices.length} days of data available for ${symbol}. ${strategyLabels[strategy] ?? strategy} requires at least ${minRequired} days. Try a stock with more history.`,
+        dataPoints: prices.length,
+      };
     }
 
     const closePrices = prices.map((p) => Number(p.close));
@@ -378,6 +407,23 @@ export class BacktestService {
     return allStocks.map((s) => s.symbol);
   }
 
+  async getCompliantSymbols(): Promise<string[]> {
+    // Top Shariah-compliant stocks ordered by price-history depth (most liquid/tracked first)
+    const results = await this.priceRepo
+      .createQueryBuilder('p')
+      .select('s.symbol', 'symbol')
+      .addSelect('COUNT(*)', 'count')
+      .innerJoin('p.stock', 's')
+      .where('s.shariah_status = :status', { status: 'compliant' })
+      .groupBy('s.symbol')
+      .having('COUNT(*) >= 50')
+      .orderBy('count', 'DESC')
+      .limit(7)
+      .getRawMany();
+
+    return results.map((r: { symbol: string }) => r.symbol);
+  }
+
   // --- Helpers ---
 
   private calculateRSI(prices: number[], period: number): number[] {
@@ -478,6 +524,20 @@ export class BacktestService {
       if (drawdown > maxDrawdown) maxDrawdown = drawdown;
     }
 
+    let sharpeRatio: number | null = null;
+    let sharpeNote: string | undefined;
+    if (totalTrades < 5) {
+      if (totalTrades > 0) {
+        sharpeNote = `Too few trades (${totalTrades}) for a meaningful Sharpe ratio. Run a longer backtest for statistical significance.`;
+      }
+    } else {
+      sharpeRatio = this.calculateSharpeRatio(equityCurve);
+      if (sharpeRatio !== null && sharpeRatio < 0 && totalReturnPercent > 0) {
+        sharpeNote =
+          'Negative Sharpe despite positive return — strategy was idle most of the period. Consider a longer backtest window.';
+      }
+    }
+
     return {
       strategy,
       symbol,
@@ -492,7 +552,8 @@ export class BacktestService {
       losingTrades: losses,
       winRate: Math.round(winRate * 100) / 100,
       maxDrawdown: Math.round(maxDrawdown * 100) / 100,
-      sharpeRatio: this.calculateSharpeRatio(equityCurve),
+      sharpeRatio,
+      sharpeNote,
       trades,
       equityCurve,
       buyAndHoldReturn: Math.round(buyAndHoldReturn * 100) / 100,

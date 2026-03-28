@@ -714,9 +714,13 @@ export interface BacktestResult {
   winRate: number;
   maxDrawdown: number;
   sharpeRatio: number | null;
+  sharpeNote?: string;
   trades: BacktestTrade[];
   equityCurve: Array<{ date: string; equity: number }>;
   buyAndHoldReturn: number;
+  error?: boolean;
+  errorMessage?: string;
+  dataPoints?: number;
 }
 
 export interface BacktestStrategy {
@@ -735,6 +739,7 @@ export const backtestApi = {
     api.get<BacktestResult>('/backtest/run', { params }),
   getStrategies: () => api.get<BacktestStrategy[]>('/backtest/strategies'),
   getSymbols: () => api.get<string[]>('/backtest/symbols'),
+  getCompliantSymbols: () => api.get<string[]>('/backtest/compliant-symbols'),
 };
 
 // Journey / Investment Tracker Types

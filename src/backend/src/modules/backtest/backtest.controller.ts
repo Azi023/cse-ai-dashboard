@@ -37,9 +37,9 @@ export class BacktestController {
       },
       {
         id: 'VALUE_SCREEN',
-        name: 'Buy Below Fair Value',
+        name: 'Buy Below SMA50',
         description:
-          'Buys when a stock trades 10% below its 50-day average price. Takes a quick 5% profit or cuts loss at 8%. Conservative, mean-reversion approach.',
+          'Buys when price drops 10%+ below its 50-day average (mean-reversion). Takes a 5% profit or cuts loss at 8%. Conservative approach — best for range-bound stocks.',
       },
     ];
   }
@@ -47,5 +47,10 @@ export class BacktestController {
   @Get('symbols')
   async getAvailableSymbols(): Promise<string[]> {
     return this.backtestService.getAvailableSymbols();
+  }
+
+  @Get('compliant-symbols')
+  async getCompliantSymbols(): Promise<string[]> {
+    return this.backtestService.getCompliantSymbols();
   }
 }
