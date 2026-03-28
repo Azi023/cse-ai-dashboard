@@ -31,7 +31,7 @@ import {
   ChevronDown,
   ChevronRight,
 } from 'lucide-react';
-import { ordersApi, type PendingOrder, type CreateOrderPayload, type SafetyCheckResult } from '@/lib/api';
+import api, { ordersApi, type PendingOrder, type CreateOrderPayload, type SafetyCheckResult } from '@/lib/api';
 import { safeNum } from '@/lib/format';
 
 // ── Status helpers ────────────────────────────────────────────────────────────
@@ -177,6 +177,7 @@ export default function OrdersPage() {
   const [form, setForm] = useState<QuickOrderForm>(EMPTY_FORM);
   const [formSubmitting, setFormSubmitting] = useState(false);
   const [statusFilter, setStatusFilter] = useState<string>('ALL');
+  const [safetyStatus, setSafetyStatus] = useState<{ enabled: boolean; requireHumanApproval: boolean } | null>(null);
 
   const fetchOrders = useCallback(async () => {
     try {
@@ -194,6 +195,7 @@ export default function OrdersPage() {
 
   useEffect(() => {
     fetchOrders();
+    api.get('/trade/safety-status').then(res => setSafetyStatus(res.data)).catch(() => {});
   }, [fetchOrders]);
 
   // ── Actions ────────────────────────────────────────────────────────────────
@@ -282,6 +284,34 @@ export default function OrdersPage() {
               Quick Order
             </Button>
           </div>
+        </div>
+
+        {/* Summary Bar */}
+        <div className="flex items-center gap-6 rounded-lg border bg-muted/20 px-4 py-2.5 text-sm flex-wrap">
+          <div className="flex items-center gap-2">
+            <div className={`h-2 w-2 rounded-full ${safetyStatus?.enabled ? 'bg-emerald-500' : 'bg-amber-500'}`} />
+            <span className="text-muted-foreground">Kill Switch:</span>
+            <span className={`font-medium ${safetyStatus?.enabled ? 'text-emerald-500' : 'text-amber-500'}`}>
+              {safetyStatus ? (safetyStatus.enabled ? 'ON — Auto-queuing active' : 'OFF — Manual only') : '…'}
+            </span>
+          </div>
+          <div className="flex items-center gap-1.5">
+            <span className="text-muted-foreground">Pending:</span>
+            <span className="font-semibold text-foreground">{activeOrders.length}</span>
+          </div>
+          <div className="flex items-center gap-1.5">
+            <span className="text-muted-foreground">Today&apos;s trades:</span>
+            <span className="font-semibold text-foreground">
+              {orders.filter(o => o.status === 'EXECUTED' && new Date(o.created_at).toDateString() === new Date().toDateString()).length}
+            </span>
+          </div>
+          {safetyStatus && (
+            <div className="flex items-center gap-1.5 ml-auto text-xs text-muted-foreground">
+              <span>Max/day: LKR {(20000).toLocaleString()}</span>
+              <span>·</span>
+              <span>Human approval: required</span>
+            </div>
+          )}
         </div>
 
         {/* Error banner */}

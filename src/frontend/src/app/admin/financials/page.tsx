@@ -18,6 +18,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import {
   stocksApi,
   financialsApi,
+  strategyEngineApi,
   type Stock,
   type CompanyFinancial,
   type FinancialsCoverage,
@@ -156,6 +157,9 @@ export default function AdminFinancialsPage() {
   const [fetchingCse, setFetchingCse] = useState(false);
   const [cseFetchResult, setCseFetchResult] = useState<{ total: number; fetched: number; failed: number } | null>(null);
   const [cseFetchError, setCseFetchError] = useState<string | null>(null);
+
+  // Strategy Backtests
+  const [runningBacktest, setRunningBacktest] = useState(false);
 
   // CSE Playwright Scraper
   const [scrapingCse, setScrapingCse] = useState(false);
@@ -337,6 +341,15 @@ export default function AdminFinancialsPage() {
     }
   };
 
+  const runBacktests = async () => {
+    setRunningBacktest(true);
+    try {
+      await strategyEngineApi.runBacktests();
+    } catch { /* silent */ } finally {
+      setRunningBacktest(false);
+    }
+  };
+
   const handleScrapeCse = async () => {
     setScrapingCse(true);
     setCseScrapeResult(null);
@@ -392,10 +405,16 @@ export default function AdminFinancialsPage() {
               Company Financials
             </h2>
             <p className="text-muted-foreground">
-              Enter and manage financial data for Shariah screening and
+              Enter and manage financial data for 272 CSE-listed stocks — Shariah screening and
               fundamental analysis
             </p>
           </div>
+        </div>
+        <div className="flex items-center gap-2">
+          <Button size="sm" variant="outline" onClick={runBacktests} disabled={runningBacktest}>
+            <RefreshCw className={`w-4 h-4 mr-1 ${runningBacktest ? 'animate-spin' : ''}`} />
+            Run Backtests
+          </Button>
         </div>
       </div>
 

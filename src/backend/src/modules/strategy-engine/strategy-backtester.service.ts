@@ -300,12 +300,16 @@ export class StrategyBacktesterService {
     }
 
     // Symbols that have any announcement (catalyst proxy)
+    // Announcements use short symbols (e.g. "AEL") while stocks use "AEL.N0000"
+    // Normalise both sides to short form for matching.
     const announcedRaw = await this.announcementRepo
       .createQueryBuilder('a')
       .select('DISTINCT a.symbol', 'symbol')
       .where('a.symbol IS NOT NULL')
       .getRawMany<{ symbol: string }>();
-    const hasAnnouncement = new Set(announcedRaw.map((r) => r.symbol));
+    const hasAnnouncement = new Set(
+      announcedRaw.map((r) => r.symbol.replace(/\.\w+\d+$/i, '').toUpperCase()),
+    );
 
     // Compliant stock IDs
     const compliantStocks = await this.stockRepo.find({
@@ -320,7 +324,8 @@ export class StrategyBacktesterService {
 
     for (const stock of compliantStocks) {
       if (!qualifiedSymbols.has(stock.symbol)) continue;
-      if (!hasAnnouncement.has(stock.symbol)) continue;
+      const shortSymbol = stock.symbol.replace(/\.\w+\d+$/i, '').toUpperCase();
+      if (!hasAnnouncement.has(shortSymbol)) continue;
 
       const prices = await this.priceRepo.find({
         where: { stock_id: stock.id },

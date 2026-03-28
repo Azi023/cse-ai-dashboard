@@ -15,10 +15,12 @@ import {
 } from 'recharts';
 import {
   signalTrackingApi,
+  strategyEngineApi,
   type PerformanceStats,
   type SignalRecordData,
+  type StrategyBacktestResult,
 } from '@/lib/api';
-import { Target, TrendingUp, TrendingDown, Minus, RefreshCw, Trophy, AlertTriangle } from 'lucide-react';
+import { Target, TrendingUp, TrendingDown, Minus, RefreshCw, Trophy, AlertTriangle, Zap } from 'lucide-react';
 import Link from 'next/link';
 import { cn } from '@/lib/utils';
 
@@ -67,6 +69,7 @@ function formatShortDate(dateStr: string): string {
 export default function PerformancePage() {
   const [stats, setStats] = useState<PerformanceStats | null>(null);
   const [signals, setSignals] = useState<SignalRecordData[]>([]);
+  const [backtestResults, setBacktestResults] = useState<StrategyBacktestResult[]>([]);
   const [loading, setLoading] = useState(true);
   const [checking, setChecking] = useState(false);
 
@@ -79,6 +82,7 @@ export default function PerformancePage() {
       if (signalsRes.status === 'fulfilled') setSignals(signalsRes.value.data);
       setLoading(false);
     });
+    strategyEngineApi.getBacktestResults().then(res => setBacktestResults(res.data.data)).catch(() => {});
   }, []);
 
   const handleCheckOutcomes = async () => {
@@ -134,6 +138,82 @@ export default function PerformancePage() {
           Check Outcomes
         </button>
       </div>
+
+      {/* Strategy Backtest Results */}
+      <Card>
+        <CardHeader className="pb-3">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <Zap className="h-4 w-4 text-primary" />
+              <CardTitle className="text-sm">Strategy Engine — Backtest Validation</CardTitle>
+            </div>
+            <Badge variant="outline" className="text-xs">
+              Activated March 28, 2026
+            </Badge>
+          </div>
+        </CardHeader>
+        <CardContent>
+          {backtestResults.length === 0 ? (
+            <p className="text-xs text-muted-foreground py-2">
+              No backtest results yet. Run backtests from the{' '}
+              <a href="/backtest" className="text-primary hover:underline">Backtest</a> page.
+            </p>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b">
+                    <th className="text-left px-3 py-2 text-xs font-medium text-muted-foreground">Strategy</th>
+                    <th className="text-center px-3 py-2 text-xs font-medium text-muted-foreground">Status</th>
+                    <th className="text-right px-3 py-2 text-xs font-medium text-muted-foreground">Trades</th>
+                    <th className="text-right px-3 py-2 text-xs font-medium text-muted-foreground">Win Rate</th>
+                    <th className="text-right px-3 py-2 text-xs font-medium text-muted-foreground">Avg Return</th>
+                    <th className="text-right px-3 py-2 text-xs font-medium text-muted-foreground">Sharpe</th>
+                    <th className="text-right px-3 py-2 text-xs font-medium text-muted-foreground">Max DD</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {backtestResults.map((r) => (
+                    <tr key={r.strategy_id} className="border-b hover:bg-muted/20">
+                      <td className="px-3 py-2 font-medium text-sm">{r.strategy_name}</td>
+                      <td className="px-3 py-2 text-center">
+                        <Badge
+                          variant="outline"
+                          className={r.is_active
+                            ? 'text-[10px] text-emerald-500 border-emerald-600/30 bg-emerald-500/10'
+                            : 'text-[10px] text-muted-foreground border-muted-foreground/30'
+                          }
+                        >
+                          {r.is_active ? 'Active' : 'Inactive'}
+                        </Badge>
+                      </td>
+                      <td className="px-3 py-2 text-right text-sm">{r.total_trades}</td>
+                      <td className={`px-3 py-2 text-right text-sm font-medium ${
+                        Number(r.win_rate) >= 60 ? 'text-emerald-500' :
+                        Number(r.win_rate) >= 50 ? 'text-yellow-500' : 'text-red-500'
+                      }`}>
+                        {r.total_trades > 0 ? `${Number(r.win_rate).toFixed(1)}%` : '—'}
+                      </td>
+                      <td className={`px-3 py-2 text-right text-sm ${Number(r.avg_return_pct) >= 0 ? 'text-emerald-500' : 'text-red-500'}`}>
+                        {r.total_trades > 0 ? `${Number(r.avg_return_pct) >= 0 ? '+' : ''}${Number(r.avg_return_pct).toFixed(2)}%` : '—'}
+                      </td>
+                      <td className="px-3 py-2 text-right text-sm text-muted-foreground">
+                        {r.sharpe_ratio != null ? Number(r.sharpe_ratio).toFixed(2) : '—'}
+                      </td>
+                      <td className="px-3 py-2 text-right text-sm text-red-500">
+                        {r.total_trades > 0 ? `${Number(r.max_drawdown).toFixed(2)}%` : '—'}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+          <p className="text-xs text-muted-foreground mt-3">
+            Win rate threshold: 50% minimum to activate. Only validated strategies generate live signals.
+          </p>
+        </CardContent>
+      </Card>
 
       {/* Onboarding message when no signals exist */}
       {!loading && signals.length === 0 && (

@@ -368,7 +368,7 @@ async function scrapeHoldingsViaApi(page: Page): Promise<ATradHolding[]> {
 
     if (!Array.isArray(rows) || rows.length === 0) {
       logger.warn(
-        `ATrad holdings API: no rows in response. Full response: ${rawText.substring(0, 500)}`,
+        `ATrad holdings API: no rows found. Top-level keys: [${Object.keys(data).join(', ')}]. Inner keys: [${innerData ? Object.keys(innerData).join(', ') : 'none'}]. Sample: ${rawText.substring(0, 800)}`,
       );
       return [];
     }
@@ -376,11 +376,29 @@ async function scrapeHoldingsViaApi(page: Page): Promise<ATradHolding[]> {
     const holdings: ATradHolding[] = rows
       .map((r: unknown) => {
         const p = r as Record<string, unknown>;
-        const symbol = String(p['symbol'] ?? p['security'] ?? p['scrip'] ?? '')
+        const symbol = String(
+          p['symbol'] ??
+            p['security'] ??
+            p['scrip'] ??
+            p['securityCode'] ??
+            p['symbolCode'] ??
+            p['isinCode'] ??
+            '',
+        )
           .replace(/\.N\d+$/i, '')
           .trim();
         const quantity = parseNumber(
-          String(p['qty'] ?? p['quantity'] ?? p['balance'] ?? 0),
+          String(
+            p['qty'] ??
+              p['quantity'] ??
+              p['balance'] ??
+              p['availBalance'] ??
+              p['availableBalance'] ??
+              p['clearedBalance'] ??
+              p['clearBalance'] ??
+              p['clrBalance'] ??
+              0,
+          ),
         );
         const avgPrice = parseNumber(
           String(
@@ -431,12 +449,103 @@ async function scrapeHoldingsViaApi(page: Page): Promise<ATradHolding[]> {
   }
 }
 
+// ── Scrape holdings via Dojo grid store eval (secondary fallback) ────────────
+
+async function scrapeHoldingsViaEval(page: Page): Promise<ATradHolding[]> {
+  try {
+    const data = await page.evaluate(() => {
+      // Try to access Dojo grid data store directly
+      if (typeof (window as any).dijit === 'undefined') return [];
+      const registry = (window as any).dijit.registry;
+      if (!registry) return [];
+      const items: unknown[] = [];
+      registry.forEach((widget: any) => {
+        try {
+          if (
+            widget.store &&
+            widget.store._arrayOfAllItems &&
+            widget.store._arrayOfAllItems.length > 0
+          ) {
+            items.push(...widget.store._arrayOfAllItems);
+          }
+        } catch {
+          // skip widget
+        }
+      });
+      return items;
+    });
+
+    if (!Array.isArray(data) || data.length === 0) return [];
+
+    logger.log(`Dojo eval: found ${data.length} potential items`);
+    const holdings: ATradHolding[] = (data as Record<string, unknown>[])
+      .map((p) => {
+        const symbol = String(
+          p['symbol'] ?? p['security'] ?? p['scrip'] ?? p['securityCode'] ?? '',
+        )
+          .replace(/\.N\d+$/i, '')
+          .trim();
+        const quantity = parseNumber(
+          String(
+            p['qty'] ??
+              p['quantity'] ??
+              p['availBalance'] ??
+              p['availableBalance'] ??
+              p['clearedBalance'] ??
+              p['balance'] ??
+              0,
+          ),
+        );
+        const avgPrice = parseNumber(
+          String(p['avgPrice'] ?? p['averagePrice'] ?? p['cost'] ?? 0),
+        );
+        const currentPrice = parseNumber(
+          String(p['currentPrice'] ?? p['lastPrice'] ?? p['ltp'] ?? 0),
+        );
+        const marketValue = parseNumber(
+          String(p['marketValue'] ?? p['currentValue'] ?? 0),
+        );
+        const unrealizedPL = parseNumber(
+          String(p['unrealizedPL'] ?? p['profitLoss'] ?? p['pl'] ?? 0),
+        );
+        const unrealizedPLPct = parseNumber(
+          String(p['unrealizedPLPct'] ?? p['plPct'] ?? 0),
+        );
+        const companyName = String(
+          p['companyName'] ?? p['company'] ?? p['name'] ?? symbol,
+        );
+        return {
+          symbol,
+          companyName,
+          quantity,
+          avgPrice,
+          currentPrice,
+          marketValue,
+          unrealizedPL,
+          unrealizedPLPct,
+        };
+      })
+      .filter((h) => h.symbol && h.quantity > 0);
+
+    logger.log(`Dojo eval: parsed ${holdings.length} valid holdings`);
+    return holdings;
+  } catch (err) {
+    logger.warn(`Dojo eval extraction failed: ${String(err)}`);
+    return [];
+  }
+}
+
 // ── Scrape holdings from portfolio table (DOM fallback) ──────────────────────
 
 async function scrapeHoldings(page: Page): Promise<ATradHolding[]> {
   // Primary: use the ATrad REST API via authenticated browser session
   const apiHoldings = await scrapeHoldingsViaApi(page);
   if (apiHoldings.length > 0) return apiHoldings;
+
+  // Secondary: try extracting from Dojo grid store via page.evaluate
+  const evalHoldings = await scrapeHoldingsViaEval(page);
+  if (evalHoldings.length > 0) return evalHoldings;
+
   const holdings: ATradHolding[] = [];
 
   // Try multiple table selectors — ATrad-specific first, then generic fallbacks

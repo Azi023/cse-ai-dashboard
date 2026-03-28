@@ -3,7 +3,7 @@
 import { useState, useEffect, useMemo } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { aiApi, type TradingSignal, type AiStatus } from '@/lib/api';
+import { aiApi, strategyEngineApi, type TradingSignal, type AiStatus, type StrategyEngineStatus, type StrategyEngineSignal } from '@/lib/api';
 import {
   Sparkles,
   TrendingUp,
@@ -13,12 +13,24 @@ import {
   Filter,
   Loader2,
   Clock,
+  Activity,
+  Zap,
+  Bot,
 } from 'lucide-react';
 import Link from 'next/link';
 import { format } from 'date-fns';
 import { useDisplayMode } from '@/contexts/display-mode-context';
 import { getSimpleLabel } from '@/lib/simple-mode-constants';
 import { safeNum } from '@/lib/format';
+
+const regimeColors: Record<string, string> = {
+  TRENDING_UP: 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20',
+  TRENDING_DOWN: 'bg-red-500/10 text-red-400 border-red-500/20',
+  RANGING: 'bg-blue-500/10 text-blue-400 border-blue-500/20',
+  HIGH_VOLATILITY: 'bg-orange-500/10 text-orange-400 border-orange-500/20',
+  RECOVERY: 'bg-purple-500/10 text-purple-400 border-purple-500/20',
+  CRISIS: 'bg-red-900/20 text-red-300 border-red-700/30',
+};
 
 const directionConfig = {
   BUY: { icon: TrendingUp, color: 'text-emerald-500', bg: 'bg-emerald-500/10', label: 'Buy Signal' },
@@ -36,23 +48,33 @@ export default function SignalsPage() {
   const { isSimple } = useDisplayMode();
   const [signals, setSignals] = useState<TradingSignal[]>([]);
   const [aiStatus, setAiStatus] = useState<AiStatus | null>(null);
+  const [engineStatus, setEngineStatus] = useState<StrategyEngineStatus | null>(null);
+  const [engineSignals, setEngineSignals] = useState<StrategyEngineSignal[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [dirFilter, setDirFilter] = useState<'ALL' | 'BUY' | 'HOLD' | 'SELL'>('ALL');
   const [confFilter, setConfFilter] = useState<'ALL' | 'HIGH' | 'MEDIUM' | 'LOW'>('ALL');
-  const [shariahOnly, setShariahOnly] = useState(false);
+  const [shariahOnly, setShariahOnly] = useState(true);
+  const [strategyOnly, setStrategyOnly] = useState(false);
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
 
   useEffect(() => {
     const fetchData = async () => {
       try {
-        const [signalsRes, statusRes] = await Promise.allSettled([
-          aiApi.getSignals(),
-          aiApi.getStatus(),
-        ]);
+        const [signalsRes, statusRes, engineStatusRes, engineSignalsRes] =
+          await Promise.allSettled([
+            aiApi.getSignals(),
+            aiApi.getStatus(),
+            strategyEngineApi.getStatus(),
+            strategyEngineApi.getSignals(),
+          ]);
         if (signalsRes.status === 'fulfilled') setSignals(signalsRes.value.data);
         else setError('Failed to load signals');
         if (statusRes.status === 'fulfilled') setAiStatus(statusRes.value.data);
+        if (engineStatusRes.status === 'fulfilled')
+          setEngineStatus(engineStatusRes.value.data.data);
+        if (engineSignalsRes.status === 'fulfilled')
+          setEngineSignals(engineSignalsRes.value.data.data);
         setLastUpdated(new Date());
       } catch {
         setError('Failed to load signals');
@@ -63,14 +85,25 @@ export default function SignalsPage() {
     fetchData();
   }, []);
 
+  // Map: symbol → strategy signals (for badge display)
+  const strategySignalsBySymbol = useMemo(() => {
+    const map = new Map<string, StrategyEngineSignal[]>();
+    for (const sig of engineSignals) {
+      if (!map.has(sig.symbol)) map.set(sig.symbol, []);
+      map.get(sig.symbol)!.push(sig);
+    }
+    return map;
+  }, [engineSignals]);
+
   const filtered = useMemo(() => {
     return signals.filter((s) => {
       if (dirFilter !== 'ALL' && s.direction !== dirFilter) return false;
       if (confFilter !== 'ALL' && s.confidence !== confFilter) return false;
       if (shariahOnly && s.shariahStatus !== 'compliant') return false;
+      if (strategyOnly && !strategySignalsBySymbol.has(s.symbol)) return false;
       return true;
     });
-  }, [signals, dirFilter, confFilter, shariahOnly]);
+  }, [signals, dirFilter, confFilter, shariahOnly, strategyOnly, strategySignalsBySymbol]);
 
   if (loading) {
     return (
@@ -127,6 +160,36 @@ export default function SignalsPage() {
         </Card>
       )}
 
+      {/* Strategy Engine Regime Bar */}
+      {engineStatus?.regime && (
+        <div className={`flex items-center justify-between rounded-lg border px-4 py-3 ${regimeColors[engineStatus.regime] ?? 'bg-muted text-muted-foreground border-muted'}`}>
+          <div className="flex items-center gap-2">
+            <Activity className="h-4 w-4" />
+            <span className="text-sm font-medium">
+              Market Regime: <span className="font-semibold">{engineStatus.regime.replace(/_/g, ' ')}</span>
+            </span>
+            {engineStatus.regimeConfidence && (
+              <span className="text-xs opacity-70">({engineStatus.regimeConfidence}% confidence)</span>
+            )}
+          </div>
+          <div className="flex items-center gap-2">
+            {engineStatus.activeStrategies.length > 0 && (
+              <div className="flex items-center gap-1.5">
+                <Zap className="h-3 w-3 opacity-70" />
+                <span className="text-xs opacity-80">
+                  {engineStatus.activeStrategies.map((s) => s.name).join(' · ')}
+                </span>
+              </div>
+            )}
+            {engineStatus.todaySignalCount > 0 && (
+              <Badge variant="outline" className="text-xs border-current/30">
+                {engineStatus.todaySignalCount} strategy signal{engineStatus.todaySignalCount !== 1 ? 's' : ''}
+              </Badge>
+            )}
+          </div>
+        </div>
+      )}
+
       {/* Filters */}
       <div className="flex flex-wrap items-center gap-2">
         <Filter className="h-4 w-4 text-muted-foreground" />
@@ -176,6 +239,21 @@ export default function SignalsPage() {
         >
           <Shield className="h-3 w-3" />
           Shariah Only
+        </button>
+        <span className="text-muted-foreground text-xs">|</span>
+        <button
+          onClick={() => setStrategyOnly(!strategyOnly)}
+          className={`flex items-center gap-1.5 rounded-md px-2.5 py-1 text-xs font-medium transition-colors ${
+            strategyOnly
+              ? 'bg-blue-500/10 text-blue-500 border border-blue-500/30'
+              : 'text-muted-foreground hover:bg-muted/50'
+          }`}
+        >
+          <Bot className="h-3 w-3" />
+          Strategy Only
+          {strategyOnly && engineSignals.length > 0 && (
+            <span className="ml-1 text-[10px] opacity-70">({strategySignalsBySymbol.size})</span>
+          )}
         </button>
       </div>
 
@@ -269,19 +347,38 @@ export default function SignalsPage() {
                   </div>
 
                   <div className="flex items-center justify-between pt-1">
-                    <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-2 flex-wrap">
                       <Badge variant="outline" className={confidenceColor[signal.confidence]}>
                         {isSimple ? getSimpleLabel(signal.confidence) : signal.confidence}
                       </Badge>
-                      {signal.shariahStatus === 'compliant' && (
+                      {signal.shariahStatus === 'compliant' ? (
                         <Badge
                           variant="outline"
                           className="border-emerald-600/30 text-emerald-500"
                         >
                           <Shield className="h-3 w-3 mr-1" />
-                          Shariah
+                          Halal
                         </Badge>
-                      )}
+                      ) : signal.shariahStatus === 'non_compliant' ? (
+                        <Badge
+                          variant="outline"
+                          className="border-red-600/30 text-red-500"
+                        >
+                          <Shield className="h-3 w-3 mr-1" />
+                          Non-Compliant
+                        </Badge>
+                      ) : null}
+                      {strategySignalsBySymbol.get(signal.symbol)?.map((ss) => (
+                        <Badge
+                          key={ss.strategy_id}
+                          variant="outline"
+                          className="border-primary/30 text-primary/80 text-[10px]"
+                          title={ss.reasoning?.join('\n')}
+                        >
+                          <Zap className="h-2.5 w-2.5 mr-1" />
+                          {ss.strategy_name}
+                        </Badge>
+                      ))}
                     </div>
                     <span className="text-xs text-muted-foreground">
                       {format(new Date(signal.generatedAt), 'HH:mm')}

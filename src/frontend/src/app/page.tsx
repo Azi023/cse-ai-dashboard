@@ -17,6 +17,8 @@ import {
   newsApi,
   portfolioApi,
   globalApi,
+  strategyEngineApi,
+  atradApi,
   type MarketSummary,
   type TopStock,
   type SectorIndex,
@@ -24,6 +26,8 @@ import {
   type NewsItemData,
   type PortfolioSummary,
   type EconomicEvent,
+  type StrategyEngineStatus,
+  type ATradSyncStatus,
 } from '@/lib/api';
 import {
   TrendingUp,
@@ -39,6 +43,7 @@ import {
   Briefcase,
   CalendarDays,
   ArrowRight,
+  Server,
 } from 'lucide-react';
 import Link from 'next/link';
 import { useDisplayMode } from '@/contexts/display-mode-context';
@@ -99,6 +104,8 @@ export default function DashboardPage() {
   const [moversTab, setMoversTab] = useState<'gainers' | 'losers' | 'active'>('gainers');
   const [portfolioSummary, setPortfolioSummary] = useState<PortfolioSummary | null>(null);
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
+  const [engineStatus, setEngineStatus] = useState<StrategyEngineStatus | null>(null);
+  const [atradStatus, setAtradStatus] = useState<ATradSyncStatus | null>(null);
 
   const { watchlist, toggle: toggleWatch, has: inWatchlist } = useWatchlist();
   const [watchlistStocks, setWatchlistStocks] = useState<Stock[]>([]);
@@ -153,6 +160,9 @@ export default function DashboardPage() {
     });
 
     globalApi.getEconomicCalendar().then((res) => setEconomicEvents(res.data)).catch(() => {});
+
+    strategyEngineApi.getStatus().then(res => setEngineStatus(res.data.data)).catch(() => {});
+    atradApi.getStatus().then(res => setAtradStatus(res.data)).catch(() => {});
   }, []);
 
   useEffect(() => {
@@ -602,6 +612,50 @@ export default function DashboardPage() {
           </CardContent>
         </Card>
       )}
+
+      {/* System Status */}
+      <Card className="border-muted/50">
+        <CardContent className="py-2.5 px-4">
+          <div className="flex items-center gap-2 flex-wrap text-xs text-muted-foreground">
+            <div className="flex items-center gap-1.5">
+              <Server className="h-3.5 w-3.5" />
+              <span className="font-medium text-foreground">System</span>
+            </div>
+            <span className="text-muted-foreground/30">·</span>
+            <span>
+              Regime: <span className="text-foreground font-medium">{engineStatus?.regime?.replace(/_/g, ' ') ?? '—'}</span>
+              {engineStatus?.regimeConfidence && <span className="text-muted-foreground/60 ml-1">({engineStatus.regimeConfidence}%)</span>}
+            </span>
+            <span className="text-muted-foreground/30">·</span>
+            <span>
+              Strategies: <span className="text-foreground font-medium">{engineStatus?.activeStrategies.length ?? '—'} active</span>
+            </span>
+            <span className="text-muted-foreground/30">·</span>
+            <span>
+              Signals today: <span className="text-foreground font-medium">{engineStatus?.todaySignalCount ?? '—'}</span>
+            </span>
+            <span className="text-muted-foreground/30">·</span>
+            <span>
+              Engine last run: <span className="text-foreground font-medium">
+                {engineStatus?.lastRun
+                  ? new Date(engineStatus.lastRun).toLocaleTimeString('en-LK', { hour: '2-digit', minute: '2-digit', hour12: false })
+                  : 'Not run today'}
+              </span>
+            </span>
+            <span className="text-muted-foreground/30">·</span>
+            <span>
+              ATrad: <span className={atradStatus?.lastSynced ? 'text-foreground font-medium' : 'text-amber-500 font-medium'}>
+                {atradStatus?.lastSynced
+                  ? new Date(atradStatus.lastSynced).toLocaleTimeString('en-LK', { hour: '2-digit', minute: '2-digit', hour12: false })
+                  : 'Not synced'}
+              </span>
+              {atradStatus?.syncSuccess === false && atradStatus?.lastSynced && (
+                <span className="ml-1 text-red-500">(failed)</span>
+              )}
+            </span>
+          </div>
+        </CardContent>
+      </Card>
     </div>
   );
 }
