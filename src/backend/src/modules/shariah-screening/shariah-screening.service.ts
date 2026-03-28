@@ -451,29 +451,38 @@ export class ShariahScreeningService implements OnModuleInit {
         ? Number(financial.total_assets)
         : null;
 
-      const interestIncomeRatio =
+      // Clamp ratios to DECIMAL(8,4) safe range — any ratio > 9999 is absurdly
+      // large and means the stock will fail Tier 2 regardless.
+      const clampRatio = (v: number | null): number | null =>
+        v === null ? null : Math.min(Math.max(v, -9999.9999), 9999.9999);
+
+      const interestIncomeRatio = clampRatio(
         totalRevenue && totalRevenue > 0 && financial.interest_income !== null
           ? Number(financial.interest_income) / totalRevenue
-          : null;
+          : null,
+      );
 
-      const debtRatio =
+      const debtRatio = clampRatio(
         totalAssets &&
-        totalAssets > 0 &&
-        financial.interest_bearing_debt !== null
+          totalAssets > 0 &&
+          financial.interest_bearing_debt !== null
           ? Number(financial.interest_bearing_debt) / totalAssets
-          : null;
+          : null,
+      );
 
-      const interestDepositRatio =
+      const interestDepositRatio = clampRatio(
         totalAssets &&
-        totalAssets > 0 &&
-        financial.interest_bearing_deposits !== null
+          totalAssets > 0 &&
+          financial.interest_bearing_deposits !== null
           ? Number(financial.interest_bearing_deposits) / totalAssets
-          : null;
+          : null,
+      );
 
-      const receivablesRatio =
+      const receivablesRatio = clampRatio(
         totalAssets && totalAssets > 0 && financial.receivables !== null
           ? Number(financial.receivables) / totalAssets
-          : null;
+          : null,
+      );
 
       const hasEnoughData =
         interestIncomeRatio !== null ||

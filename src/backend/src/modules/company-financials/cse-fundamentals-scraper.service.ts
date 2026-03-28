@@ -1280,7 +1280,25 @@ export class CseFundamentalsScraperService {
       }
     }
 
-    // 2. Top 20 most-traded (by market cap as proxy) — excluding whitelist
+    // 2. All pending_review stocks — these NEED financial data to complete Tier 2 screening
+    try {
+      const pendingStocks = await this.stockRepo.find({
+        where: { shariah_status: 'pending_review', is_active: true },
+      });
+      for (const stock of pendingStocks) {
+        if (!seen.has(stock.symbol)) {
+          seen.add(stock.symbol);
+          symbols.push(stock.symbol);
+        }
+      }
+      this.logger.log(
+        `Target list includes ${pendingStocks.length} pending_review stocks for Tier 2 screening`,
+      );
+    } catch (err) {
+      this.logger.warn(`Could not load pending_review stocks: ${String(err)}`);
+    }
+
+    // 3. Top 20 most-traded (by market cap as proxy) — for breadth coverage
     try {
       const topTraded = await this.stockRepo.find({
         where: { is_active: true },
