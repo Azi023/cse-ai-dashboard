@@ -1,7 +1,9 @@
-import { Controller, Get, Post, Param } from '@nestjs/common';
+import { Controller, Get, Post, Param, UseGuards } from '@nestjs/common';
+import { Throttle } from '@nestjs/throttler';
 import { NotificationsService } from './notifications.service';
 import { DailyDigest } from '../../entities/daily-digest.entity';
 import { WeeklyBrief } from '../../entities/weekly-brief.entity';
+import { ApiKeyGuard } from '../../common/guards/api-key.guard';
 
 @Controller('notifications')
 export class NotificationsController {
@@ -13,7 +15,9 @@ export class NotificationsController {
   }
 
   @Get('daily-digest/:date')
-  async getDailyDigestByDate(@Param('date') date: string): Promise<DailyDigest | null> {
+  async getDailyDigestByDate(
+    @Param('date') date: string,
+  ): Promise<DailyDigest | null> {
     return this.notificationsService.getDailyDigestByDate(date);
   }
 
@@ -24,7 +28,9 @@ export class NotificationsController {
 
   /** weekId format: YYYY-WW (e.g. 2026-12) */
   @Get('weekly-brief/:weekId')
-  async getWeeklyBriefByWeekId(@Param('weekId') weekId: string): Promise<WeeklyBrief | null> {
+  async getWeeklyBriefByWeekId(
+    @Param('weekId') weekId: string,
+  ): Promise<WeeklyBrief | null> {
     return this.notificationsService.getWeeklyBriefByWeekId(weekId);
   }
 
@@ -35,23 +41,31 @@ export class NotificationsController {
   }
 
   /** Manually trigger daily digest generation for testing */
+  @UseGuards(ApiKeyGuard)
+  @Throttle({ default: { ttl: 60_000, limit: 3 } })
   @Post('test-digest')
   async testDigest(): Promise<{ message: string; content: string | null }> {
     await this.notificationsService.generateDailyDigest();
     const digest = await this.notificationsService.getLatestDailyDigest();
     return {
-      message: digest ? 'Daily digest generated successfully' : 'Generation skipped (no market data or no API key)',
+      message: digest
+        ? 'Daily digest generated successfully'
+        : 'Generation skipped (no market data or no API key)',
       content: digest?.content ?? null,
     };
   }
 
   /** Manually trigger weekly brief generation for testing */
+  @UseGuards(ApiKeyGuard)
+  @Throttle({ default: { ttl: 60_000, limit: 3 } })
   @Post('test-brief')
   async testBrief(): Promise<{ message: string; content: string | null }> {
     await this.notificationsService.generateWeeklyBrief();
     const brief = await this.notificationsService.getLatestWeeklyBrief();
     return {
-      message: brief ? 'Weekly brief generated successfully' : 'Generation skipped (insufficient data or no API key)',
+      message: brief
+        ? 'Weekly brief generated successfully'
+        : 'Generation skipped (insufficient data or no API key)',
       content: brief?.content ?? null,
     };
   }

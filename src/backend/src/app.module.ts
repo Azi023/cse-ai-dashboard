@@ -4,6 +4,8 @@ import { TypeOrmModule } from '@nestjs/typeorm';
 import { ScheduleModule } from '@nestjs/schedule';
 import { BullModule } from '@nestjs/bull';
 import { HttpModule } from '@nestjs/axios';
+import { ThrottlerModule, ThrottlerGuard } from '@nestjs/throttler';
+import { APP_GUARD } from '@nestjs/core';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
 import { CseDataModule } from './modules/cse-data/cse-data.module';
@@ -29,6 +31,7 @@ import { DataModule } from './modules/data/data.module';
 import { DemoModule } from './demo/demo.module';
 import { TradeOpportunitiesModule } from './modules/trade-opportunities/trade-opportunities.module';
 import { ZakatModule } from './modules/zakat/zakat.module';
+import { StrategyEngineModule } from './modules/strategy-engine/strategy-engine.module';
 
 @Module({
   imports: [
@@ -47,17 +50,22 @@ import { ZakatModule } from './modules/zakat/zakat.module';
         host: configService.get<string>('DATABASE_HOST', 'localhost'),
         port: configService.get<number>('DATABASE_PORT', 5432),
         username: configService.get<string>('DATABASE_USER', 'cse_user'),
-        password: configService.get<string>(
-          'DATABASE_PASSWORD',
-          'cse_secure_2026',
-        ),
+        password: configService.get<string>('DATABASE_PASSWORD'),
         database: configService.get<string>('DATABASE_NAME', 'cse_dashboard'),
         autoLoadEntities: true,
-        synchronize:
-          configService.get<string>('NODE_ENV', 'development') ===
-          'development',
+        // Never default synchronize to true — require explicit NODE_ENV=development
+        synchronize: configService.get<string>('NODE_ENV') === 'development',
       }),
     }),
+
+    // Rate limiting — global defaults; override per-endpoint with @Throttle()
+    ThrottlerModule.forRoot([
+      {
+        name: 'global',
+        ttl: 60_000, // 1 minute window
+        limit: 100, // 100 req/min per IP (general endpoints)
+      },
+    ]),
 
     // Task scheduling
     ScheduleModule.forRoot(),
@@ -101,8 +109,16 @@ import { ZakatModule } from './modules/zakat/zakat.module';
     DemoModule,
     TradeOpportunitiesModule,
     ZakatModule,
+    StrategyEngineModule,
   ],
   controllers: [AppController],
-  providers: [AppService],
+  providers: [
+    AppService,
+    // Apply ThrottlerGuard globally across all endpoints
+    {
+      provide: APP_GUARD,
+      useClass: ThrottlerGuard,
+    },
+  ],
 })
 export class AppModule {}

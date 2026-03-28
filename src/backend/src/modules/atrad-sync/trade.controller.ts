@@ -19,10 +19,16 @@ import {
   Body,
   BadRequestException,
   ParseIntPipe,
+  UseGuards,
 } from '@nestjs/common';
+import { Throttle } from '@nestjs/throttler';
 import { OrderService, CreateTradeQueueDto } from './order.service';
 import { SAFETY_RAILS } from './safety-rails';
+import { ApiKeyGuard } from '../../common/guards/api-key.guard';
 
+/** All trade endpoints require a valid X-API-Key header. */
+@UseGuards(ApiKeyGuard)
+@Throttle({ default: { ttl: 60_000, limit: 5 } }) // 5 req/min — trade actions are high-value
 @Controller('trade')
 export class TradeController {
   constructor(private readonly orderService: OrderService) {}

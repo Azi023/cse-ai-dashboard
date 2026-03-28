@@ -1,6 +1,7 @@
 import { NestFactory } from '@nestjs/core';
 import { ValidationPipe } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
+import helmet from 'helmet';
 import { AppModule } from './app.module';
 
 async function bootstrap(): Promise<void> {
@@ -9,11 +10,15 @@ async function bootstrap(): Promise<void> {
   const configService = app.get(ConfigService);
   const port = configService.get<number>('PORT', 4101);
 
-  // Enable CORS for frontend
+  // HTTP security headers (XSS, clickjacking, MIME sniffing, HSTS, etc.)
+  app.use(helmet());
+
+  // Enable CORS for frontend only
   app.enableCors({
     origin: ['http://localhost:4100'],
     methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
     credentials: true,
+    allowedHeaders: ['Content-Type', 'Authorization', 'X-API-Key'],
   });
 
   // Set global API prefix

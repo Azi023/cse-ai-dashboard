@@ -54,3 +54,10 @@ data/cse-historical/*.csv
 data/ai-generated/
 data/atrad-sync/
 data/tracking/
+
+# Script output — ATrad HTML dumps and screenshots contain brokerage account data
+scripts/*.html
+scripts/*.png
+
+# Excel files with financial data (KPI trackers, etc.)
+*.xlsx

@@ -10,17 +10,22 @@ import {
   Res,
   UseInterceptors,
   UploadedFile,
+  UseGuards,
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
+import { Throttle } from '@nestjs/throttler';
 import type { Response } from 'express';
 import { CompanyFinancialsService } from './company-financials.service';
 import { CseFundamentalsScraperService } from './cse-fundamentals-scraper.service';
+import { CseHistoricalBackfillService } from './cse-historical-backfill.service';
+import { ApiKeyGuard } from '../../common/guards/api-key.guard';
 
 @Controller('financials')
 export class CompanyFinancialsController {
   constructor(
     private readonly financialsService: CompanyFinancialsService,
     private readonly scraperService: CseFundamentalsScraperService,
+    private readonly historicalBackfillService: CseHistoricalBackfillService,
   ) {}
 
   /** POST /api/financials — Create a new financial record. */
@@ -103,14 +108,54 @@ export class CompanyFinancialsController {
    * Launches a visible (headless: false) browser so the login flow can be watched.
    * Takes screenshots at every step. Returns all logs + screenshot paths as JSON.
    */
+  @UseGuards(ApiKeyGuard)
+  @Throttle({ default: { ttl: 60_000, limit: 2 } })
   @Post('test-login')
   async testLogin() {
     return this.scraperService.testLoginFlow();
   }
 
-  /** POST /api/financials/import-csv — Bulk import from CSV file. */
+  /**
+   * POST /api/financials/probe-mycse
+   *
+   * Diagnostic: Login to CSE Platinum and map the MYCSE dashboard structure.
+   * Returns all navigation links, historical mentions, URL candidates, and
+   * a screenshot at data/cse-fundamentals/probe-mycse-dashboard.png.
+   *
+   * Use this BEFORE running backfill-history to verify navigation works.
+   */
+  @UseGuards(ApiKeyGuard)
+  @Throttle({ default: { ttl: 60_000, limit: 2 } })
+  @Post('probe-mycse')
+  async probeMycse() {
+    return this.historicalBackfillService.probeMycseStructure();
+  }
+
+  /**
+   * POST /api/financials/backfill-history
+   *
+   * Backfills 5+ years of OHLCV daily price data from CSE Platinum
+   * "Historical Share Prices" section. Targets all 151 Shariah-compliant
+   * stocks + top 50 by market cap. Inserts with ON CONFLICT DO NOTHING.
+   *
+   * Optional body: { "symbols": ["AEL.N0000", "JKH.N0000"] }
+   * (omit to backfill all targets)
+   *
+   * Returns a full BackfillHistoryResult + saves report to tasks/backfill-report.md
+   */
+  @UseGuards(ApiKeyGuard)
+  @Throttle({ default: { ttl: 60_000, limit: 2 } })
+  @Post('backfill-history')
+  async backfillHistory(@Body() body: { symbols?: string[] } = {}) {
+    return this.historicalBackfillService.backfillHistory(body.symbols);
+  }
+
+  /** POST /api/financials/import-csv — Bulk import from CSV file (max 5 MB). */
+  @UseGuards(ApiKeyGuard)
   @Post('import-csv')
-  @UseInterceptors(FileInterceptor('file'))
+  @UseInterceptors(
+    FileInterceptor('file', { limits: { fileSize: 5 * 1024 * 1024 } }),
+  )
   async importCsv(
     @UploadedFile() file: { buffer: Buffer; originalname: string } | undefined,
   ) {

@@ -6,10 +6,16 @@ import {
   Body,
   Query,
   ParseIntPipe,
+  UseGuards,
 } from '@nestjs/common';
+import { Throttle } from '@nestjs/throttler';
 import { ATradSyncService } from './atrad-sync.service';
 import { OrderService, CreateOrderDto } from './order.service';
+import { ApiKeyGuard } from '../../common/guards/api-key.guard';
 
+/** All ATrad endpoints require a valid X-API-Key header (live broker automation). */
+@UseGuards(ApiKeyGuard)
+@Throttle({ default: { ttl: 60_000, limit: 5 } }) // 5 req/min — each sync launches a browser
 @Controller('atrad')
 export class ATradSyncController {
   constructor(
