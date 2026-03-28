@@ -23,3 +23,6 @@ export { TechnicalSignal } from './technical-signal.entity';
 export { PositionRisk } from './position-risk.entity';
 export { RecommendationOutcome } from './recommendation-outcome.entity';
 export { PendingOrder } from './pending-order.entity';
+export { MarketRegimeRecord } from './market-regime.entity';
+export { StrategySignal } from './strategy-signal.entity';
+export { StrategyBacktestResult } from './strategy-backtest-result.entity';

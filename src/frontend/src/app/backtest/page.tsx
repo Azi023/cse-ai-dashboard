@@ -5,10 +5,12 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import {
   backtestApi,
+  strategyEngineApi,
   type BacktestResult,
   type BacktestStrategy,
+  type StrategyBacktestResult,
 } from '@/lib/api';
-import { FlaskConical, TrendingUp, TrendingDown, Loader2, AlertCircle, Info } from 'lucide-react';
+import { FlaskConical, TrendingUp, TrendingDown, Loader2, AlertCircle, Info, Activity, ChevronDown, ChevronRight, Play } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { safeNum } from '@/lib/format';
 
@@ -47,12 +49,19 @@ export default function BacktestPage() {
   const [loading, setLoading] = useState(false);
   const [initialLoading, setInitialLoading] = useState(true);
 
+  // Strategy Engine validation state
+  const [engineResults, setEngineResults] = useState<StrategyBacktestResult[]>([]);
+  const [engineLoading, setEngineLoading] = useState(false);
+  const [runningBacktests, setRunningBacktests] = useState(false);
+  const [expandedStrategy, setExpandedStrategy] = useState<string | null>(null);
+
   useEffect(() => {
     Promise.allSettled([
       backtestApi.getStrategies(),
       backtestApi.getSymbols(),
       backtestApi.getCompliantSymbols(),
-    ]).then(([stratRes, symRes, compliantRes]) => {
+      strategyEngineApi.getBacktestResults(),
+    ]).then(([stratRes, symRes, compliantRes, engineRes]) => {
       if (stratRes.status === 'fulfilled') setStrategies(stratRes.value.data);
       if (symRes.status === 'fulfilled') {
         setSymbols(symRes.value.data);
@@ -61,9 +70,24 @@ export default function BacktestPage() {
       if (compliantRes.status === 'fulfilled' && compliantRes.value.data.length > 0) {
         setCompliantChips(compliantRes.value.data);
       }
+      if (engineRes.status === 'fulfilled') {
+        setEngineResults(engineRes.value.data.data ?? []);
+      }
       setInitialLoading(false);
     });
   }, []);
+
+  const handleRunEngineBacktests = async () => {
+    setRunningBacktests(true);
+    try {
+      await strategyEngineApi.runBacktests();
+      const res = await strategyEngineApi.getBacktestResults();
+      setEngineResults(res.data.data ?? []);
+    } catch {
+      // ignore
+    }
+    setRunningBacktests(false);
+  };
 
   const runBacktest = async () => {
     if (!selectedSymbol) return;
@@ -99,6 +123,204 @@ export default function BacktestPage() {
           Test trading strategies against historical CSE price data
         </p>
       </div>
+
+      {/* Strategy Engine Validation */}
+      <Card>
+        <CardHeader className="pb-3">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <Activity className="h-4 w-4 text-primary" />
+              <CardTitle className="text-sm">Strategy Engine — Backtest Validation</CardTitle>
+            </div>
+            <button
+              onClick={handleRunEngineBacktests}
+              disabled={runningBacktests}
+              className="flex items-center gap-1.5 rounded-md border px-3 py-1.5 text-xs font-medium transition-colors hover:bg-muted/30 disabled:opacity-50"
+            >
+              {runningBacktests ? (
+                <><Loader2 className="h-3 w-3 animate-spin" />Running all 5 strategies...</>
+              ) : (
+                <><Play className="h-3 w-3" />Run Backtests</>
+              )}
+            </button>
+          </div>
+          <p className="text-xs text-muted-foreground mt-1">
+            Validates each strategy against 62,671 rows of real historical data. Only strategies with ≥50% win rate go live.
+          </p>
+        </CardHeader>
+        <CardContent>
+          {engineLoading ? (
+            <div className="flex items-center gap-2 text-sm text-muted-foreground py-4">
+              <Loader2 className="h-4 w-4 animate-spin" /> Loading results...
+            </div>
+          ) : engineResults.length === 0 ? (
+            <div className="text-sm text-muted-foreground py-4">
+              No backtest results yet. Click &ldquo;Run Backtests&rdquo; to validate all 5 strategies against historical data.
+            </div>
+          ) : (
+            <div className="space-y-2">
+              {/* Summary table */}
+              <div className="overflow-x-auto">
+                <table className="w-full text-xs">
+                  <thead>
+                    <tr className="border-b text-muted-foreground">
+                      <th className="text-left py-2 pr-4 font-medium">Strategy</th>
+                      <th className="text-right py-2 px-2 font-medium">Trades</th>
+                      <th className="text-right py-2 px-2 font-medium">Win Rate</th>
+                      <th className="text-right py-2 px-2 font-medium">Avg Return</th>
+                      <th className="text-right py-2 px-2 font-medium">Max DD</th>
+                      <th className="text-right py-2 px-2 font-medium">Sharpe</th>
+                      <th className="text-right py-2 pl-2 font-medium">Status</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {engineResults.map((r) => (
+                      <>
+                        <tr
+                          key={r.strategy_id}
+                          className="border-b border-muted/30 hover:bg-muted/10 cursor-pointer"
+                          onClick={() =>
+                            setExpandedStrategy(
+                              expandedStrategy === r.strategy_id ? null : r.strategy_id,
+                            )
+                          }
+                        >
+                          <td className="py-2.5 pr-4">
+                            <div className="flex items-center gap-1.5">
+                              {expandedStrategy === r.strategy_id ? (
+                                <ChevronDown className="h-3 w-3 text-muted-foreground" />
+                              ) : (
+                                <ChevronRight className="h-3 w-3 text-muted-foreground" />
+                              )}
+                              <span className="font-medium">{r.strategy_name}</span>
+                            </div>
+                          </td>
+                          <td className="text-right py-2.5 px-2 text-muted-foreground">
+                            {r.total_trades}
+                          </td>
+                          <td className="text-right py-2.5 px-2">
+                            <span
+                              className={cn(
+                                'font-semibold',
+                                Number(r.win_rate) >= 60
+                                  ? 'text-green-400'
+                                  : Number(r.win_rate) >= 50
+                                    ? 'text-yellow-400'
+                                    : 'text-red-400',
+                              )}
+                            >
+                              {safeNum(r.win_rate).toFixed(1)}%
+                            </span>
+                          </td>
+                          <td className="text-right py-2.5 px-2">
+                            <span
+                              className={
+                                Number(r.avg_return_pct) >= 0 ? 'text-green-400' : 'text-red-400'
+                              }
+                            >
+                              {Number(r.avg_return_pct) >= 0 ? '+' : ''}
+                              {safeNum(r.avg_return_pct).toFixed(1)}%
+                            </span>
+                          </td>
+                          <td className="text-right py-2.5 px-2 text-red-400/80">
+                            -{safeNum(r.max_drawdown).toFixed(1)}%
+                          </td>
+                          <td className="text-right py-2.5 px-2 text-muted-foreground">
+                            {r.sharpe_ratio !== null ? safeNum(r.sharpe_ratio).toFixed(2) : '—'}
+                          </td>
+                          <td className="text-right py-2.5 pl-2">
+                            <Badge
+                              variant={r.is_active ? 'default' : 'secondary'}
+                              className={cn(
+                                'text-[10px]',
+                                r.is_active
+                                  ? 'bg-green-500/20 text-green-400 border-green-500/30'
+                                  : 'bg-muted/50 text-muted-foreground',
+                              )}
+                            >
+                              {r.is_active ? 'ACTIVE' : 'INACTIVE'}
+                            </Badge>
+                          </td>
+                        </tr>
+                        {expandedStrategy === r.strategy_id && (
+                          <tr key={`${r.strategy_id}-expand`} className="bg-muted/5">
+                            <td colSpan={7} className="px-6 py-3">
+                              {r.notes && (
+                                <p className="text-xs text-muted-foreground mb-2">{r.notes}</p>
+                              )}
+                              {r.trades_detail && r.trades_detail.length > 0 ? (
+                                <div className="overflow-x-auto max-h-64 overflow-y-auto">
+                                  <table className="w-full text-[11px]">
+                                    <thead className="sticky top-0 bg-background">
+                                      <tr className="text-muted-foreground border-b">
+                                        <th className="text-left py-1.5 pr-3">Symbol</th>
+                                        <th className="text-left py-1.5 pr-3">Entry Date</th>
+                                        <th className="text-right py-1.5 px-2">Entry</th>
+                                        <th className="text-right py-1.5 px-2">Exit</th>
+                                        <th className="text-right py-1.5 px-2">Return</th>
+                                        <th className="text-right py-1.5 px-2">Days</th>
+                                        <th className="text-left py-1.5 pl-2">Exit Reason</th>
+                                      </tr>
+                                    </thead>
+                                    <tbody>
+                                      {r.trades_detail.slice(0, 50).map((t, idx) => (
+                                        <tr
+                                          key={idx}
+                                          className="border-b border-muted/20 hover:bg-muted/10"
+                                        >
+                                          <td className="py-1.5 pr-3 font-medium">{t.symbol}</td>
+                                          <td className="py-1.5 pr-3 text-muted-foreground">
+                                            {t.entry_date}
+                                          </td>
+                                          <td className="text-right py-1.5 px-2">
+                                            {safeNum(t.entry_price).toFixed(2)}
+                                          </td>
+                                          <td className="text-right py-1.5 px-2">
+                                            {safeNum(t.exit_price).toFixed(2)}
+                                          </td>
+                                          <td
+                                            className={cn(
+                                              'text-right py-1.5 px-2 font-semibold',
+                                              t.return_pct >= 0 ? 'text-green-400' : 'text-red-400',
+                                            )}
+                                          >
+                                            {t.return_pct >= 0 ? '+' : ''}
+                                            {safeNum(t.return_pct).toFixed(1)}%
+                                          </td>
+                                          <td className="text-right py-1.5 px-2 text-muted-foreground">
+                                            {t.hold_days}d
+                                          </td>
+                                          <td className="py-1.5 pl-2 text-muted-foreground truncate max-w-[200px]">
+                                            {t.exit_reason}
+                                          </td>
+                                        </tr>
+                                      ))}
+                                    </tbody>
+                                  </table>
+                                </div>
+                              ) : (
+                                <p className="text-xs text-muted-foreground">
+                                  No individual trade data available for this strategy.
+                                </p>
+                              )}
+                            </td>
+                          </tr>
+                        )}
+                      </>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+              <p className="text-[10px] text-muted-foreground pt-1">
+                Backtested on historical CSE price data. Active = win rate ≥ 50%. Only active strategies generate live signals.
+                {engineResults[0]?.period_start && (
+                  <span> Data period: {engineResults[0].period_start} to {engineResults[0].period_end}.</span>
+                )}
+              </p>
+            </div>
+          )}
+        </CardContent>
+      </Card>
 
       {/* Configuration */}
       <Card>

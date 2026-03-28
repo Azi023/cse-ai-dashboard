@@ -849,14 +849,54 @@ export interface ATradSyncStatus {
   configured: boolean;
 }
 
+export interface ATradDetailedSyncStatus {
+  lastSync: string | null;
+  balance: number;
+  holdingsCount: number;
+  isStale: boolean;
+  nextScheduledSync: string;
+  syncSuccess: boolean;
+  error?: string;
+}
+
+export interface SafetyCheckDetail {
+  name: string;
+  passed: boolean;
+  reason: string;
+  value?: number;
+  limit?: number;
+}
+
+export interface SafetyCheckResult {
+  passed: boolean;
+  checks: SafetyCheckDetail[];
+  rejectedBy?: string;
+  checkedAt: string;
+}
+
+export interface TradeSafetyStatus {
+  enabled: boolean;
+  requireHumanApproval: boolean;
+  limits: {
+    maxSingleOrderLkr: number;
+    maxDailyBuyLkr: number;
+    maxPortfolioAllocationPct: number;
+    minCashReserveLkr: number;
+    maxDailyOrders: number;
+    dailyLossLimitPct: number;
+    limitOffsetPct: number;
+  };
+}
+
 export const atradApi = {
   sync: () => api.post<{ message: string }>('/atrad/sync'),
   getStatus: () => api.get<ATradSyncStatus>('/atrad/status'),
+  getSyncStatus: () => api.get<ATradDetailedSyncStatus>('/atrad/sync-status'),
   getHoldings: () => api.get<ATradHolding[]>('/atrad/holdings'),
   testConnection: () => api.post<{ success: boolean; message: string }>('/atrad/test'),
 };
 
-// Pending Orders Types
+// Pending Orders / Trade Queue Types
 export interface PendingOrder {
   id: number;
   symbol: string;
@@ -865,10 +905,12 @@ export interface PendingOrder {
   quantity: number;
   trigger_price: number;
   limit_price: number | null;
-  status: string;     // 'PENDING' | 'APPROVED' | 'EXECUTING' | 'EXECUTED' | 'FAILED' | 'CANCELLED'
+  status: string;     // 'PENDING' | 'APPROVED' | 'EXECUTING' | 'EXECUTED' | 'FAILED' | 'CANCELLED' | 'REJECTED'
   source: string | null;
   reason: string | null;
   risk_data: Record<string, unknown> | null;
+  strategy_id: string | null;       // which strategy generated this (e.g. 'MEAN_REVERSION')
+  safety_check_result: SafetyCheckResult | null; // full safety check pipeline result
   approved_at: string | null;
   executed_at: string | null;
   atrad_order_id: string | null;
@@ -886,6 +928,16 @@ export interface CreateOrderPayload {
   trigger_price: number;
   limit_price?: number;
   reason?: string;
+  strategy_id?: string;
+}
+
+export interface CreateTradeQueuePayload {
+  symbol: string;
+  direction: 'BUY' | 'SELL';
+  quantity: number;
+  limit_price: number;
+  strategy_id?: string;
+  reasoning?: string;
 }
 
 export const ordersApi = {
@@ -897,6 +949,18 @@ export const ordersApi = {
   approve: (id: number) => api.post<PendingOrder>(`/atrad/orders/${id}/approve`),
   execute: (id: number) => api.post<PendingOrder>(`/atrad/orders/${id}/execute`),
   cancel: (id: number) => api.post<PendingOrder>(`/atrad/orders/${id}/cancel`),
+  reject: (id: number) => api.post<PendingOrder>(`/atrad/orders/${id}/cancel`), // alias → cancel
+};
+
+export const tradeApi = {
+  getQueue: () => api.get<PendingOrder[]>('/trade/queue'),
+  getPending: () => api.get<PendingOrder[]>('/trade/queue/pending'),
+  createQueueEntry: (payload: CreateTradeQueuePayload) =>
+    api.post<{ created: boolean; order?: PendingOrder; safetyCheckResult: SafetyCheckResult; reason?: string }>('/trade/queue', payload),
+  approve: (id: number) => api.post<PendingOrder>(`/trade/approve/${id}`),
+  reject: (id: number) => api.post<PendingOrder>(`/trade/reject/${id}`),
+  execute: (id: number) => api.post<PendingOrder>(`/trade/execute/${id}`),
+  getSafetyStatus: () => api.get<TradeSafetyStatus>('/trade/safety-status'),
 };
 
 // Insights Types
@@ -1286,6 +1350,109 @@ export const opportunitiesApi = {
     api.post<{ executed: string[]; failed: string[]; total_risk_lkr: number }>(
       '/trade-opportunities/execute',
       { symbols, account_id },
+    ),
+};
+
+// ---------------------------------------------------------------------------
+// Strategy Engine
+// ---------------------------------------------------------------------------
+
+export interface StrategyEngineStatus {
+  regime: string | null;
+  regimeConfidence: number | null;
+  regimeReasoning: string | null;
+  regimeIndicators: {
+    aspi_current: number | null;
+    sma_20: number | null;
+    sma_50: number | null;
+    atr_14: number | null;
+    atr_50: number | null;
+    breadth_advancing_pct: number | null;
+    foreign_net_buying_mtd: number | null;
+    week52_high: number | null;
+  } | null;
+  activeStrategies: Array<{ id: string; name: string; description: string }>;
+  inactiveStrategies: Array<{ id: string; name: string; reason: string }>;
+  todaySignalCount: number;
+  lastRun: string | null;
+  totalStrategiesInRegistry: number;
+}
+
+export interface StrategyEngineSignal {
+  id: number;
+  signal_date: string;
+  symbol: string;
+  strategy_id: string;
+  strategy_name: string;
+  direction: string;
+  confidence: string;
+  score: number;
+  entry_price: number;
+  stop_loss: number | null;
+  take_profit: number | null;
+  risk_reward_ratio: number | null;
+  position_size_shares: number | null;
+  position_size_lkr: number | null;
+  reasoning: string[] | null;
+  rules_triggered: Array<{ rule: string; actual: unknown; threshold: unknown }> | null;
+  market_regime: string;
+  expires_at: string;
+  data_confidence: number | null;
+  created_at: string;
+}
+
+export interface StrategyBacktestResult {
+  id: string;
+  strategy_id: string;
+  strategy_name: string;
+  run_date: string;
+  total_trades: number;
+  winning_trades: number;
+  losing_trades: number;
+  win_rate: number;
+  avg_return_pct: number;
+  max_drawdown: number;
+  sharpe_ratio: number | null;
+  total_return_pct: number;
+  stocks_tested: number;
+  trades_detail: Array<{
+    symbol: string;
+    entry_date: string;
+    entry_price: number;
+    exit_date: string;
+    exit_price: number;
+    return_pct: number;
+    hold_days: number;
+    exit_reason: string;
+  }> | null;
+  period_start: string | null;
+  period_end: string | null;
+  notes: string | null;
+  is_active: boolean;
+  created_at: string;
+}
+
+export const strategyEngineApi = {
+  getStatus: () =>
+    api.get<{ success: boolean; data: StrategyEngineStatus }>('/strategy-engine/status'),
+  getSignals: () =>
+    api.get<{
+      success: boolean;
+      data: StrategyEngineSignal[];
+      meta: { total: number; date: string };
+    }>('/strategy-engine/signals'),
+  runManually: () =>
+    api.post<{
+      success: boolean;
+      data: { regime: string; regimeConfidence: number; signalsGenerated: number };
+    }>('/strategy-engine/run'),
+  runBacktests: () =>
+    api.post<{ success: boolean; data: StrategyBacktestResult[] }>('/strategy-engine/run-backtests'),
+  getBacktestResults: () =>
+    api.get<{ success: boolean; data: StrategyBacktestResult[] }>('/strategy-engine/backtest-results'),
+  getBacktestResultsByStrategy: (strategyId: string) =>
+    api.get<{ success: boolean; data: StrategyBacktestResult[] }>(
+      `/strategy-engine/backtest-results/${strategyId}`,
     ),
 };
 
