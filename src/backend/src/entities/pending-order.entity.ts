@@ -8,8 +8,21 @@ import {
 
 export const ORDER_TYPES = ['STOP_LOSS', 'TAKE_PROFIT', 'LIMIT_BUY'] as const;
 export const ORDER_ACTIONS = ['BUY', 'SELL'] as const;
-export const ORDER_STATUSES = ['PENDING', 'APPROVED', 'EXECUTING', 'EXECUTED', 'FAILED', 'CANCELLED'] as const;
-export const ORDER_SOURCES = ['RISK_SERVICE', 'AI_RECOMMENDATION', 'MANUAL'] as const;
+export const ORDER_STATUSES = [
+  'PENDING',
+  'APPROVED',
+  'EXECUTING',
+  'EXECUTED',
+  'FAILED',
+  'CANCELLED',
+  'REJECTED',
+] as const;
+export const ORDER_SOURCES = [
+  'RISK_SERVICE',
+  'AI_RECOMMENDATION',
+  'STRATEGY_ENGINE',
+  'MANUAL',
+] as const;
 
 export type OrderType = (typeof ORDER_TYPES)[number];
 export type OrderAction = (typeof ORDER_ACTIONS)[number];
@@ -59,6 +72,21 @@ export class PendingOrder {
   /** Snapshot of the PositionRisk data at time of order creation. */
   @Column({ type: 'jsonb', nullable: true })
   risk_data: Record<string, unknown> | null;
+
+  /**
+   * Strategy engine ID that generated this signal (e.g. 'MEAN_REVERSION').
+   * Null for manually created or risk-service suggested orders.
+   */
+  // MUST have type: 'varchar' — 'string | null' emits 'Object' via emitDecoratorMetadata
+  @Column({ type: 'varchar', length: 50, nullable: true })
+  strategy_id: string | null;
+
+  /**
+   * Full safety check pipeline result stored as JSON.
+   * Allows the approval UI to show which checks passed/failed.
+   */
+  @Column({ type: 'jsonb', nullable: true })
+  safety_check_result: Record<string, unknown> | null;
 
   @Column({ type: 'timestamp', nullable: true })
   approved_at: Date | null;

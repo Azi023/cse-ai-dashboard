@@ -27,8 +27,11 @@ import {
   RefreshCw,
   Plus,
   Loader2,
+  Bot,
+  ChevronDown,
+  ChevronRight,
 } from 'lucide-react';
-import { ordersApi, type PendingOrder, type CreateOrderPayload } from '@/lib/api';
+import { ordersApi, type PendingOrder, type CreateOrderPayload, type SafetyCheckResult } from '@/lib/api';
 import { safeNum } from '@/lib/format';
 
 // ── Status helpers ────────────────────────────────────────────────────────────
@@ -40,12 +43,13 @@ const STATUS_CONFIG: Record<string, { label: string; color: string; icon: React.
   EXECUTED: { label: 'Executed', color: 'bg-emerald-500/20 text-emerald-600 dark:text-emerald-400 border-emerald-500/30', icon: CheckCircle },
   FAILED: { label: 'Failed', color: 'bg-red-500/20 text-red-600 dark:text-red-400 border-red-500/30', icon: XCircle },
   CANCELLED: { label: 'Cancelled', color: 'bg-muted text-muted-foreground border-border', icon: Ban },
+  REJECTED: { label: 'Rejected', color: 'bg-orange-500/20 text-orange-600 dark:text-orange-400 border-orange-500/30', icon: XCircle },
 };
 
 const ORDER_TYPE_CONFIG: Record<string, { label: string; icon: React.ElementType; color: string }> = {
   STOP_LOSS: { label: 'Stop-Loss', icon: ShieldAlert, color: 'text-red-500 dark:text-red-400' },
   TAKE_PROFIT: { label: 'Take-Profit', icon: TrendingUp, color: 'text-emerald-600 dark:text-emerald-400' },
-  LIMIT_BUY: { label: 'Limit Buy', icon: TrendingDown, color: 'text-blue-600 dark:text-blue-400' },
+  LIMIT_BUY: { label: 'Limit Buy', icon: TrendingUp, color: 'text-blue-600 dark:text-blue-400' },
 };
 
 // ── Status helpers ────────────────────────────────────────────────────────────
@@ -69,6 +73,66 @@ function OrderTypeBadge({ orderType }: { orderType: string }) {
       <Icon className="w-4 h-4" />
       {config.label}
     </span>
+  );
+}
+
+// ── Strategy badge ────────────────────────────────────────────────────────────
+
+function StrategyBadge({ strategyId }: { strategyId: string }) {
+  const label = strategyId
+    .replace(/_/g, ' ')
+    .replace(/\b\w/g, (c) => c.toUpperCase());
+  return (
+    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs font-medium bg-blue-500/10 text-blue-600 dark:text-blue-300 border border-blue-500/20">
+      <Bot className="w-3 h-3" />
+      {label}
+    </span>
+  );
+}
+
+// ── Safety checks panel ───────────────────────────────────────────────────────
+
+function SafetyChecksPanel({ result }: { result: SafetyCheckResult }) {
+  const [expanded, setExpanded] = useState(false);
+  const allPassed = result.passed;
+  const passCount = result.checks.filter((c) => c.passed).length;
+
+  return (
+    <div className={`rounded-lg border px-3 py-2 text-xs ${allPassed ? 'border-emerald-500/30 bg-emerald-500/5' : 'border-red-500/30 bg-red-500/5'}`}>
+      <button
+        className="flex w-full items-center justify-between gap-2"
+        onClick={() => setExpanded((v) => !v)}
+      >
+        <span className="flex items-center gap-1.5 font-medium">
+          {allPassed ? (
+            <CheckCircle className="w-3.5 h-3.5 text-emerald-500" />
+          ) : (
+            <XCircle className="w-3.5 h-3.5 text-red-500" />
+          )}
+          <span className={allPassed ? 'text-emerald-600 dark:text-emerald-400' : 'text-red-500'}>
+            Safety checks: {passCount}/{result.checks.length} passed
+            {!allPassed && ` — failed: ${result.rejectedBy}`}
+          </span>
+        </span>
+        {expanded ? <ChevronDown className="w-3 h-3 text-muted-foreground" /> : <ChevronRight className="w-3 h-3 text-muted-foreground" />}
+      </button>
+      {expanded && (
+        <ul className="mt-2 space-y-1">
+          {result.checks.map((check) => (
+            <li key={check.name} className="flex items-start gap-2">
+              {check.passed ? (
+                <CheckCircle className="w-3 h-3 text-emerald-500 mt-0.5 shrink-0" />
+              ) : (
+                <XCircle className="w-3 h-3 text-red-500 mt-0.5 shrink-0" />
+              )}
+              <span className={check.passed ? 'text-muted-foreground' : 'text-red-500'}>
+                <span className="font-mono">{check.name}:</span> {check.reason}
+              </span>
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
   );
 }
 
@@ -191,7 +255,7 @@ export default function OrdersPage() {
   // ── Derived state ──────────────────────────────────────────────────────────
 
   const activeOrders = orders.filter((o) => ['PENDING', 'APPROVED', 'EXECUTING'].includes(o.status));
-  const historyOrders = orders.filter((o) => ['EXECUTED', 'FAILED', 'CANCELLED'].includes(o.status));
+  const historyOrders = orders.filter((o) => ['EXECUTED', 'FAILED', 'CANCELLED', 'REJECTED'].includes(o.status));
 
   // ── Render ─────────────────────────────────────────────────────────────────
 
@@ -376,6 +440,7 @@ export default function OrdersPage() {
                 <option value="EXECUTED">Executed</option>
                 <option value="FAILED">Failed</option>
                 <option value="CANCELLED">Cancelled</option>
+                <option value="REJECTED">Rejected</option>
               </select>
             </div>
           </CardHeader>
@@ -390,9 +455,9 @@ export default function OrdersPage() {
                   <TableRow>
                     <TableHead>ID</TableHead>
                     <TableHead>Symbol</TableHead>
-                    <TableHead>Type</TableHead>
+                    <TableHead>Type / Strategy</TableHead>
                     <TableHead>Qty</TableHead>
-                    <TableHead>Trigger Price</TableHead>
+                    <TableHead>Price</TableHead>
                     <TableHead>Status</TableHead>
                     <TableHead>Date</TableHead>
                     <TableHead>ATrad ID</TableHead>
@@ -403,7 +468,14 @@ export default function OrdersPage() {
                     <TableRow key={order.id}>
                       <TableCell className="text-muted-foreground text-sm">#{order.id}</TableCell>
                       <TableCell className="font-mono text-sm">{order.symbol}</TableCell>
-                      <TableCell><OrderTypeBadge orderType={order.order_type} /></TableCell>
+                      <TableCell>
+                        <div className="flex flex-col gap-1">
+                          <OrderTypeBadge orderType={order.order_type} />
+                          {order.strategy_id && (
+                            <StrategyBadge strategyId={order.strategy_id} />
+                          )}
+                        </div>
+                      </TableCell>
                       <TableCell className="text-sm">{order.quantity}</TableCell>
                       <TableCell className="text-sm font-mono">
                         LKR {safeNum(order.trigger_price).toFixed(2)}
@@ -450,13 +522,21 @@ function ActiveOrderCard({
   onCancel: (o: PendingOrder) => void;
 }) {
   const isLoading = actionLoading === order.id;
+  const borderColor =
+    order.order_type === 'LIMIT_BUY'
+      ? 'border-l-blue-500'
+      : order.order_type === 'TAKE_PROFIT'
+        ? 'border-l-emerald-500'
+        : 'border-l-red-500';
+
   return (
-    <div className={`border rounded-lg p-4 space-y-3 border-l-4 ${order.order_type === 'TAKE_PROFIT' ? 'border-l-emerald-500' : 'border-l-red-500'}`}>
+    <div className={`border rounded-lg p-4 space-y-3 border-l-4 ${borderColor}`}>
       <div className="flex items-start justify-between gap-4">
-        <div className="space-y-1">
-          <div className="flex items-center gap-3">
+        <div className="space-y-1.5">
+          <div className="flex items-center gap-3 flex-wrap">
             <span className="font-mono font-semibold">{order.symbol}</span>
             <OrderTypeBadge orderType={order.order_type} />
+            {order.strategy_id && <StrategyBadge strategyId={order.strategy_id} />}
             <span className="text-xs text-muted-foreground">#{order.id}</span>
           </div>
           <div className="text-sm space-x-4">
@@ -465,23 +545,35 @@ function ActiveOrderCard({
               <strong>{order.quantity} shares</strong>
             </span>
             <span>
-              <span className="text-muted-foreground">Trigger:</span>{' '}
+              <span className="text-muted-foreground">
+                {order.order_type === 'LIMIT_BUY' ? 'Limit:' : 'Trigger:'}
+              </span>{' '}
               <strong className="font-mono">LKR {safeNum(order.trigger_price).toFixed(2)}</strong>
             </span>
+            {order.order_type === 'LIMIT_BUY' && (
+              <span className="text-muted-foreground text-xs">
+                Est. LKR {(safeNum(order.trigger_price) * order.quantity).toLocaleString()}
+              </span>
+            )}
             {order.source && (
               <span className="text-xs text-muted-foreground bg-muted px-2 py-0.5 rounded">
-                {order.source.replace('_', ' ')}
+                {order.source.replace(/_/g, ' ')}
               </span>
             )}
           </div>
           {order.reason && (
-            <p className="text-xs text-muted-foreground max-w-2xl">{order.reason}</p>
+            <p className="text-xs text-muted-foreground max-w-2xl leading-relaxed">{order.reason}</p>
           )}
         </div>
         <div className="shrink-0">
           <StatusBadge status={order.status} />
         </div>
       </div>
+
+      {/* Safety check results — shown for strategy-engine queued orders */}
+      {order.safety_check_result && (
+        <SafetyChecksPanel result={order.safety_check_result as unknown as SafetyCheckResult} />
+      )}
 
       <div className="flex gap-2">
         {order.status === 'PENDING' && (

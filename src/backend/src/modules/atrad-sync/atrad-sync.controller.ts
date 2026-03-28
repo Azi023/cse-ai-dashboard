@@ -36,6 +36,15 @@ export class ATradSyncController {
     };
   }
 
+  /**
+   * GET /api/atrad/sync-status — Detailed health check with staleness indicator.
+   * Returns: { lastSync, balance, holdingsCount, isStale, nextScheduledSync }
+   */
+  @Get('sync-status')
+  async getSyncStatus() {
+    return this.atradSyncService.getSyncStatus();
+  }
+
   /** GET /api/atrad/holdings — Latest synced holdings from ATrad. */
   @Get('holdings')
   async getHoldings() {

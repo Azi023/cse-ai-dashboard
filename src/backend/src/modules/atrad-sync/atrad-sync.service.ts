@@ -153,6 +153,18 @@ export class ATradSyncService {
           86400,
         );
 
+        // Store balance separately for quick access by safety checks
+        await this.redisService.setJson(
+          'atrad:balance',
+          {
+            cashBalance: result.cashBalance,
+            buyingPower: result.buyingPower,
+            accountValue: result.accountValue,
+            syncedAt: result.lastSynced.toISOString(),
+          },
+          86400,
+        );
+
         // Cache holdings separately for quick access (5 min TTL during market, 24h otherwise)
         await this.redisService.setJson(
           'atrad:holdings',
@@ -267,6 +279,74 @@ export class ATradSyncService {
       cashBalance: 0,
       error: 'No sync has been performed yet',
     };
+  }
+
+  /**
+   * GET /api/atrad/sync-status — detailed health check.
+   * Returns isStale (>24hr old) and nextScheduledSync for the UI dashboard.
+   */
+  async getSyncStatus(): Promise<{
+    lastSync: string | null;
+    balance: number;
+    holdingsCount: number;
+    isStale: boolean;
+    nextScheduledSync: string;
+    syncSuccess: boolean;
+    error?: string;
+  }> {
+    const status = await this.getLastSyncStatus();
+    const lastSync = status.lastSyncTime?.toISOString() ?? null;
+    const isStale = lastSync
+      ? Date.now() - new Date(lastSync).getTime() > 24 * 60 * 60 * 1000
+      : true;
+
+    return {
+      lastSync,
+      balance: status.cashBalance,
+      holdingsCount: status.holdingsCount,
+      isStale,
+      nextScheduledSync: this.computeNextScheduledSync(),
+      syncSuccess: status.syncSuccess,
+      error: status.error,
+    };
+  }
+
+  private computeNextScheduledSync(): string {
+    const now = new Date();
+    // Convert to SLT (UTC+5:30)
+    const sltMs = now.getTime() + 5.5 * 60 * 60 * 1000;
+    const slt = new Date(sltMs);
+    const dow = slt.getUTCDay(); // 0=Sun, 1=Mon...5=Fri, 6=Sat
+    const h = slt.getUTCHours();
+    const m = slt.getUTCMinutes();
+    const time = h * 100 + m;
+
+    // Weekend — next sync is Monday 09:30
+    if (dow === 0 || dow === 6) {
+      return 'Monday 09:30 AM SLT (market open)';
+    }
+
+    // Before market open
+    if (time < 930) {
+      return `Today 09:30 AM SLT (market open)`;
+    }
+
+    // During market hours (9:30–14:30) — next 15-min tick
+    if (time >= 930 && time <= 1430) {
+      const nextMin = Math.ceil((m + 1) / 15) * 15;
+      if (nextMin < 60) {
+        return `~${60 - m} min (market hours sync at :${nextMin.toString().padStart(2, '0')})`;
+      }
+      return `~${60 - m} min (market hours sync)`;
+    }
+
+    // Post-close: next sync at 14:38 if not yet passed
+    if (time > 1430 && time < 1438) {
+      return 'Post-close sync at 14:38 SLT';
+    }
+
+    // End of day — tomorrow
+    return 'Tomorrow 09:30 AM SLT (market open)';
   }
 
   /**
