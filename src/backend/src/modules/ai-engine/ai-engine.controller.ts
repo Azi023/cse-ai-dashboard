@@ -46,7 +46,6 @@ export class AiEngineController {
     return this.aiEngineService.analyzeStock(symbol, forceRefresh === 'true');
   }
 
-  @UseGuards(ApiKeyGuard)
   @Throttle({ default: { ttl: 60_000, limit: 10 } }) // 10 chat messages/min — each is billable
   @Post('chat')
   async chat(

@@ -13,9 +13,11 @@ import { ATradSyncService } from './atrad-sync.service';
 import { OrderService, CreateOrderDto } from './order.service';
 import { ApiKeyGuard } from '../../common/guards/api-key.guard';
 
-/** All ATrad endpoints require a valid X-API-Key header (live broker automation). */
-@UseGuards(ApiKeyGuard)
-@Throttle({ default: { ttl: 60_000, limit: 5 } }) // 5 req/min — each sync launches a browser
+/**
+ * ATrad Sync controller.
+ * GET (read) endpoints are public — the dashboard displays sync status and holdings.
+ * POST (write) endpoints require X-API-Key — they launch live browser automation.
+ */
 @Controller('atrad')
 export class ATradSyncController {
   constructor(
@@ -25,7 +27,12 @@ export class ATradSyncController {
 
   // ── ATrad Sync endpoints ─────────────────────────────────────────────────────
 
-  /** POST /api/atrad/sync — Trigger a manual ATrad portfolio sync. */
+  /**
+   * POST /api/atrad/sync — Trigger a manual ATrad portfolio sync.
+   * Protected: launches Playwright, logs into live broker account.
+   */
+  @UseGuards(ApiKeyGuard)
+  @Throttle({ default: { ttl: 60_000, limit: 5 } })
   @Post('sync')
   async triggerSync() {
     return this.atradSyncService.triggerSync();
@@ -57,7 +64,12 @@ export class ATradSyncController {
     return await this.atradSyncService.getHoldings();
   }
 
-  /** POST /api/atrad/test — Test ATrad login (validates credentials). */
+  /**
+   * POST /api/atrad/test — Test ATrad login (validates credentials).
+   * Protected: tests live credentials against the broker platform.
+   */
+  @UseGuards(ApiKeyGuard)
+  @Throttle({ default: { ttl: 60_000, limit: 3 } })
   @Post('test')
   async testConnection() {
     return this.atradSyncService.testConnection();
@@ -88,8 +100,10 @@ export class ATradSyncController {
 
   /**
    * POST /api/atrad/orders — Create a new pending order.
-   * Body: { symbol, order_type, action, quantity, trigger_price, limit_price?, reason? }
+   * Protected: modifies order state.
    */
+  @UseGuards(ApiKeyGuard)
+  @Throttle({ default: { ttl: 60_000, limit: 5 } })
   @Post('orders')
   async createOrder(@Body() dto: CreateOrderDto) {
     return this.orderService.createPendingOrder(dto);
@@ -97,8 +111,10 @@ export class ATradSyncController {
 
   /**
    * POST /api/atrad/orders/:id/approve — Approve a pending order.
-   * User explicitly confirms they want to execute this order.
+   * Protected: approval enables live execution path.
    */
+  @UseGuards(ApiKeyGuard)
+  @Throttle({ default: { ttl: 60_000, limit: 5 } })
   @Post('orders/:id/approve')
   async approveOrder(@Param('id', ParseIntPipe) id: number) {
     return this.orderService.approveOrder(id);
@@ -106,8 +122,10 @@ export class ATradSyncController {
 
   /**
    * POST /api/atrad/orders/:id/execute — Execute an approved order via Playwright.
-   * REQUIRES status = 'APPROVED'. Will fail-safe if selectors are not configured.
+   * Protected: places a real order on the live broker platform.
    */
+  @UseGuards(ApiKeyGuard)
+  @Throttle({ default: { ttl: 60_000, limit: 5 } })
   @Post('orders/:id/execute')
   async executeOrder(@Param('id', ParseIntPipe) id: number) {
     return this.orderService.executeOrder(id);
@@ -115,8 +133,10 @@ export class ATradSyncController {
 
   /**
    * POST /api/atrad/orders/:id/cancel — Cancel a pending or approved order.
-   * Does NOT affect already-executed orders.
+   * Protected: modifies order state.
    */
+  @UseGuards(ApiKeyGuard)
+  @Throttle({ default: { ttl: 60_000, limit: 5 } })
   @Post('orders/:id/cancel')
   async cancelOrder(@Param('id', ParseIntPipe) id: number) {
     return this.orderService.cancelOrder(id);

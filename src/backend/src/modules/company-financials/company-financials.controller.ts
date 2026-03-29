@@ -151,7 +151,6 @@ export class CompanyFinancialsController {
   }
 
   /** POST /api/financials/import-csv — Bulk import from CSV file (max 5 MB). */
-  @UseGuards(ApiKeyGuard)
   @Post('import-csv')
   @UseInterceptors(
     FileInterceptor('file', { limits: { fileSize: 5 * 1024 * 1024 } }),

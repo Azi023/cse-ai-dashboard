@@ -26,9 +26,11 @@ import { OrderService, CreateTradeQueueDto } from './order.service';
 import { SAFETY_RAILS } from './safety-rails';
 import { ApiKeyGuard } from '../../common/guards/api-key.guard';
 
-/** All trade endpoints require a valid X-API-Key header. */
-@UseGuards(ApiKeyGuard)
-@Throttle({ default: { ttl: 60_000, limit: 5 } }) // 5 req/min — trade actions are high-value
+/**
+ * GET endpoints on this controller are public (dashboard display).
+ * POST write endpoints require X-API-Key — approve/reject/execute are irreversible.
+ */
+@Throttle({ default: { ttl: 60_000, limit: 20 } }) // 20 reads/min for polling
 @Controller('trade')
 export class TradeController {
   constructor(private readonly orderService: OrderService) {}
@@ -55,6 +57,8 @@ export class TradeController {
    *
    * Body: { symbol, direction, quantity, limit_price, strategy_id?, reasoning? }
    */
+  @UseGuards(ApiKeyGuard)
+  @Throttle({ default: { ttl: 60_000, limit: 5 } })
   @Post('queue')
   async createQueueEntry(@Body() dto: CreateTradeQueueDto) {
     if (!dto.symbol || !dto.direction || !dto.quantity || !dto.limit_price) {
@@ -113,7 +117,10 @@ export class TradeController {
 
   /**
    * POST /api/trade/approve/:id — Approve a PENDING order.
+   * Protected: approval is irreversible and enables execution.
    */
+  @UseGuards(ApiKeyGuard)
+  @Throttle({ default: { ttl: 60_000, limit: 5 } })
   @Post('approve/:id')
   async approveOrder(@Param('id', ParseIntPipe) id: number) {
     return this.orderService.approveOrder(id);
@@ -121,7 +128,10 @@ export class TradeController {
 
   /**
    * POST /api/trade/reject/:id — Reject a PENDING or APPROVED order.
+   * Protected: same guard level as approve for symmetry.
    */
+  @UseGuards(ApiKeyGuard)
+  @Throttle({ default: { ttl: 60_000, limit: 5 } })
   @Post('reject/:id')
   async rejectOrder(@Param('id', ParseIntPipe) id: number) {
     return this.orderService.rejectOrder(id);
@@ -129,7 +139,10 @@ export class TradeController {
 
   /**
    * POST /api/trade/execute/:id — Execute an APPROVED order via Playwright.
+   * Protected: launches a live browser and places a real order on ATrad.
    */
+  @UseGuards(ApiKeyGuard)
+  @Throttle({ default: { ttl: 60_000, limit: 5 } })
   @Post('execute/:id')
   async executeOrder(@Param('id', ParseIntPipe) id: number) {
     return this.orderService.executeOrder(id);
@@ -137,7 +150,7 @@ export class TradeController {
 
   /**
    * GET /api/trade/safety-status — Check current safety rails status.
-   * Useful for the frontend to show whether trade automation is active.
+   * Public: safe read-only config, useful for the dashboard kill-switch indicator.
    */
   @Get('safety-status')
   getSafetyStatus() {
