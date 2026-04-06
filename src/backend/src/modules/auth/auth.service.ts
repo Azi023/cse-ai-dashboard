@@ -49,7 +49,9 @@ export class AuthService implements OnModuleInit {
     // Pre-hash the password at startup so we never hold plaintext in memory
     // beyond initialization
     this.passwordHash = await bcrypt.hash(password, 12);
-    this.logger.log('Auth service initialized — credentials loaded from environment');
+    this.logger.log(
+      'Auth service initialized — credentials loaded from environment',
+    );
   }
 
   async validateLogin(
@@ -62,8 +64,9 @@ export class AuthService implements OnModuleInit {
       );
     }
 
-    // Constant-time username comparison via bcrypt to prevent timing attacks
-    const usernameMatch = username === this.expectedUsername;
+    // Case-insensitive username comparison
+    const usernameMatch =
+      username.toLowerCase() === this.expectedUsername.toLowerCase();
     const passwordMatch = await bcrypt.compare(password, this.passwordHash);
 
     if (!usernameMatch || !passwordMatch) {

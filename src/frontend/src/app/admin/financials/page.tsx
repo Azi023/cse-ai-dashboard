@@ -612,7 +612,7 @@ export default function AdminFinancialsPage() {
               download="financials-template.csv"
               onClick={(e) => {
                 e.preventDefault();
-                fetch('http://localhost:4101/api/financials/template-csv')
+                fetch(`${process.env.NEXT_PUBLIC_API_URL || '/api'}/financials/template-csv`)
                   .then((r) => r.blob())
                   .then((blob) => {
                     const url = URL.createObjectURL(blob);

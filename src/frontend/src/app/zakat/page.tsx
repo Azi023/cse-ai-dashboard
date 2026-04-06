@@ -11,7 +11,7 @@ import {
   ChevronUp,
 } from 'lucide-react';
 
-const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:4101/api';
+const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? '/api';
 
 interface HoldingZakat {
   symbol: string;
