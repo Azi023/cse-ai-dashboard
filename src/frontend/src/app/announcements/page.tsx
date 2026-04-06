@@ -3,6 +3,7 @@
 import { useState, useEffect, useMemo } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
+import { isSafeUrl } from '@/lib/safe-url';
 import { announcementsApi, type Announcement } from '@/lib/api';
 import { Megaphone, Search, Filter, ChevronDown, ChevronUp, ExternalLink } from 'lucide-react';
 import Link from 'next/link';
@@ -247,7 +248,7 @@ export default function AnnouncementsPage() {
                         </p>
                       </div>
                       <div className="flex items-center gap-2 mt-1">
-                        {ann.url && (
+                        {isSafeUrl(ann.url) && (
                           <a
                             href={ann.url}
                             target="_blank"

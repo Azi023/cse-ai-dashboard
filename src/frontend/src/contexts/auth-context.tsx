@@ -7,7 +7,7 @@ interface AuthContextValue {
   isAuthenticated: boolean;
   isLoading: boolean;
   username: string | null;
-  login: (username: string, password: string) => Promise<void>;
+  login: (username: string, password: string, redirectTo?: string) => Promise<void>;
   logout: () => Promise<void>;
 }
 
@@ -56,7 +56,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, [isLoading, isAuthenticated, pathname, router]);
 
   const login = useCallback(
-    async (loginUsername: string, password: string) => {
+    async (loginUsername: string, password: string, redirectTo?: string) => {
       const res = await fetch(`${API_URL}/auth/login`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -71,7 +71,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
       setIsAuthenticated(true);
       setUsername(loginUsername);
-      router.replace('/');
+
+      // Validate redirect: must be a relative path, no protocol or double-slash
+      const destination =
+        redirectTo && redirectTo.startsWith('/') && !redirectTo.startsWith('//')
+          ? redirectTo
+          : '/';
+      router.replace(destination);
     },
     [router],
   );

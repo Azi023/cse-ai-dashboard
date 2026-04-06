@@ -32,8 +32,8 @@ function LoginForm() {
     setSubmitting(true);
 
     try {
-      await login(username, password);
-      // Auth context handles redirect
+      const redirectTo = searchParams.get('redirect') ?? undefined;
+      await login(username, password, redirectTo);
     } catch (err: unknown) {
       const message =
         err instanceof Error ? err.message : 'Login failed';

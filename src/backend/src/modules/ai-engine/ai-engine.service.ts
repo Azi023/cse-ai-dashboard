@@ -580,7 +580,7 @@ export class AiEngineService {
       };
     } catch (error) {
       this.logger.error(
-        `Live daily brief failed, falling back to mock: ${error}`,
+        `Live daily brief failed, falling back to mock: ${error instanceof Error ? error.message : 'Unknown error'}`,
       );
       return this.mockGenerator.generateDailyBrief();
     }
@@ -614,7 +614,7 @@ export class AiEngineService {
       return { ...mockResult, analysis: text };
     } catch (error) {
       this.logger.error(
-        `Live stock analysis failed, falling back to mock: ${error}`,
+        `Live stock analysis failed, falling back to mock: ${error instanceof Error ? error.message : 'Unknown error'}`,
       );
       return this.mockGenerator.generateStockAnalysis(symbol);
     }
@@ -652,7 +652,9 @@ export class AiEngineService {
         ? response.content[0].text
         : 'I was unable to generate a response. Please try again.';
     } catch (error) {
-      this.logger.error(`Live chat failed, falling back to mock: ${error}`);
+      this.logger.error(
+        `Live chat failed, falling back to mock: ${error instanceof Error ? error.message : 'Unknown error'}`,
+      );
       return this.mockGenerator.generateChatResponse(
         message,
         history.map((h) => ({ role: h.role, content: h.content })),
@@ -760,7 +762,9 @@ export class AiEngineService {
       this.logger.log(`Live signals generated: ${signals.length} signals`);
       return signals;
     } catch (error) {
-      this.logger.error(`Live signals failed, falling back to mock: ${error}`);
+      this.logger.error(
+        `Live signals failed, falling back to mock: ${error instanceof Error ? error.message : 'Unknown error'}`,
+      );
       return this.mockGenerator.generateSignals();
     }
   }

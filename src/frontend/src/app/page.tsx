@@ -3,6 +3,7 @@
 import { useState, useEffect, useMemo, useCallback } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
+import { isSafeUrl } from '@/lib/safe-url';
 import { IndexCard } from '@/components/market/index-card';
 import { MarketStatsCard } from '@/components/market/market-stats-card';
 import { TopStocksTable } from '@/components/market/top-stocks-table';
@@ -385,7 +386,7 @@ export default function DashboardPage() {
                       <AlertTriangle className="h-3 w-3 text-red-500 mt-0.5 flex-shrink-0" />
                     )}
                     <p className="text-xs leading-tight line-clamp-2">
-                      {item.url ? (
+                      {isSafeUrl(item.url) ? (
                         <a
                           href={item.url}
                           target="_blank"

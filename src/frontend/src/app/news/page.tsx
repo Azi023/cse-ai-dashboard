@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
+import { isSafeUrl } from '@/lib/safe-url';
 import { newsApi, type NewsItemData } from '@/lib/api';
 import { Newspaper, ExternalLink, RefreshCw, Search, AlertTriangle } from 'lucide-react';
 import { cn } from '@/lib/utils';
@@ -197,7 +198,7 @@ export default function NewsPage() {
                       </span>
                     </div>
                     <h3 className="font-medium text-sm leading-tight">
-                      {item.url ? (
+                      {isSafeUrl(item.url) ? (
                         <a
                           href={item.url}
                           target="_blank"
@@ -218,7 +219,7 @@ export default function NewsPage() {
                     ) : !item.summary ? (
                       <p className="text-xs text-muted-foreground mt-1">
                         {sourceLabels[item.source] || item.source}
-                        {item.url && (
+                        {isSafeUrl(item.url) && (
                           <> &middot; <a href={item.url} target="_blank" rel="noopener noreferrer" className="text-primary hover:underline">Read more</a></>
                         )}
                       </p>

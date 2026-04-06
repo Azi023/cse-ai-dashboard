@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { Card, CardContent } from '@/components/ui/card';
+import { isSafeUrl } from '@/lib/safe-url';
 import {
   marketApi,
   portfolioApi,
@@ -335,7 +336,7 @@ export function SimpleDashboard() {
                   {item.impact_level === 'HIGH' && <AlertTriangle className="h-3.5 w-3.5 text-red-500 flex-shrink-0 mt-0.5" />}
                   <div>
                     <p className="leading-tight font-medium">
-                      {item.url ? (
+                      {isSafeUrl(item.url) ? (
                         <a href={item.url} target="_blank" rel="noopener noreferrer" className="hover:text-primary">
                           {item.title}
                         </a>

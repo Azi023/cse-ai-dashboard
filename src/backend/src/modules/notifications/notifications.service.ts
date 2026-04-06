@@ -99,7 +99,9 @@ export class NotificationsService {
 
       this.logger.log(`Daily digest saved for ${today}`);
     } catch (error) {
-      this.logger.error(`Failed to generate daily digest: ${String(error)}`);
+      this.logger.error(
+        `Failed to generate daily digest: ${error instanceof Error ? error.message : 'Unknown error'}`,
+      );
     }
   }
 
@@ -156,7 +158,9 @@ export class NotificationsService {
 
       this.logger.log(`Weekly brief saved for week ${weekId}`);
     } catch (error) {
-      this.logger.error(`Failed to generate weekly brief: ${String(error)}`);
+      this.logger.error(
+        `Failed to generate weekly brief: ${error instanceof Error ? error.message : 'Unknown error'}`,
+      );
     }
   }
 
