@@ -71,7 +71,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
       setIsAuthenticated(true);
       setUsername(loginUsername);
-      router.replace('/dashboard');
+      router.replace('/');
     },
     [router],
   );
