@@ -21,7 +21,6 @@ import { CseHistoricalBackfillService } from './cse-historical-backfill.service'
 import { ApiKeyGuard } from '../../common/guards/api-key.guard';
 import { Public } from '../auth/public.decorator';
 
-@Public()
 @Controller('financials')
 export class CompanyFinancialsController {
   constructor(
@@ -30,7 +29,7 @@ export class CompanyFinancialsController {
     private readonly historicalBackfillService: CseHistoricalBackfillService,
   ) {}
 
-  /** POST /api/financials — Create a new financial record. */
+  /** POST /api/financials — Create a new financial record. Requires JWT. */
   @Post()
   async create(
     @Body()
@@ -64,18 +63,21 @@ export class CompanyFinancialsController {
   }
 
   /** GET /api/financials/summary/coverage — Coverage stats. */
+  @Public()
   @Get('summary/coverage')
   async getCoverage() {
     return this.financialsService.getCoverage();
   }
 
   /** GET /api/financials/status — Coverage stats scoped to compliant stocks. */
+  @Public()
   @Get('status')
   async getStatus() {
     return this.financialsService.getStatus();
   }
 
   /** GET /api/financials/template-csv — Download CSV import template. */
+  @Public()
   @Get('template-csv')
   getTemplateCsv(@Res() res: Response) {
     const csv = this.financialsService.getTemplateCsv();
@@ -87,29 +89,20 @@ export class CompanyFinancialsController {
     res.send(csv);
   }
 
-  /** POST /api/financials/fetch-cse — Auto-fetch market data for all compliant stocks. */
+  /** POST /api/financials/fetch-cse — Requires JWT. */
   @Post('fetch-cse')
   async fetchFromCse() {
     return this.financialsService.fetchFromCse();
   }
 
-  /**
-   * POST /api/financials/scrape-cse — Playwright scraper for CSE company profiles.
-   * Navigates to cse.lk/company-profile for each symbol, opens Financials →
-   * Fundamental Data, waits for the TradingView widget, extracts all metrics,
-   * saves screenshots + JSON to data/cse-fundamentals/, upserts into DB,
-   * and then triggers POST /api/shariah/run-tier2-screening.
-   */
+  /** POST /api/financials/scrape-cse — Requires JWT. Playwright scraper. */
+  @Throttle({ default: { ttl: 60_000, limit: 2 } })
   @Post('scrape-cse')
   async scrapeCse(@Query('symbol') symbol?: string) {
     return this.scraperService.scrapeAll(symbol);
   }
 
-  /**
-   * POST /api/financials/test-login — Isolated MYCSE login test with full logging.
-   * Launches a visible (headless: false) browser so the login flow can be watched.
-   * Takes screenshots at every step. Returns all logs + screenshot paths as JSON.
-   */
+  /** POST /api/financials/test-login — JWT + API key. */
   @UseGuards(ApiKeyGuard)
   @Throttle({ default: { ttl: 60_000, limit: 2 } })
   @Post('test-login')
@@ -117,15 +110,7 @@ export class CompanyFinancialsController {
     return this.scraperService.testLoginFlow();
   }
 
-  /**
-   * POST /api/financials/probe-mycse
-   *
-   * Diagnostic: Login to CSE Platinum and map the MYCSE dashboard structure.
-   * Returns all navigation links, historical mentions, URL candidates, and
-   * a screenshot at data/cse-fundamentals/probe-mycse-dashboard.png.
-   *
-   * Use this BEFORE running backfill-history to verify navigation works.
-   */
+  /** POST /api/financials/probe-mycse — JWT + API key. */
   @UseGuards(ApiKeyGuard)
   @Throttle({ default: { ttl: 60_000, limit: 2 } })
   @Post('probe-mycse')
@@ -133,18 +118,7 @@ export class CompanyFinancialsController {
     return this.historicalBackfillService.probeMycseStructure();
   }
 
-  /**
-   * POST /api/financials/backfill-history
-   *
-   * Backfills 5+ years of OHLCV daily price data from CSE Platinum
-   * "Historical Share Prices" section. Targets all 151 Shariah-compliant
-   * stocks + top 50 by market cap. Inserts with ON CONFLICT DO NOTHING.
-   *
-   * Optional body: { "symbols": ["AEL.N0000", "JKH.N0000"] }
-   * (omit to backfill all targets)
-   *
-   * Returns a full BackfillHistoryResult + saves report to tasks/backfill-report.md
-   */
+  /** POST /api/financials/backfill-history — JWT + API key. */
   @UseGuards(ApiKeyGuard)
   @Throttle({ default: { ttl: 60_000, limit: 2 } })
   @Post('backfill-history')
@@ -152,7 +126,8 @@ export class CompanyFinancialsController {
     return this.historicalBackfillService.backfillHistory(body.symbols);
   }
 
-  /** POST /api/financials/import-csv — Bulk import from CSV file (max 5 MB). */
+  /** POST /api/financials/import-csv — Requires JWT. */
+  @Throttle({ default: { ttl: 60_000, limit: 3 } })
   @Post('import-csv')
   @UseInterceptors(
     FileInterceptor('file', { limits: { fileSize: 5 * 1024 * 1024 } }),
@@ -168,18 +143,20 @@ export class CompanyFinancialsController {
   }
 
   /** GET /api/financials/:symbol — All records for a symbol. */
+  @Public()
   @Get(':symbol')
   async getBySymbol(@Param('symbol') symbol: string) {
     return this.financialsService.getBySymbol(symbol);
   }
 
   /** GET /api/financials/:symbol/latest — Most recent record. */
+  @Public()
   @Get(':symbol/latest')
   async getLatest(@Param('symbol') symbol: string) {
     return this.financialsService.getLatest(symbol);
   }
 
-  /** PUT /api/financials/:id — Update a financial record. */
+  /** PUT /api/financials/:id — Update a financial record. Requires JWT. */
   @Put(':id')
   async update(
     @Param('id', ParseIntPipe) id: number,

@@ -6,16 +6,17 @@ import { WeeklyBrief } from '../../entities/weekly-brief.entity';
 import { ApiKeyGuard } from '../../common/guards/api-key.guard';
 import { Public } from '../auth/public.decorator';
 
-@Public()
 @Controller('notifications')
 export class NotificationsController {
   constructor(private readonly notificationsService: NotificationsService) {}
 
+  @Public()
   @Get('daily-digest')
   async getLatestDailyDigest(): Promise<DailyDigest | null> {
     return this.notificationsService.getLatestDailyDigest();
   }
 
+  @Public()
   @Get('daily-digest/:date')
   async getDailyDigestByDate(
     @Param('date') date: string,
@@ -23,12 +24,14 @@ export class NotificationsController {
     return this.notificationsService.getDailyDigestByDate(date);
   }
 
+  @Public()
   @Get('weekly-brief')
   async getLatestWeeklyBrief(): Promise<WeeklyBrief | null> {
     return this.notificationsService.getLatestWeeklyBrief();
   }
 
   /** weekId format: YYYY-WW (e.g. 2026-12) */
+  @Public()
   @Get('weekly-brief/:weekId')
   async getWeeklyBriefByWeekId(
     @Param('weekId') weekId: string,
@@ -37,12 +40,13 @@ export class NotificationsController {
   }
 
   /** Token usage for current month */
+  @Public()
   @Get('usage')
   async getTokenUsage() {
     return this.notificationsService.getMonthlyTokenUsage();
   }
 
-  /** Manually trigger daily digest generation for testing */
+  /** Manually trigger daily digest generation — JWT + API key. */
   @UseGuards(ApiKeyGuard)
   @Throttle({ default: { ttl: 60_000, limit: 3 } })
   @Post('test-digest')
@@ -57,7 +61,7 @@ export class NotificationsController {
     };
   }
 
-  /** Manually trigger weekly brief generation for testing */
+  /** Manually trigger weekly brief generation — JWT + API key. */
   @UseGuards(ApiKeyGuard)
   @Throttle({ default: { ttl: 60_000, limit: 3 } })
   @Post('test-brief')

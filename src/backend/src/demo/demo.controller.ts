@@ -15,7 +15,6 @@ import { CreateDemoTradeDto } from './dto/create-demo-trade.dto';
 import { DemoQueryDto } from './dto/demo-query.dto';
 import { Public } from '../modules/auth/public.decorator';
 
-@Public()
 @Controller('demo')
 export class DemoController {
   constructor(
@@ -26,21 +25,25 @@ export class DemoController {
 
   // ─── Accounts ──────────────────────────────────────────────────────────────
 
+  @Public()
   @Get('accounts')
   getAccounts() {
     return this.demoService.getAccounts();
   }
 
+  /** POST /api/demo/accounts — Requires JWT. */
   @Post('accounts')
   createAccount(@Body() dto: CreateDemoAccountDto) {
     return this.demoService.createAccount(dto);
   }
 
+  @Public()
   @Get('accounts/:id')
   getAccount(@Param('id', ParseIntPipe) id: number) {
     return this.demoService.getAccount(id);
   }
 
+  /** POST /api/demo/accounts/:id/reset — Requires JWT. */
   @Post('accounts/:id/reset')
   resetAccount(@Param('id', ParseIntPipe) id: number) {
     return this.demoService.resetAccount(id);
@@ -48,11 +51,13 @@ export class DemoController {
 
   // ─── Trades ────────────────────────────────────────────────────────────────
 
+  @Public()
   @Get('trades')
   getTradeHistory(@Query() query: DemoQueryDto) {
     return this.demoService.getTradeHistory(query.accountId ?? 0, query);
   }
 
+  /** POST /api/demo/trades — Requires JWT. */
   @Post('trades')
   executeTrade(@Body() dto: CreateDemoTradeDto) {
     return this.demoService.executeTrade(dto);
@@ -60,6 +65,7 @@ export class DemoController {
 
   // ─── Holdings ──────────────────────────────────────────────────────────────
 
+  @Public()
   @Get('holdings/:accountId')
   getHoldings(@Param('accountId', ParseIntPipe) accountId: number) {
     return this.demoService.getHoldings(accountId);
@@ -67,6 +73,7 @@ export class DemoController {
 
   // ─── Performance ───────────────────────────────────────────────────────────
 
+  @Public()
   @Get('performance/:accountId')
   getPerformance(@Param('accountId', ParseIntPipe) accountId: number) {
     return this.demoService.getPerformance(accountId);
@@ -74,16 +81,19 @@ export class DemoController {
 
   // ─── Benchmarks & Snapshots ────────────────────────────────────────────────
 
+  @Public()
   @Get('benchmarks/:accountId')
   getBenchmarks(@Param('accountId', ParseIntPipe) accountId: number) {
     return this.demoService.getBenchmarks(accountId);
   }
 
+  @Public()
   @Get('snapshots/:accountId')
   getSnapshots(@Param('accountId', ParseIntPipe) accountId: number) {
     return this.demoService.getSnapshots(accountId);
   }
 
+  /** POST /api/demo/snapshots/trigger/:accountId — Requires JWT. */
   @Post('snapshots/trigger/:accountId')
   triggerSnapshot(@Param('accountId', ParseIntPipe) accountId: number) {
     return this.cronService.triggerSnapshotForAccount(accountId);
@@ -91,11 +101,13 @@ export class DemoController {
 
   // ─── AI ────────────────────────────────────────────────────────────────────
 
+  /** POST /api/demo/ai-trade/:accountId — Requires JWT. */
   @Post('ai-trade/:accountId')
   triggerAITrade(@Param('accountId', ParseIntPipe) accountId: number) {
     return this.aiTraderService.evaluateAndTrade(accountId);
   }
 
+  @Public()
   @Get('ai-log/:accountId')
   getAILog(@Param('accountId', ParseIntPipe) accountId: number) {
     return this.aiTraderService.getAILog(accountId);
@@ -103,6 +115,7 @@ export class DemoController {
 
   // ─── Risk Budget ───────────────────────────────────────────────────────────
 
+  @Public()
   @Get('risk-budget/:accountId')
   getDailyRiskBudget(@Param('accountId', ParseIntPipe) accountId: number) {
     return this.demoService.getDailyRiskBudget(accountId);
@@ -110,6 +123,7 @@ export class DemoController {
 
   // ─── Maintenance ───────────────────────────────────────────────────────────
 
+  /** POST /api/demo/sync-shariah — Requires JWT. */
   @Post('sync-shariah')
   syncShariahStatus() {
     return this.demoService.syncShariahStatus();

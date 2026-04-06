@@ -1,4 +1,5 @@
 import { Controller, Post, Body, Get } from '@nestjs/common';
+import { Throttle } from '@nestjs/throttler';
 import { DataService, BackfillOptions, BackfillResult } from './data.service';
 import { Public } from '../auth/public.decorator';
 
@@ -7,23 +8,12 @@ interface BackfillRequestBody {
   days?: number;
 }
 
-@Public()
 @Controller('data')
 export class DataController {
   constructor(private readonly dataService: DataService) {}
 
-  /**
-   * POST /api/data/backfill-history
-   *
-   * Triggers historical price backfill for all (or specified) stocks.
-   * Uses Playwright to probe the CSE website for a historical data API;
-   * falls back to HTML table scraping per stock if no API is found.
-   *
-   * Body (optional JSON):
-   *   { symbols: ["AEL.N0000", "JKH.N0000"], days: 30 }
-   *
-   * Returns a BackfillResult summary when complete (may take several minutes).
-   */
+  /** POST /api/data/backfill-history — Requires JWT. */
+  @Throttle({ default: { ttl: 60_000, limit: 2 } })
   @Post('backfill-history')
   async backfillHistory(
     @Body() body: BackfillRequestBody = {},
@@ -35,11 +25,8 @@ export class DataController {
     return this.dataService.backfillHistory(options);
   }
 
-  /**
-   * GET /api/data/status
-   *
-   * Returns quick stats on how many daily_prices records exist.
-   */
+  /** GET /api/data/status */
+  @Public()
   @Get('status')
   async getStatus(): Promise<{
     message: string;

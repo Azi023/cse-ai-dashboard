@@ -4,7 +4,6 @@ import { DataSource } from 'typeorm';
 import { RedisService } from './modules/cse-data/redis.service';
 import { Public } from './modules/auth/public.decorator';
 
-@Public()
 @Controller()
 export class AppController {
   constructor(
@@ -12,13 +11,43 @@ export class AppController {
     private readonly redisService: RedisService,
   ) {}
 
+  @Public()
   @Get()
   getHello(): string {
     return 'CSE AI Dashboard API';
   }
 
+  /**
+   * Public health check — returns only status (ok/degraded).
+   * Full details available at GET /api/health/details (JWT required).
+   */
+  @Public()
   @Get('health')
-  async getHealth(): Promise<{
+  async getHealth(): Promise<{ status: 'ok' | 'degraded' }> {
+    let dbOk = true;
+    let redisOk = true;
+
+    try {
+      await this.dataSource.query('SELECT 1');
+    } catch {
+      dbOk = false;
+    }
+
+    try {
+      await this.redisService.get('healthcheck:ping');
+    } catch {
+      redisOk = false;
+    }
+
+    return { status: dbOk && redisOk ? 'ok' : 'degraded' };
+  }
+
+  /**
+   * Detailed health check — requires JWT authentication.
+   * Exposes infrastructure details: db, Redis, last sync times, uptime.
+   */
+  @Get('health/details')
+  async getHealthDetails(): Promise<{
     status: 'ok' | 'degraded';
     db: string;
     redis: string;
@@ -28,7 +57,6 @@ export class AppController {
     uptime: number;
     timestamp: string;
   }> {
-    // DB check
     let dbStatus = 'ok';
     try {
       await this.dataSource.query('SELECT 1');
@@ -36,13 +64,11 @@ export class AppController {
       dbStatus = 'error';
     }
 
-    // Redis check
     let redisStatus = 'ok';
     let lastMarketPoll: string | null = null;
     let lastAtradSync: string | null = null;
     let lastDailyDigest: string | null = null;
     try {
-      // Probe well-known keys to confirm Redis connectivity and surface freshness
       const tradeSummary = await this.redisService.getJson<{
         fetchedAt?: string;
       }>('cse:trade_summary');

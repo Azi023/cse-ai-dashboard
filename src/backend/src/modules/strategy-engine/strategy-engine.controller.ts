@@ -9,7 +9,6 @@ import { Public } from '../auth/public.decorator';
 
 // ---------------------------------------------------------------------------
 
-@Public()
 @Controller('strategy-engine')
 export class StrategyEngineController {
   private readonly logger = new Logger(StrategyEngineController.name);
@@ -24,8 +23,8 @@ export class StrategyEngineController {
 
   /**
    * GET /api/strategy-engine/status
-   * Returns current regime, active strategies, signal count, last run time.
    */
+  @Public()
   @Get('status')
   async getStatus() {
     const [summary, regimeResult] = await Promise.all([
@@ -71,8 +70,8 @@ export class StrategyEngineController {
 
   /**
    * GET /api/strategy-engine/signals
-   * Returns today's strategy engine signals sorted by score.
    */
+  @Public()
   @Get('signals')
   async getSignals() {
     const signals = await this.signalGenerator.getTodaySignals();
@@ -86,10 +85,7 @@ export class StrategyEngineController {
     };
   }
 
-  /**
-   * POST /api/strategy-engine/run
-   * Manually trigger regime detection + signal generation (for testing).
-   */
+  /** POST /api/strategy-engine/run — Requires JWT. */
   @Post('run')
   async runManually() {
     this.logger.log('Manual strategy engine run triggered');
@@ -105,11 +101,7 @@ export class StrategyEngineController {
     };
   }
 
-  /**
-   * POST /api/strategy-engine/run-backtests
-   * Run strategy backtests. Pass ?strategy=STRATEGY_ID to run a single one.
-   * Sets Redis strategy:active:{id} keys based on win rates.
-   */
+  /** POST /api/strategy-engine/run-backtests — Requires JWT. */
   @Post('run-backtests')
   async runBacktests(@Query('strategy') strategyId?: string) {
     this.logger.log(
@@ -139,8 +131,8 @@ export class StrategyEngineController {
 
   /**
    * GET /api/strategy-engine/backtest-results
-   * Returns the latest backtest result for each strategy.
    */
+  @Public()
   @Get('backtest-results')
   async getBacktestResults() {
     const results = await this.backtester.getLatestResults();
@@ -149,8 +141,8 @@ export class StrategyEngineController {
 
   /**
    * GET /api/strategy-engine/backtest-results/:strategyId
-   * Returns backtest history for a specific strategy.
    */
+  @Public()
   @Get('backtest-results/:strategyId')
   async getBacktestResultsByStrategy(@Param('strategyId') strategyId: string) {
     const results = await this.backtester.getResultsByStrategy(strategyId);

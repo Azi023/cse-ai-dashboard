@@ -10,26 +10,27 @@ import {
 import { SignalTrackingService } from './signal-tracking.service';
 import { Public } from '../auth/public.decorator';
 
-@Public()
 @Controller('signal-tracking')
 export class SignalTrackingController {
   constructor(private readonly signalTrackingService: SignalTrackingService) {}
 
   /** GET /api/signal-tracking/performance — Overall performance stats. */
+  @Public()
   @Get('performance')
   async getPerformanceStats() {
     return this.signalTrackingService.getPerformanceStats();
   }
 
-  /** GET /api/signal-tracking/signals — All signal records. */
+  /** GET /api/signal-tracking/signals — All tracked signals. */
+  @Public()
   @Get('signals')
   async getAllSignals(
-    @Query('limit', new DefaultValuePipe(100), ParseIntPipe) limit: number,
+    @Query('limit', new DefaultValuePipe(50), ParseIntPipe) limit?: number,
   ) {
     return this.signalTrackingService.getAllSignals(limit);
   }
 
-  /** POST /api/signal-tracking/record — Record a new signal. */
+  /** POST /api/signal-tracking/record — Requires JWT. */
   @Post('record')
   async recordSignal(
     @Body()
@@ -44,10 +45,9 @@ export class SignalTrackingController {
     return this.signalTrackingService.recordSignal(body);
   }
 
-  /** POST /api/signal-tracking/check-outcomes — Manually check outcomes. */
+  /** POST /api/signal-tracking/check-outcomes — Requires JWT. */
   @Post('check-outcomes')
   async checkOutcomes() {
-    await this.signalTrackingService.checkOutcomes();
-    return { message: 'Outcome check completed' };
+    return this.signalTrackingService.checkOutcomes();
   }
 }

@@ -12,32 +12,34 @@ import {
 import { AlertsService } from './alerts.service';
 import { Public } from '../auth/public.decorator';
 
-@Public()
 @Controller('alerts')
 export class AlertsController {
   constructor(private readonly alertsService: AlertsService) {}
 
   /** GET /api/alerts/notifications — Triggered notifications. */
+  @Public()
   @Get('notifications')
   async getNotifications(
-    @Query('limit', new DefaultValuePipe(50), ParseIntPipe) limit: number,
+    @Query('limit', new DefaultValuePipe(50), ParseIntPipe) limit?: number,
   ) {
     return this.alertsService.getNotifications(limit);
   }
 
-  /** GET /api/alerts/unread-count — Unread notification count. */
+  /** GET /api/alerts/unread-count — Count of unread notifications. */
+  @Public()
   @Get('unread-count')
   async getUnreadCount() {
-    return { count: await this.alertsService.getUnreadCount() };
+    return this.alertsService.getUnreadCount();
   }
 
-  /** GET /api/alerts/active — Active (untriggered) alerts. */
+  /** GET /api/alerts/active — Active alert configs. */
+  @Public()
   @Get('active')
   async getActiveAlerts() {
     return this.alertsService.getActiveAlerts();
   }
 
-  /** POST /api/alerts — Create a new alert. */
+  /** POST /api/alerts — Create a new alert. Requires JWT. */
   @Post()
   async createAlert(
     @Body()
@@ -51,31 +53,31 @@ export class AlertsController {
     return this.alertsService.createAlert(body);
   }
 
-  /** POST /api/alerts/mark-read/:id — Mark one notification as read. */
+  /** POST /api/alerts/mark-read/:id — Mark one notification as read. Requires JWT. */
   @Post('mark-read/:id')
   async markAsRead(@Param('id', ParseIntPipe) id: number) {
     await this.alertsService.markAsRead(id);
-    return { message: 'Marked as read' };
+    return { success: true };
   }
 
-  /** POST /api/alerts/mark-all-read — Mark all notifications as read. */
+  /** POST /api/alerts/mark-all-read — Mark all notifications as read. Requires JWT. */
   @Post('mark-all-read')
   async markAllAsRead() {
     await this.alertsService.markAllAsRead();
-    return { message: 'All marked as read' };
+    return { success: true };
   }
 
-  /** POST /api/alerts/check — Manually trigger alert check. */
+  /** POST /api/alerts/check — Run alert checks now. Requires JWT. */
   @Post('check')
   async checkAlerts() {
     await this.alertsService.checkAlerts();
-    return { message: 'Alert check completed' };
+    return { message: 'Alert check triggered' };
   }
 
-  /** DELETE /api/alerts/:id — Delete an alert. */
+  /** DELETE /api/alerts/:id — Delete an alert. Requires JWT. */
   @Delete(':id')
   async deleteAlert(@Param('id', ParseIntPipe) id: number) {
     await this.alertsService.deleteAlert(id);
-    return { message: 'Alert deleted' };
+    return { success: true };
   }
 }
