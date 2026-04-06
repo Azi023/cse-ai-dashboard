@@ -1,7 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { RedisService } from '../cse-data/redis.service';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { Repository, Not } from 'typeorm';
 import { Stock } from '../../entities';
 
 interface MarketData {
@@ -48,16 +48,35 @@ export class MockGenerator {
   ) {}
 
   async getMarketData(): Promise<MarketData> {
-    const [aspiRaw, snpRaw, marketRaw, gainersRaw, losersRaw, activeRaw, sectorsRaw] =
-      await Promise.all([
-        this.redisService.getJson<{ value?: number; change?: number; percentage?: number }>('cse:aspi_data'),
-        this.redisService.getJson<{ value?: number; change?: number; percentage?: number }>('cse:snp_data'),
-        this.redisService.getJson<{ tradeVolume?: number; shareVolume?: number; trades?: number }>('cse:market_summary'),
-        this.redisService.getJson<TopMover[]>('cse:top_gainers'),
-        this.redisService.getJson<TopMover[]>('cse:top_losers'),
-        this.redisService.getJson<TopMover[]>('cse:most_active'),
-        this.redisService.getJson<SectorData[]>('cse:all_sectors'),
-      ]);
+    const [
+      aspiRaw,
+      snpRaw,
+      marketRaw,
+      gainersRaw,
+      losersRaw,
+      activeRaw,
+      sectorsRaw,
+    ] = await Promise.all([
+      this.redisService.getJson<{
+        value?: number;
+        change?: number;
+        percentage?: number;
+      }>('cse:aspi_data'),
+      this.redisService.getJson<{
+        value?: number;
+        change?: number;
+        percentage?: number;
+      }>('cse:snp_data'),
+      this.redisService.getJson<{
+        tradeVolume?: number;
+        shareVolume?: number;
+        trades?: number;
+      }>('cse:market_summary'),
+      this.redisService.getJson<TopMover[]>('cse:top_gainers'),
+      this.redisService.getJson<TopMover[]>('cse:top_losers'),
+      this.redisService.getJson<TopMover[]>('cse:most_active'),
+      this.redisService.getJson<SectorData[]>('cse:all_sectors'),
+    ]);
 
     return {
       aspiValue: aspiRaw?.value ?? null,
@@ -147,7 +166,11 @@ export class MockGenerator {
     const price = Number(stock.last_price) || 0;
 
     const technicalSignal: 'BULLISH' | 'BEARISH' | 'NEUTRAL' =
-      changePercent > 2 ? 'BULLISH' : changePercent < -2 ? 'BEARISH' : 'NEUTRAL';
+      changePercent > 2
+        ? 'BULLISH'
+        : changePercent < -2
+          ? 'BEARISH'
+          : 'NEUTRAL';
 
     const fundamentalScore = this.calculateFundamentalScore(stock, data);
     const confidence = this.determineConfidence(stock);
@@ -156,7 +179,12 @@ export class MockGenerator {
       s.name.toLowerCase().includes((stock.sector || '').toLowerCase()),
     );
 
-    const analysis = this.buildStockAnalysis(stock, data, sectorPerf, technicalSignal);
+    const analysis = this.buildStockAnalysis(
+      stock,
+      data,
+      sectorPerf,
+      technicalSignal,
+    );
     const riskFactors = this.buildStockRisks(stock, data);
 
     return {
@@ -180,7 +208,12 @@ export class MockGenerator {
     const data = await this.getMarketData();
     const lowerMsg = message.toLowerCase();
 
-    if (lowerMsg.includes('market') && (lowerMsg.includes('today') || lowerMsg.includes('movement') || lowerMsg.includes('how'))) {
+    if (
+      lowerMsg.includes('market') &&
+      (lowerMsg.includes('today') ||
+        lowerMsg.includes('movement') ||
+        lowerMsg.includes('how'))
+    ) {
       return this.chatMarketOverview(data);
     }
 
@@ -192,7 +225,11 @@ export class MockGenerator {
       }
     }
 
-    if (lowerMsg.includes('shariah') || lowerMsg.includes('compliant') || lowerMsg.includes('halal')) {
+    if (
+      lowerMsg.includes('shariah') ||
+      lowerMsg.includes('compliant') ||
+      lowerMsg.includes('halal')
+    ) {
       return this.chatShariahResponse(data);
     }
 
@@ -200,11 +237,20 @@ export class MockGenerator {
       return this.chatSectorResponse(data);
     }
 
-    if (lowerMsg.includes('risk') || lowerMsg.includes('tension') || lowerMsg.includes('geopolit')) {
+    if (
+      lowerMsg.includes('risk') ||
+      lowerMsg.includes('tension') ||
+      lowerMsg.includes('geopolit')
+    ) {
       return this.chatGeopoliticalResponse(data);
     }
 
-    if (lowerMsg.includes('p/e') || lowerMsg.includes('ratio') || lowerMsg.includes('beginner') || lowerMsg.includes('explain')) {
+    if (
+      lowerMsg.includes('p/e') ||
+      lowerMsg.includes('ratio') ||
+      lowerMsg.includes('beginner') ||
+      lowerMsg.includes('explain')
+    ) {
       return this.chatEducationalResponse(message);
     }
 
@@ -253,7 +299,8 @@ export class MockGenerator {
           direction: 'BUY',
           reasoning: `${loser.symbol} has declined ${Math.abs(loser.changePercentage ?? 0).toFixed(1)}% today to LKR ${(loser.price ?? 0).toFixed(2)}, potentially offering a buying opportunity if fundamentals remain intact. Volume of ${(loser.volume ?? 0).toLocaleString()} shares suggests active interest.`,
           rationale_simple: `${loser.symbol} dropped today, which may make it worth considering at a lower price — but research the company before investing.`,
-          confidence: Math.abs(loser.changePercentage ?? 0) > 5 ? 'MEDIUM' : 'LOW',
+          confidence:
+            Math.abs(loser.changePercentage ?? 0) > 5 ? 'MEDIUM' : 'LOW',
           shariahStatus: stock.shariah_status,
           suggested_holding_period: '12–24 months',
           generatedAt: now,
@@ -266,7 +313,7 @@ export class MockGenerator {
       const stock = await this.stockRepository.findOne({
         where: { symbol: gainer.symbol },
       });
-      if (stock) {
+      if (stock && stock.shariah_status !== 'non_compliant') {
         signals.push({
           symbol: gainer.symbol,
           name: gainer.name || stock.name,
@@ -287,7 +334,11 @@ export class MockGenerator {
       const stock = await this.stockRepository.findOne({
         where: { symbol: active.symbol },
       });
-      if (stock && (active.changePercentage ?? 0) < -1) {
+      if (
+        stock &&
+        stock.shariah_status !== 'non_compliant' &&
+        (active.changePercentage ?? 0) < -1
+      ) {
         signals.push({
           symbol: active.symbol,
           name: active.name || stock.name,
@@ -303,10 +354,10 @@ export class MockGenerator {
       }
     }
 
-    // If no signals generated from live data, use some stocks from DB
+    // If no signals generated from live data, use some compliant stocks from DB
     if (signals.length === 0) {
       const sampleStocks = await this.stockRepository.find({
-        where: { is_active: true },
+        where: { is_active: true, shariah_status: Not('non_compliant') },
         take: 5,
         order: { symbol: 'ASC' },
       });
@@ -337,7 +388,9 @@ export class MockGenerator {
 
   // --- Private helpers ---
 
-  private determineSentiment(data: MarketData): 'BULLISH' | 'BEARISH' | 'NEUTRAL' | 'CAUTIOUS' {
+  private determineSentiment(
+    data: MarketData,
+  ): 'BULLISH' | 'BEARISH' | 'NEUTRAL' | 'CAUTIOUS' {
     const aspiPercent = data.aspiPercent ?? 0;
     if (aspiPercent > 1) return 'BULLISH';
     if (aspiPercent < -1) return 'BEARISH';
@@ -355,7 +408,9 @@ export class MockGenerator {
     const aspiDir = (data.aspiPercent ?? 0) >= 0 ? 'rising' : 'falling';
     const snpVal = data.snpValue?.toFixed(2) ?? 'N/A';
     const snpChg = data.snpPercent?.toFixed(2) ?? '0.00';
-    const vol = data.volume ? (data.volume / 1_000_000).toFixed(1) + 'M' : 'N/A';
+    const vol = data.volume
+      ? (data.volume / 1_000_000).toFixed(1) + 'M'
+      : 'N/A';
     const turnover = data.turnover
       ? 'LKR ' + (data.turnover / 1_000_000).toFixed(1) + 'M'
       : 'N/A';
@@ -365,12 +420,14 @@ export class MockGenerator {
     const topGainers = data.gainers.slice(0, 2);
     const topLosers = data.losers.slice(0, 2);
 
-    const bestSector = data.sectors.length > 0
-      ? [...data.sectors].sort((a, b) => b.percentage - a.percentage)[0]
-      : null;
-    const worstSector = data.sectors.length > 0
-      ? [...data.sectors].sort((a, b) => a.percentage - b.percentage)[0]
-      : null;
+    const bestSector =
+      data.sectors.length > 0
+        ? [...data.sectors].sort((a, b) => b.percentage - a.percentage)[0]
+        : null;
+    const worstSector =
+      data.sectors.length > 0
+        ? [...data.sectors].sort((a, b) => a.percentage - b.percentage)[0]
+        : null;
 
     let summary = `**Market Update — ${dateStr}**\n\n`;
     summary += `The Colombo Stock Exchange saw ${(data.aspiPercent ?? 0) >= 0 ? 'positive' : 'negative'} movement today with the ASPI ${aspiDir} ${Math.abs(Number(aspiChg))}% to ${aspiVal} points. `;
@@ -389,9 +446,10 @@ export class MockGenerator {
         summary += ` with ${bestSector.name} leading gains at +${bestSector.percentage.toFixed(2)}%`;
       }
       summary += `. ${gainerCount} stocks advanced against ${loserCount} decliners`;
-      summary += (data.aspiPercent ?? 0) > 0.5
-        ? ', suggesting healthy market participation.\n\n'
-        : '.\n\n';
+      summary +=
+        (data.aspiPercent ?? 0) > 0.5
+          ? ', suggesting healthy market participation.\n\n'
+          : '.\n\n';
     }
 
     if (topGainers.length > 0) {
@@ -456,8 +514,12 @@ export class MockGenerator {
       );
     }
 
-    risks.push('Global risk-off sentiment could impact emerging market flows including Sri Lanka');
-    risks.push('USD/LKR volatility remains a key concern for import-heavy sectors');
+    risks.push(
+      'Global risk-off sentiment could impact emerging market flows including Sri Lanka',
+    );
+    risks.push(
+      'USD/LKR volatility remains a key concern for import-heavy sectors',
+    );
 
     if (data.turnover && data.turnover < 500_000_000) {
       risks.push(
@@ -465,19 +527,28 @@ export class MockGenerator {
       );
     }
 
-    risks.push('Upcoming CBSL monetary policy review could shift interest rate expectations');
+    risks.push(
+      'Upcoming CBSL monetary policy review could shift interest rate expectations',
+    );
 
     return risks.slice(0, 4);
   }
 
-  private buildSectorOutlook(data: MarketData): { sector: string; outlook: string }[] {
+  private buildSectorOutlook(
+    data: MarketData,
+  ): { sector: string; outlook: string }[] {
     if (data.sectors.length === 0) {
       return [
-        { sector: 'Market', outlook: 'Insufficient sector data available — monitor for updates' },
+        {
+          sector: 'Market',
+          outlook: 'Insufficient sector data available — monitor for updates',
+        },
       ];
     }
 
-    const sorted = [...data.sectors].sort((a, b) => b.percentage - a.percentage);
+    const sorted = [...data.sectors].sort(
+      (a, b) => b.percentage - a.percentage,
+    );
     return sorted.slice(0, 5).map((s) => ({
       sector: s.name,
       outlook:
@@ -505,7 +576,8 @@ export class MockGenerator {
   }
 
   private determineConfidence(stock: Stock): 'HIGH' | 'MEDIUM' | 'LOW' {
-    if (Number(stock.market_cap) > 50_000_000_000 && stock.last_price) return 'HIGH';
+    if (Number(stock.market_cap) > 50_000_000_000 && stock.last_price)
+      return 'HIGH';
     if (Number(stock.market_cap) > 5_000_000_000) return 'MEDIUM';
     return 'LOW';
   }
@@ -519,7 +591,8 @@ export class MockGenerator {
     const price = Number(stock.last_price) || 0;
     const change = Number(stock.change_percent) || 0;
     const mcap = Number(stock.market_cap) || 0;
-    const mcapStr = mcap > 0 ? `LKR ${(mcap / 1_000_000_000).toFixed(2)}B` : 'N/A';
+    const mcapStr =
+      mcap > 0 ? `LKR ${(mcap / 1_000_000_000).toFixed(2)}B` : 'N/A';
 
     let analysis = `**${stock.name} (${stock.symbol})**\n\n`;
     analysis += `${stock.name} is a ${stock.sector || 'diversified'} sector company listed on the Colombo Stock Exchange.\n\n`;
@@ -534,20 +607,22 @@ export class MockGenerator {
     }
 
     analysis += `**Fundamentals:** Market capitalization stands at ${mcapStr}. `;
-    analysis += mcap > 50_000_000_000
-      ? 'As a large-cap stock, it offers relatively better liquidity compared to smaller CSE-listed names.'
-      : mcap > 5_000_000_000
-        ? 'As a mid-cap stock, it offers a balance of growth potential and reasonable liquidity.'
-        : 'As a smaller-cap stock, liquidity may be limited — exercise caution with position sizing.';
+    analysis +=
+      mcap > 50_000_000_000
+        ? 'As a large-cap stock, it offers relatively better liquidity compared to smaller CSE-listed names.'
+        : mcap > 5_000_000_000
+          ? 'As a mid-cap stock, it offers a balance of growth potential and reasonable liquidity.'
+          : 'As a smaller-cap stock, liquidity may be limited — exercise caution with position sizing.';
     analysis += '\n\n';
 
     if (sectorPerf) {
       analysis += `**Sector Context:** The ${sectorPerf.name} sector ${sectorPerf.percentage >= 0 ? 'gained' : 'declined'} ${Math.abs(sectorPerf.percentage).toFixed(2)}% today. `;
-      analysis += change > sectorPerf.percentage
-        ? `${stock.symbol} is outperforming its sector.`
-        : change < sectorPerf.percentage
-          ? `${stock.symbol} is underperforming relative to its sector peers.`
-          : `${stock.symbol} is trading in line with its sector.`;
+      analysis +=
+        change > sectorPerf.percentage
+          ? `${stock.symbol} is outperforming its sector.`
+          : change < sectorPerf.percentage
+            ? `${stock.symbol} is underperforming relative to its sector peers.`
+            : `${stock.symbol} is trading in line with its sector.`;
       analysis += '\n\n';
     }
 
@@ -577,13 +652,19 @@ export class MockGenerator {
     }
 
     if (stock.shariah_status === 'pending_review') {
-      risks.push('Shariah compliance status pending — may change upon financial review');
+      risks.push(
+        'Shariah compliance status pending — may change upon financial review',
+      );
     }
 
-    risks.push('CSE market-wide risk from foreign investor outflows or macro shocks');
+    risks.push(
+      'CSE market-wide risk from foreign investor outflows or macro shocks',
+    );
 
     if (stock.sector) {
-      risks.push(`${stock.sector} sector-specific regulatory or competitive risks`);
+      risks.push(
+        `${stock.sector} sector-specific regulatory or competitive risks`,
+      );
     }
 
     return risks.slice(0, 4);
@@ -602,10 +683,16 @@ export class MockGenerator {
     }
 
     if (data.gainers.length > 0) {
-      response += `**Top Gainers:** ${data.gainers.slice(0, 3).map((g) => `${g.symbol} (+${(g.changePercentage ?? 0).toFixed(1)}%)`).join(', ')}\n`;
+      response += `**Top Gainers:** ${data.gainers
+        .slice(0, 3)
+        .map((g) => `${g.symbol} (+${(g.changePercentage ?? 0).toFixed(1)}%)`)
+        .join(', ')}\n`;
     }
     if (data.losers.length > 0) {
-      response += `**Top Losers:** ${data.losers.slice(0, 3).map((l) => `${l.symbol} (${(l.changePercentage ?? 0).toFixed(1)}%)`).join(', ')}\n\n`;
+      response += `**Top Losers:** ${data.losers
+        .slice(0, 3)
+        .map((l) => `${l.symbol} (${(l.changePercentage ?? 0).toFixed(1)}%)`)
+        .join(', ')}\n\n`;
     }
 
     response += `Market turnover is ${data.turnover ? `LKR ${(data.turnover / 1_000_000).toFixed(1)}M` : 'not yet available'} with ${data.volume ? `${(data.volume / 1_000_000).toFixed(1)}M shares` : 'volume data pending'}.\n\n`;
@@ -634,11 +721,14 @@ export class MockGenerator {
       return `Sector data is not currently available. This usually refreshes during market hours. Check back when the market is open for real-time sector performance data.`;
     }
 
-    const sorted = [...data.sectors].sort((a, b) => b.percentage - a.percentage);
+    const sorted = [...data.sectors].sort(
+      (a, b) => b.percentage - a.percentage,
+    );
     let response = `Here's today's **sector performance** on the CSE:\n\n`;
 
     for (const sector of sorted.slice(0, 8)) {
-      const icon = sector.percentage > 0 ? '🟢' : sector.percentage < 0 ? '🔴' : '⚪';
+      const icon =
+        sector.percentage > 0 ? '🟢' : sector.percentage < 0 ? '🔴' : '⚪';
       response += `${icon} **${sector.name}:** ${sector.percentage > 0 ? '+' : ''}${sector.percentage.toFixed(2)}% (${sector.indexValue.toFixed(2)})\n`;
     }
 

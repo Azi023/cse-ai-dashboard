@@ -6,6 +6,7 @@ import { MockGenerator } from './mock-generator';
 import { SYSTEM_PROMPTS } from './prompts';
 import { RedisService } from '../cse-data/redis.service';
 import { SignalTrackingService } from '../signal-tracking/signal-tracking.service';
+import { AiContextBridgeService } from '../strategy-engine/ai-context-bridge.service';
 import { MacroData, Stock } from '../../entities';
 import * as fs from 'fs';
 import * as path from 'path';
@@ -92,6 +93,7 @@ export class AiEngineService {
     private readonly mockGenerator: MockGenerator,
     private readonly redisService: RedisService,
     private readonly signalTrackingService: SignalTrackingService,
+    private readonly aiContextBridge: AiContextBridgeService,
     @InjectRepository(MacroData)
     private readonly macroDataRepo: Repository<MacroData>,
     @InjectRepository(Stock)
@@ -461,6 +463,15 @@ export class AiEngineService {
       }
     }
 
+    // Filter out non-compliant stocks — we never want to signal these
+    const beforeFilter = signals.length;
+    signals = signals.filter((s) => s.shariahStatus !== 'non_compliant');
+    if (signals.length < beforeFilter) {
+      this.logger.log(
+        `Filtered out ${beforeFilter - signals.length} non-compliant signals`,
+      );
+    }
+
     // 4. Auto-record fresh signals for outcome tracking (once per day)
     void this.autoRecordSignals(signals);
 
@@ -485,6 +496,8 @@ export class AiEngineService {
       let recorded = 0;
       for (const signal of signals) {
         if (!signal.currentPrice || signal.currentPrice <= 0) continue;
+        // Only record compliant signals — non-compliant are irrelevant to our trading universe
+        if (signal.shariahStatus === 'non_compliant') continue;
         try {
           await this.signalTrackingService.recordSignal({
             symbol: signal.symbol,
@@ -668,10 +681,11 @@ export class AiEngineService {
       const marketData = await this.mockGenerator.getMarketData();
       const macroContext = await this.buildMacroContext();
       const performanceContext = await this.buildPerformanceContext();
+      const strategyContext = await this.aiContextBridge.buildStrategyContext();
       const compliantSymbols = await this.getCompliantSymbols();
       const shariahContext =
         compliantSymbols.length > 0
-          ? `\n\nShariah-compliant stocks (MUST include at least 50% of signals from these): ${compliantSymbols.join(', ')}`
+          ? `\n\nShariah-compliant stocks (ONLY generate signals for stocks from this list — do not include any non-compliant stocks): ${compliantSymbols.join(', ')}`
           : '';
 
       const response = await client.messages.create({
@@ -681,7 +695,7 @@ export class AiEngineService {
         messages: [
           {
             role: 'user',
-            content: `Respond with ONLY a raw JSON array. No markdown. No backticks. No explanation. Start your response with [ and end with ].\n\nGenerate trading signals based on today's CSE market data. Each element must match this exact structure:\n{\n  "symbol": "SYMBOL.N0000",\n  "name": "Company Name",\n  "currentPrice": 100.00,\n  "direction": "BUY|HOLD|SELL",\n  "reasoning": "2-3 technical sentences for analysts",\n  "rationale_simple": "One plain-English sentence a beginner investor can understand",\n  "confidence": "HIGH|MEDIUM|LOW",\n  "shariahStatus": "compliant|non_compliant|pending_review",\n  "suggested_holding_period": "e.g. 12-24 months, 3-6 months, Short-term: 1-4 weeks"\n}\n\nIMPORTANT: Never say 'buy' or 'sell' as direct instructions. Use 'worth considering' or 'may warrant attention'. Always include suggested_holding_period and rationale_simple.${shariahContext}${performanceContext}\n\nMarket data:\n${JSON.stringify(marketData, null, 2)}${macroContext}`,
+            content: `Respond with ONLY a raw JSON array. No markdown. No backticks. No explanation. Start your response with [ and end with ].\n\nGenerate trading signals based on today's CSE market data. Each element must match this exact structure:\n{\n  "symbol": "SYMBOL.N0000",\n  "name": "Company Name",\n  "currentPrice": 100.00,\n  "direction": "BUY|HOLD|SELL",\n  "reasoning": "2-3 technical sentences for analysts",\n  "rationale_simple": "One plain-English sentence a beginner investor can understand",\n  "confidence": "HIGH|MEDIUM|LOW",\n  "shariahStatus": "compliant|non_compliant|pending_review",\n  "suggested_holding_period": "e.g. 12-24 months, 3-6 months, Short-term: 1-4 weeks"\n}\n\nIMPORTANT: Never say 'buy' or 'sell' as direct instructions. Use 'worth considering' or 'may warrant attention'. Always include suggested_holding_period and rationale_simple.${shariahContext}${performanceContext}${strategyContext}\n\nMarket data:\n${JSON.stringify(marketData, null, 2)}${macroContext}`,
           },
         ],
       });

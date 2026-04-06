@@ -130,12 +130,18 @@ export class SignalTrackingService {
   }
 
   /**
-   * Get performance statistics.
+   * Get performance statistics (Shariah-compliant signals only).
    */
   async getPerformanceStats(): Promise<PerformanceStats> {
-    const all = await this.signalRepository.find({
-      order: { signal_date: 'DESC' },
-    });
+    const [rawSignals, nonCompliantStocks] = await Promise.all([
+      this.signalRepository.find({ order: { signal_date: 'DESC' } }),
+      this.stockRepository.find({
+        where: { shariah_status: 'non_compliant' },
+        select: ['symbol'],
+      }),
+    ]);
+    const nonCompliantSet = new Set(nonCompliantStocks.map((s) => s.symbol));
+    const all = rawSignals.filter((s) => !nonCompliantSet.has(s.symbol));
 
     const completed = all.filter((s) => s.outcome !== 'pending');
     const pending = all.filter((s) => s.outcome === 'pending');
@@ -228,12 +234,22 @@ export class SignalTrackingService {
   }
 
   /**
-   * Get all signal records.
+   * Get signal records (Shariah-compliant only).
    */
   async getAllSignals(limit = 100): Promise<SignalRecord[]> {
-    return this.signalRepository.find({
-      order: { signal_date: 'DESC' },
-      take: limit,
-    });
+    const [rawSignals, nonCompliantStocks] = await Promise.all([
+      this.signalRepository.find({
+        order: { signal_date: 'DESC' },
+        take: limit * 2, // fetch extra to account for filtered records
+      }),
+      this.stockRepository.find({
+        where: { shariah_status: 'non_compliant' },
+        select: ['symbol'],
+      }),
+    ]);
+    const nonCompliantSet = new Set(nonCompliantStocks.map((s) => s.symbol));
+    return rawSignals
+      .filter((s) => !nonCompliantSet.has(s.symbol))
+      .slice(0, limit);
   }
 }
