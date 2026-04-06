@@ -9,6 +9,9 @@
  *   POST /api/trade/approve/:id → PENDING → APPROVED
  *   POST /api/trade/execute/:id → APPROVED → EXECUTING → EXECUTED/FAILED
  *   POST /api/trade/reject/:id  → PENDING/APPROVED → REJECTED
+ *
+ * Auth: JWT required for all endpoints. POST endpoints also require X-API-Key.
+ * GET endpoints marked @Public() temporarily while login flow is validated.
  */
 
 import {
@@ -25,12 +28,9 @@ import { Throttle } from '@nestjs/throttler';
 import { OrderService, CreateTradeQueueDto } from './order.service';
 import { SAFETY_RAILS } from './safety-rails';
 import { ApiKeyGuard } from '../../common/guards/api-key.guard';
+import { Public } from '../auth/public.decorator';
 
-/**
- * GET endpoints on this controller are public (dashboard display).
- * POST write endpoints require X-API-Key — approve/reject/execute are irreversible.
- */
-@Throttle({ default: { ttl: 60_000, limit: 20 } }) // 20 reads/min for polling
+@Throttle({ default: { ttl: 60_000, limit: 20 } })
 @Controller('trade')
 export class TradeController {
   constructor(private readonly orderService: OrderService) {}
@@ -38,6 +38,7 @@ export class TradeController {
   /**
    * GET /api/trade/queue — All trade queue entries (newest first, max 100).
    */
+  @Public()
   @Get('queue')
   async getQueue() {
     return this.orderService.getOrderHistory();
@@ -46,6 +47,7 @@ export class TradeController {
   /**
    * GET /api/trade/queue/pending — Only PENDING_APPROVAL entries.
    */
+  @Public()
   @Get('queue/pending')
   async getPendingQueue() {
     return this.orderService.getActiveOrders();
@@ -54,8 +56,7 @@ export class TradeController {
   /**
    * POST /api/trade/queue — Manually add to trade queue.
    * Runs all safety checks. Requires SAFETY_RAILS.ENABLED = true.
-   *
-   * Body: { symbol, direction, quantity, limit_price, strategy_id?, reasoning? }
+   * Protected: JWT + API key required.
    */
   @UseGuards(ApiKeyGuard)
   @Throttle({ default: { ttl: 60_000, limit: 5 } })
@@ -72,7 +73,6 @@ export class TradeController {
     const limitPrice = Number(dto.limit_price);
     const orderAmountLkr = quantity * limitPrice;
 
-    // Run safety checks (returns result even if ENABLED=false, for visibility)
     const safetyResult = await this.orderService.runSafetyChecks({
       symbol,
       quantity,
@@ -80,7 +80,6 @@ export class TradeController {
       orderAmountLkr,
     });
 
-    // If kill switch is off, return the check results but don't create entry
     if (!SAFETY_RAILS.ENABLED) {
       return {
         created: false,
@@ -97,7 +96,6 @@ export class TradeController {
       };
     }
 
-    // All checks passed — create the order with safety result embedded
     const order = await this.orderService.createPendingOrder({
       symbol,
       order_type: 'LIMIT_BUY',
@@ -117,7 +115,7 @@ export class TradeController {
 
   /**
    * POST /api/trade/approve/:id — Approve a PENDING order.
-   * Protected: approval is irreversible and enables execution.
+   * Protected: JWT + API key required. Approval is irreversible.
    */
   @UseGuards(ApiKeyGuard)
   @Throttle({ default: { ttl: 60_000, limit: 5 } })
@@ -128,7 +126,7 @@ export class TradeController {
 
   /**
    * POST /api/trade/reject/:id — Reject a PENDING or APPROVED order.
-   * Protected: same guard level as approve for symmetry.
+   * Protected: JWT + API key required.
    */
   @UseGuards(ApiKeyGuard)
   @Throttle({ default: { ttl: 60_000, limit: 5 } })
@@ -139,7 +137,7 @@ export class TradeController {
 
   /**
    * POST /api/trade/execute/:id — Execute an APPROVED order via Playwright.
-   * Protected: launches a live browser and places a real order on ATrad.
+   * Protected: JWT + API key required. Places a real order on ATrad.
    */
   @UseGuards(ApiKeyGuard)
   @Throttle({ default: { ttl: 60_000, limit: 5 } })
@@ -150,8 +148,8 @@ export class TradeController {
 
   /**
    * GET /api/trade/safety-status — Check current safety rails status.
-   * Public: safe read-only config, useful for the dashboard kill-switch indicator.
    */
+  @Public()
   @Get('safety-status')
   getSafetyStatus() {
     return {

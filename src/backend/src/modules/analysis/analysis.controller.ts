@@ -3,7 +3,9 @@ import { AnalysisService } from './analysis.service';
 import { TechnicalService } from './technical.service';
 import { RiskService } from './risk.service';
 import { LearningService } from './learning.service';
+import { Public } from '../auth/public.decorator';
 
+@Public()
 @Controller('analysis')
 export class AnalysisController {
   constructor(

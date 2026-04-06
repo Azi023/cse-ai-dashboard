@@ -9,7 +9,9 @@ import {
   ParseIntPipe,
 } from '@nestjs/common';
 import { JourneyService } from './journey.service';
+import { Public } from '../auth/public.decorator';
 
+@Public()
 @Controller('journey')
 export class JourneyController {
   constructor(private readonly journeyService: JourneyService) {}

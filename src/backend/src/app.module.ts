@@ -7,6 +7,8 @@ import { HttpModule } from '@nestjs/axios';
 import { ThrottlerModule, ThrottlerGuard } from '@nestjs/throttler';
 import { APP_GUARD } from '@nestjs/core';
 import { AppController } from './app.controller';
+import { AuthModule } from './modules/auth/auth.module';
+import { JwtAuthGuard } from './modules/auth/jwt-auth.guard';
 import { AppService } from './app.service';
 import { CseDataModule } from './modules/cse-data/cse-data.module';
 import { StocksModule } from './modules/stocks/stocks.module';
@@ -85,6 +87,9 @@ import { StrategyEngineModule } from './modules/strategy-engine/strategy-engine.
     // HTTP client
     HttpModule,
 
+    // Authentication
+    AuthModule,
+
     // Feature modules
     CseDataModule,
     StocksModule,
@@ -118,6 +123,11 @@ import { StrategyEngineModule } from './modules/strategy-engine/strategy-engine.
     {
       provide: APP_GUARD,
       useClass: ThrottlerGuard,
+    },
+    // Apply JwtAuthGuard globally — routes must opt out with @Public()
+    {
+      provide: APP_GUARD,
+      useClass: JwtAuthGuard,
     },
   ],
 })

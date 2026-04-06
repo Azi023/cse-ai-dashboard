@@ -1,6 +1,15 @@
-import { Controller, Get, Query, ParseFloatPipe, DefaultValuePipe, Optional } from '@nestjs/common';
+import {
+  Controller,
+  Get,
+  Query,
+  ParseFloatPipe,
+  DefaultValuePipe,
+  Optional,
+} from '@nestjs/common';
 import { ZakatService } from './zakat.service';
+import { Public } from '../auth/public.decorator';
 
+@Public()
 @Controller('zakat')
 export class ZakatController {
   constructor(private readonly zakatService: ZakatService) {}

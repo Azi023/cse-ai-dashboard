@@ -1,6 +1,16 @@
-import { Controller, Get, Post, Body, Query, DefaultValuePipe, ParseIntPipe } from '@nestjs/common';
+import {
+  Controller,
+  Get,
+  Post,
+  Body,
+  Query,
+  DefaultValuePipe,
+  ParseIntPipe,
+} from '@nestjs/common';
 import { SignalTrackingService } from './signal-tracking.service';
+import { Public } from '../auth/public.decorator';
 
+@Public()
 @Controller('signal-tracking')
 export class SignalTrackingController {
   constructor(private readonly signalTrackingService: SignalTrackingService) {}

@@ -9,7 +9,9 @@ import {
   ParseIntPipe,
 } from '@nestjs/common';
 import { PortfolioService } from './portfolio.service';
+import { Public } from '../auth/public.decorator';
 
+@Public()
 @Controller('portfolio')
 export class PortfolioController {
   constructor(private readonly portfolioService: PortfolioService) {}

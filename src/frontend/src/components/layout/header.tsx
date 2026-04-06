@@ -31,10 +31,12 @@ import {
   ClipboardList,
   Crosshair,
   Scale,
+  LogOut,
 } from 'lucide-react';
 import { marketApi, alertsApi } from '@/lib/api';
 import { useDisplayMode } from '@/contexts/display-mode-context';
 import { useTheme } from '@/contexts/theme-context';
+import { useAuth } from '@/contexts/auth-context';
 
 function checkMarketHours(): boolean {
   const now = new Date();
@@ -190,6 +192,7 @@ export function Header() {
   const pathname = usePathname();
   const { mode, toggleMode } = useDisplayMode();
   const { theme, toggleTheme } = useTheme();
+  const { logout } = useAuth();
   const [mounted, setMounted] = useState(false);
   const [currentTime, setCurrentTime] = useState<Date | null>(null);
   const [marketOpen, setMarketOpen] = useState(false);
@@ -413,6 +416,15 @@ export function Header() {
               </span>
             )}
           </Link>
+
+          {/* Logout */}
+          <button
+            onClick={() => logout()}
+            className="flex items-center justify-center h-8 w-8 rounded-md border text-muted-foreground hover:text-red-400 hover:border-red-400/30 hover:bg-red-400/5 transition-all duration-150"
+            title="Sign out"
+          >
+            <LogOut className="h-3.5 w-3.5" />
+          </button>
 
           {/* Mobile menu toggle */}
           <button

@@ -1,8 +1,11 @@
 import axios from 'axios';
 
+const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4101/api';
+
 const api = axios.create({
-  baseURL: process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4101/api',
+  baseURL: API_BASE,
   timeout: 60000,
+  withCredentials: true, // Send httpOnly cookies with every request
 });
 
 // Attach API key to every request so protected endpoints (approve/execute/cancel/create)
@@ -14,6 +17,66 @@ api.interceptors.request.use((config) => {
   }
   return config;
 });
+
+// Auto-refresh: on 401, attempt token refresh once, then retry the original request.
+// If refresh also fails, redirect to login.
+let isRefreshing = false;
+let failedQueue: Array<{
+  resolve: (value: unknown) => void;
+  reject: (reason: unknown) => void;
+}> = [];
+
+function processQueue(error: unknown) {
+  failedQueue.forEach((prom) => {
+    if (error) {
+      prom.reject(error);
+    } else {
+      prom.resolve(undefined);
+    }
+  });
+  failedQueue = [];
+}
+
+api.interceptors.response.use(
+  (response) => response,
+  async (error) => {
+    const originalRequest = error.config;
+
+    // Only intercept 401s, skip if already retried or if this IS the refresh call
+    if (
+      error.response?.status !== 401 ||
+      originalRequest._retry ||
+      originalRequest.url?.includes('/auth/')
+    ) {
+      return Promise.reject(error);
+    }
+
+    if (isRefreshing) {
+      // Queue requests while refresh is in-flight
+      return new Promise((resolve, reject) => {
+        failedQueue.push({ resolve, reject });
+      }).then(() => api(originalRequest));
+    }
+
+    originalRequest._retry = true;
+    isRefreshing = true;
+
+    try {
+      await axios.post(`${API_BASE}/auth/refresh`, {}, { withCredentials: true });
+      processQueue(null);
+      return api(originalRequest);
+    } catch (refreshError) {
+      processQueue(refreshError);
+      // Refresh failed — session expired, redirect to login
+      if (typeof window !== 'undefined') {
+        window.location.href = '/login';
+      }
+      return Promise.reject(refreshError);
+    } finally {
+      isRefreshing = false;
+    }
+  },
+);
 
 export interface Stock {
   id: number;

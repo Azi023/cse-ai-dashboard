@@ -13,7 +13,9 @@ import { DemoCronService } from './demo-cron.service';
 import { CreateDemoAccountDto } from './dto/create-demo-account.dto';
 import { CreateDemoTradeDto } from './dto/create-demo-trade.dto';
 import { DemoQueryDto } from './dto/demo-query.dto';
+import { Public } from '../modules/auth/public.decorator';
 
+@Public()
 @Controller('demo')
 export class DemoController {
   constructor(

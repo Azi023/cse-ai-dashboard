@@ -1,6 +1,16 @@
-import { Controller, Get, Post, Body, Query, ParseIntPipe, DefaultValuePipe } from '@nestjs/common';
+import {
+  Controller,
+  Get,
+  Post,
+  Body,
+  Query,
+  ParseIntPipe,
+  DefaultValuePipe,
+} from '@nestjs/common';
 import { TradeOpportunitiesService } from './trade-opportunities.service';
+import { Public } from '../auth/public.decorator';
 
+@Public()
 @Controller('trade-opportunities')
 export class TradeOpportunitiesController {
   constructor(private readonly service: TradeOpportunitiesService) {}
@@ -14,7 +24,8 @@ export class TradeOpportunitiesController {
   /** GET /api/trade-opportunities/risk-summary */
   @Get('risk-summary')
   getRiskSummary(
-    @Query('accountId', new DefaultValuePipe(1), ParseIntPipe) accountId: number,
+    @Query('accountId', new DefaultValuePipe(1), ParseIntPipe)
+    accountId: number,
   ) {
     return this.service.getRiskSummary(accountId);
   }

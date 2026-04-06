@@ -1,6 +1,16 @@
-import { Controller, Get, Post, Param, Query, DefaultValuePipe, ParseIntPipe } from '@nestjs/common';
+import {
+  Controller,
+  Get,
+  Post,
+  Param,
+  Query,
+  DefaultValuePipe,
+  ParseIntPipe,
+} from '@nestjs/common';
 import { CbslDataService } from './cbsl-data.service';
+import { Public } from '../auth/public.decorator';
 
+@Public()
 @Controller('macro')
 export class CbslDataController {
   constructor(private readonly cbslDataService: CbslDataService) {}

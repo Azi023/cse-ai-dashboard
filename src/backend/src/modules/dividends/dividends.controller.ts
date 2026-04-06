@@ -1,6 +1,16 @@
-import { Controller, Get, Post, Delete, Param, Body, ParseIntPipe } from '@nestjs/common';
+import {
+  Controller,
+  Get,
+  Post,
+  Delete,
+  Param,
+  Body,
+  ParseIntPipe,
+} from '@nestjs/common';
 import { DividendsService } from './dividends.service';
+import { Public } from '../auth/public.decorator';
 
+@Public()
 @Controller('dividends')
 export class DividendsController {
   constructor(private readonly dividendsService: DividendsService) {}

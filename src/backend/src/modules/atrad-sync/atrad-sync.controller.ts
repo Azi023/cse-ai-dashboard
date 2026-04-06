@@ -12,11 +12,12 @@ import { Throttle } from '@nestjs/throttler';
 import { ATradSyncService } from './atrad-sync.service';
 import { OrderService, CreateOrderDto } from './order.service';
 import { ApiKeyGuard } from '../../common/guards/api-key.guard';
+import { Public } from '../auth/public.decorator';
 
 /**
  * ATrad Sync controller.
- * GET (read) endpoints are public — the dashboard displays sync status and holdings.
- * POST (write) endpoints require X-API-Key — they launch live browser automation.
+ * GET (read) endpoints marked @Public() temporarily while login flow is validated.
+ * POST (write) endpoints require JWT + X-API-Key — they launch live browser automation.
  */
 @Controller('atrad')
 export class ATradSyncController {
@@ -29,7 +30,7 @@ export class ATradSyncController {
 
   /**
    * POST /api/atrad/sync — Trigger a manual ATrad portfolio sync.
-   * Protected: launches Playwright, logs into live broker account.
+   * Protected: JWT + API key. Launches Playwright, logs into live broker account.
    */
   @UseGuards(ApiKeyGuard)
   @Throttle({ default: { ttl: 60_000, limit: 5 } })
@@ -39,6 +40,7 @@ export class ATradSyncController {
   }
 
   /** GET /api/atrad/status — Last sync time, success/failure, holdings count. */
+  @Public()
   @Get('status')
   async getStatus() {
     const status = await this.atradSyncService.getLastSyncStatus();
@@ -51,14 +53,15 @@ export class ATradSyncController {
 
   /**
    * GET /api/atrad/sync-status — Detailed health check with staleness indicator.
-   * Returns: { lastSync, balance, holdingsCount, isStale, nextScheduledSync }
    */
+  @Public()
   @Get('sync-status')
   async getSyncStatus() {
     return this.atradSyncService.getSyncStatus();
   }
 
   /** GET /api/atrad/holdings — Latest synced holdings from ATrad. */
+  @Public()
   @Get('holdings')
   async getHoldings() {
     return await this.atradSyncService.getHoldings();
@@ -66,7 +69,7 @@ export class ATradSyncController {
 
   /**
    * POST /api/atrad/test — Test ATrad login (validates credentials).
-   * Protected: tests live credentials against the broker platform.
+   * Protected: JWT + API key. Tests live credentials against broker platform.
    */
   @UseGuards(ApiKeyGuard)
   @Throttle({ default: { ttl: 60_000, limit: 3 } })
@@ -79,20 +82,22 @@ export class ATradSyncController {
 
   /**
    * GET /api/atrad/orders — List all orders.
-   * Query: ?status=PENDING|APPROVED|EXECUTED|FAILED|CANCELLED (optional filter)
    */
+  @Public()
   @Get('orders')
   async listOrders(@Query('status') status?: string) {
     return this.orderService.getOrderHistory(status);
   }
 
-  /** GET /api/atrad/orders/active — Active orders only (PENDING + APPROVED + EXECUTING). */
+  /** GET /api/atrad/orders/active — Active orders only. */
+  @Public()
   @Get('orders/active')
   async getActiveOrders() {
     return this.orderService.getActiveOrders();
   }
 
   /** GET /api/atrad/orders/:id — Get a single order by ID. */
+  @Public()
   @Get('orders/:id')
   async getOrder(@Param('id', ParseIntPipe) id: number) {
     return this.orderService.getOrderById(id);
@@ -100,7 +105,7 @@ export class ATradSyncController {
 
   /**
    * POST /api/atrad/orders — Create a new pending order.
-   * Protected: modifies order state.
+   * Protected: JWT + API key.
    */
   @UseGuards(ApiKeyGuard)
   @Throttle({ default: { ttl: 60_000, limit: 5 } })
@@ -111,7 +116,7 @@ export class ATradSyncController {
 
   /**
    * POST /api/atrad/orders/:id/approve — Approve a pending order.
-   * Protected: approval enables live execution path.
+   * Protected: JWT + API key. Approval enables live execution path.
    */
   @UseGuards(ApiKeyGuard)
   @Throttle({ default: { ttl: 60_000, limit: 5 } })
@@ -122,7 +127,7 @@ export class ATradSyncController {
 
   /**
    * POST /api/atrad/orders/:id/execute — Execute an approved order via Playwright.
-   * Protected: places a real order on the live broker platform.
+   * Protected: JWT + API key. Places a real order on the live broker platform.
    */
   @UseGuards(ApiKeyGuard)
   @Throttle({ default: { ttl: 60_000, limit: 5 } })
@@ -133,7 +138,7 @@ export class ATradSyncController {
 
   /**
    * POST /api/atrad/orders/:id/cancel — Cancel a pending or approved order.
-   * Protected: modifies order state.
+   * Protected: JWT + API key.
    */
   @UseGuards(ApiKeyGuard)
   @Throttle({ default: { ttl: 60_000, limit: 5 } })

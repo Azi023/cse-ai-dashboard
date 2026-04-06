@@ -2,7 +2,9 @@ import { Controller, Get } from '@nestjs/common';
 import { InjectDataSource } from '@nestjs/typeorm';
 import { DataSource } from 'typeorm';
 import { RedisService } from './modules/cse-data/redis.service';
+import { Public } from './modules/auth/public.decorator';
 
+@Public()
 @Controller()
 export class AppController {
   constructor(
@@ -41,19 +43,26 @@ export class AppController {
     let lastDailyDigest: string | null = null;
     try {
       // Probe well-known keys to confirm Redis connectivity and surface freshness
-      const tradeSummary = await this.redisService.getJson<{ fetchedAt?: string }>('cse:trade_summary');
+      const tradeSummary = await this.redisService.getJson<{
+        fetchedAt?: string;
+      }>('cse:trade_summary');
       lastMarketPoll = tradeSummary?.fetchedAt ?? null;
 
-      const atradSync = await this.redisService.getJson<{ syncedAt?: string }>('atrad:last_sync');
+      const atradSync = await this.redisService.getJson<{ syncedAt?: string }>(
+        'atrad:last_sync',
+      );
       lastAtradSync = atradSync?.syncedAt ?? null;
 
-      const digest = await this.redisService.get('notifications:last_digest_at');
+      const digest = await this.redisService.get(
+        'notifications:last_digest_at',
+      );
       lastDailyDigest = digest ?? null;
     } catch {
       redisStatus = 'error';
     }
 
-    const overall = dbStatus === 'ok' && redisStatus === 'ok' ? 'ok' : 'degraded';
+    const overall =
+      dbStatus === 'ok' && redisStatus === 'ok' ? 'ok' : 'degraded';
 
     return {
       status: overall,

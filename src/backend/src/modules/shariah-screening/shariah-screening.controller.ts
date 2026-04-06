@@ -1,6 +1,8 @@
 import { Controller, Get, Post, Param } from '@nestjs/common';
 import { ShariahScreeningService } from './shariah-screening.service';
+import { Public } from '../auth/public.decorator';
 
+@Public()
 @Controller('shariah')
 export class ShariahScreeningController {
   constructor(

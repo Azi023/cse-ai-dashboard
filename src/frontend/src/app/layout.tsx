@@ -1,9 +1,10 @@
 import type { Metadata, Viewport } from 'next';
 import { Inter, JetBrains_Mono } from 'next/font/google';
 import './globals.css';
-import { Header } from '@/components/layout/header';
+import { AppShell } from '@/components/layout/app-shell';
 import { DisplayModeProvider } from '@/contexts/display-mode-context';
 import { ThemeProvider } from '@/contexts/theme-context';
+import { AuthProvider } from '@/contexts/auth-context';
 
 const inter = Inter({
   variable: '--font-sans',
@@ -43,14 +44,15 @@ export default function RootLayout({
     <html lang="en" className={`dark ${inter.variable} ${jetbrainsMono.variable}`} suppressHydrationWarning>
       <body className="antialiased">
         <ThemeProvider>
-          <DisplayModeProvider>
-            <div className="min-h-screen bg-background">
-              <Header />
-              <main className="container max-w-[1400px] mx-auto px-4 py-6">
-                {children}
-              </main>
-            </div>
-          </DisplayModeProvider>
+          <AuthProvider>
+            <DisplayModeProvider>
+              <div className="min-h-screen bg-background">
+                <AppShell>
+                  {children}
+                </AppShell>
+              </div>
+            </DisplayModeProvider>
+          </AuthProvider>
         </ThemeProvider>
       </body>
     </html>

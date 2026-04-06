@@ -2,6 +2,7 @@ import { NestFactory } from '@nestjs/core';
 import { ValidationPipe } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import helmet from 'helmet';
+import cookieParser from 'cookie-parser';
 import { AppModule } from './app.module';
 
 async function bootstrap(): Promise<void> {
@@ -12,6 +13,9 @@ async function bootstrap(): Promise<void> {
 
   // HTTP security headers (XSS, clickjacking, MIME sniffing, HSTS, etc.)
   app.use(helmet());
+
+  // Parse cookies for JWT httpOnly auth
+  app.use(cookieParser());
 
   // Enable CORS for frontend only
   app.enableCors({

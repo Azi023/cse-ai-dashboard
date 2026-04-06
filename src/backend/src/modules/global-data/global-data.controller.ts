@@ -1,6 +1,8 @@
 import { Controller, Get, Post, Body, Query } from '@nestjs/common';
 import { GlobalDataService } from './global-data.service';
+import { Public } from '../auth/public.decorator';
 
+@Public()
 @Controller('global')
 export class GlobalDataController {
   constructor(private readonly globalDataService: GlobalDataService) {}

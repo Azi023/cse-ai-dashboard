@@ -5,9 +5,11 @@ import { SignalGeneratorService } from './signal-generator.service';
 import { StrategySelectorService } from './strategy-selector.service';
 import { StrategyBacktesterService } from './strategy-backtester.service';
 import { STRATEGY_REGISTRY } from './strategy-registry';
+import { Public } from '../auth/public.decorator';
 
 // ---------------------------------------------------------------------------
 
+@Public()
 @Controller('strategy-engine')
 export class StrategyEngineController {
   private readonly logger = new Logger(StrategyEngineController.name);

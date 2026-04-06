@@ -19,7 +19,9 @@ import { CompanyFinancialsService } from './company-financials.service';
 import { CseFundamentalsScraperService } from './cse-fundamentals-scraper.service';
 import { CseHistoricalBackfillService } from './cse-historical-backfill.service';
 import { ApiKeyGuard } from '../../common/guards/api-key.guard';
+import { Public } from '../auth/public.decorator';
 
+@Public()
 @Controller('financials')
 export class CompanyFinancialsController {
   constructor(

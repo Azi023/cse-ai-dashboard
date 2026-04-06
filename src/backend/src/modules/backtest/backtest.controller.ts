@@ -1,6 +1,8 @@
 import { Controller, Get, Query } from '@nestjs/common';
 import { BacktestService, BacktestResult } from './backtest.service';
+import { Public } from '../auth/public.decorator';
 
+@Public()
 @Controller('backtest')
 export class BacktestController {
   constructor(private readonly backtestService: BacktestService) {}

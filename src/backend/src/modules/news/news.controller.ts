@@ -1,7 +1,16 @@
-import { Controller, Get, Post, Param, Query, ParseIntPipe } from '@nestjs/common';
+import {
+  Controller,
+  Get,
+  Post,
+  Param,
+  Query,
+  ParseIntPipe,
+} from '@nestjs/common';
 import { NewsService } from './news.service';
 import { NewsItem } from '../../entities';
+import { Public } from '../auth/public.decorator';
 
+@Public()
 @Controller('news')
 export class NewsController {
   constructor(private readonly newsService: NewsService) {}
@@ -24,14 +33,14 @@ export class NewsController {
   }
 
   @Get('sources')
-  async getSources(): Promise<Array<{ name: string; label: string; count: number }>> {
+  async getSources(): Promise<
+    Array<{ name: string; label: string; count: number }>
+  > {
     return this.newsService.getSources();
   }
 
   @Get('high-impact')
-  async getHighImpact(
-    @Query('hours') hours?: string,
-  ): Promise<NewsItem[]> {
+  async getHighImpact(@Query('hours') hours?: string): Promise<NewsItem[]> {
     return this.newsService.getHighImpactNews(hours ? parseInt(hours, 10) : 24);
   }
 

@@ -1,6 +1,8 @@
 import { Controller, Get, Param, Query, Res, Header } from '@nestjs/common';
 import { ExportService } from './export.service';
+import { Public } from '../auth/public.decorator';
 
+@Public()
 @Controller('export')
 export class ExportController {
   constructor(private readonly exportService: ExportService) {}

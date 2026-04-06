@@ -8,7 +8,9 @@ import {
 } from '@nestjs/common';
 import { StocksService } from './stocks.service';
 import { Stock, DailyPrice, Announcement } from '../../entities';
+import { Public } from '../auth/public.decorator';
 
+@Public()
 @Controller()
 export class StocksController {
   constructor(private readonly stocksService: StocksService) {}
@@ -111,7 +113,14 @@ export class StocksController {
     @Query('from') from?: string,
     @Query('to') to?: string,
   ): Promise<Announcement[]> {
-    return this.stocksService.getAnnouncements(type, limit, symbol, category, from, to);
+    return this.stocksService.getAnnouncements(
+      type,
+      limit,
+      symbol,
+      category,
+      from,
+      to,
+    );
   }
 
   /**

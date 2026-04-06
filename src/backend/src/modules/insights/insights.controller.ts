@@ -4,7 +4,9 @@ import {
   DynamicInsight,
   MarketExplainer,
 } from './insights.service';
+import { Public } from '../auth/public.decorator';
 
+@Public()
 @Controller('insights')
 export class InsightsController {
   constructor(private readonly insightsService: InsightsService) {}

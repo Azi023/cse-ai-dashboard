@@ -1,6 +1,18 @@
-import { Controller, Get, Post, Delete, Param, Body, Query, ParseIntPipe, DefaultValuePipe } from '@nestjs/common';
+import {
+  Controller,
+  Get,
+  Post,
+  Delete,
+  Param,
+  Body,
+  Query,
+  ParseIntPipe,
+  DefaultValuePipe,
+} from '@nestjs/common';
 import { AlertsService } from './alerts.service';
+import { Public } from '../auth/public.decorator';
 
+@Public()
 @Controller('alerts')
 export class AlertsController {
   constructor(private readonly alertsService: AlertsService) {}
@@ -28,7 +40,13 @@ export class AlertsController {
   /** POST /api/alerts — Create a new alert. */
   @Post()
   async createAlert(
-    @Body() body: { symbol: string; alert_type: string; title: string; threshold?: number },
+    @Body()
+    body: {
+      symbol: string;
+      alert_type: string;
+      title: string;
+      threshold?: number;
+    },
   ) {
     return this.alertsService.createAlert(body);
   }

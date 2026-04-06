@@ -4,7 +4,9 @@ import { NotificationsService } from './notifications.service';
 import { DailyDigest } from '../../entities/daily-digest.entity';
 import { WeeklyBrief } from '../../entities/weekly-brief.entity';
 import { ApiKeyGuard } from '../../common/guards/api-key.guard';
+import { Public } from '../auth/public.decorator';
 
+@Public()
 @Controller('notifications')
 export class NotificationsController {
   constructor(private readonly notificationsService: NotificationsService) {}
