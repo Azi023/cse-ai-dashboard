@@ -21,8 +21,8 @@ async function bootstrap(): Promise<void> {
   app.enableCors({
     origin: [
       'http://localhost:4100',
-      'http://195.201.33.87',
       'https://csedash.xyz',
+      'https://www.csedash.xyz',
     ],
     methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
     credentials: true,
