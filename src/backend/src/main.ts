@@ -19,7 +19,11 @@ async function bootstrap(): Promise<void> {
 
   // Enable CORS for frontend only
   app.enableCors({
-    origin: ['http://localhost:4100', 'http://195.201.33.87'],
+    origin: [
+      'http://localhost:4100',
+      'http://195.201.33.87',
+      'https://csedash.xyz',
+    ],
     methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
     credentials: true,
     allowedHeaders: ['Content-Type', 'Authorization', 'X-API-Key'],

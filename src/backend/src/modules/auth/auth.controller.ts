@@ -18,10 +18,9 @@ import { Public } from './public.decorator';
 import { JwtAuthGuard } from './jwt-auth.guard';
 
 // Cookie config — centralized so login and logout stay in sync
-// TODO: Set secure: true when HTTPS is enabled
 const COOKIE_OPTIONS = {
   httpOnly: true,
-  secure: false, // MUST be true once HTTPS is enabled
+  secure: true,
   sameSite: 'lax' as const,
   path: '/',
 };
@@ -41,8 +40,10 @@ export class AuthController {
     @Body() loginDto: LoginDto,
     @Res({ passthrough: true }) res: Response,
   ): Promise<{ success: true }> {
-    const { accessToken, refreshToken } =
-      await this.authService.validateLogin(loginDto.username, loginDto.password);
+    const { accessToken, refreshToken } = await this.authService.validateLogin(
+      loginDto.username,
+      loginDto.password,
+    );
 
     res.cookie('access_token', accessToken, {
       ...COOKIE_OPTIONS,
