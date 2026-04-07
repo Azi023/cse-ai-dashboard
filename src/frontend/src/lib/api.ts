@@ -8,16 +8,6 @@ const api = axios.create({
   withCredentials: true, // Send httpOnly cookies with every request
 });
 
-// Attach API key to every request so protected endpoints (approve/execute/cancel/create)
-// can verify the caller is the dashboard owner and not a random public request.
-api.interceptors.request.use((config) => {
-  const apiKey = process.env.NEXT_PUBLIC_API_KEY;
-  if (apiKey) {
-    config.headers['X-API-Key'] = apiKey;
-  }
-  return config;
-});
-
 // Auto-refresh: on 401, attempt token refresh once, then retry the original request.
 // If refresh also fails, redirect to login.
 let isRefreshing = false;
