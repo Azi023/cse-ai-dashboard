@@ -60,10 +60,10 @@ import { StrategyEngineModule } from './modules/strategy-engine/strategy-engine.
       }),
     }),
 
-    // Rate limiting — global defaults; override per-endpoint with @Throttle()
+    // Rate limiting — "default" name must match @Throttle({ default: { ... } }) overrides
     ThrottlerModule.forRoot([
       {
-        name: 'global',
+        name: 'default',
         ttl: 60_000, // 1 minute window
         limit: 100, // 100 req/min per IP (general endpoints)
       },
