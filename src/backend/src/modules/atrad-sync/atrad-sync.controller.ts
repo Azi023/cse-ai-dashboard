@@ -39,6 +39,34 @@ export class ATradSyncController {
     return this.atradSyncService.triggerSync();
   }
 
+  /**
+   * POST /api/atrad/sync-push — Receive scraped ATrad data from local machine.
+   * Protected: JWT required. Used when VPS can't reach ATrad directly (IP block).
+   * Local script runs Playwright, scrapes data, POSTs it here.
+   */
+  @Throttle({ default: { ttl: 60_000, limit: 5 } })
+  @Post('sync-push')
+  async syncPush(
+    @Body()
+    body: {
+      holdings: Array<{
+        symbol: string;
+        companyName: string;
+        quantity: number;
+        avgPrice: number;
+        currentPrice: number;
+        marketValue: number;
+        unrealizedPL: number;
+        unrealizedPLPct: number;
+      }>;
+      buyingPower: number;
+      accountValue: number;
+      cashBalance: number;
+    },
+  ) {
+    return this.atradSyncService.processPushedSync(body);
+  }
+
   /** GET /api/atrad/status — Last sync time, success/failure, holdings count. */
   @Public()
   @Get('status')

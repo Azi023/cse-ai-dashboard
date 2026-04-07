@@ -37,47 +37,14 @@ export class ATradSyncService {
     private readonly redisService: RedisService,
   ) {}
 
-  // ── Cron: Every 15 minutes during market hours (9:30 AM - 2:30 PM SLT, Mon-Fri) ──
-  // Hour range 4-8 is UTC: 04:00 UTC = 9:30 SLT, 09:00 UTC = 14:30 SLT
-  // No timeZone option — cron expression uses UTC hours directly.
-  @Cron('0 */15 4-8 * * 1-5', {
-    name: 'atrad-sync-market-hours',
-  })
-  async handleMarketHoursSync(): Promise<void> {
-    // Check if within market hours (9:30-14:30 SLT)
-    const now = new Date();
-    const sltHour =
-      now.getUTCHours() + 5 + (now.getUTCMinutes() + 30 >= 60 ? 1 : 0);
-    const sltMinute = (now.getUTCMinutes() + 30) % 60;
-    const sltTime = sltHour * 100 + sltMinute;
-
-    if (sltTime < 930 || sltTime > 1430) {
-      return;
-    }
-
-    this.logger.log('Cron: ATrad market hours sync triggered');
-    await this.triggerSync();
-  }
-
-  // ── Cron: Once at 2:38 PM SLT (post-close, before daily snapshot at 2:40 PM) ──
-  // 9:08 AM UTC = 2:38 PM SLT — ensures ATrad data is fresh for portfolio snapshot
-  @Cron('8 9 * * 1-5', {
-    name: 'atrad-sync-post-close',
-  })
-  async handlePostCloseSync(): Promise<void> {
-    this.logger.log('Cron: ATrad post-close sync triggered (2:38 PM SLT)');
-    await this.triggerSync();
-  }
-
-  // ── Cron: Once at 3:00 PM SLT (post-market) ──
-  @Cron('0 0 15 * * 1-5', {
-    name: 'atrad-sync-post-market',
-    timeZone: 'Asia/Colombo',
-  })
-  async handlePostMarketSync(): Promise<void> {
-    this.logger.log('Cron: ATrad post-market sync triggered (3:00 PM SLT)');
-    await this.triggerSync();
-  }
+  // ── ATrad VPS crons DISABLED ──
+  // ATrad blocks Hetzner datacenter IPs (403 Forbidden).
+  // Sync now runs from local WSL2 machine via POST /api/atrad/sync-push.
+  // Keeping cron methods commented for reference:
+  //
+  // @Cron('0 */15 4-8 * * 1-5')  — market hours (every 15min)
+  // @Cron('8 9 * * 1-5')         — post-close (2:38 PM SLT)
+  // @Cron('0 0 15 * * 1-5')      — post-market (3:00 PM SLT)
 
   /**
    * Trigger a manual or scheduled ATrad portfolio sync.
@@ -193,6 +160,69 @@ export class ATradSyncService {
     } finally {
       this.isSyncing = false;
     }
+  }
+
+  /**
+   * Process portfolio data pushed from local machine.
+   * Same reconcile + cache logic as triggerSync, but skips Playwright entirely.
+   */
+  async processPushedSync(data: {
+    holdings: ATradHolding[];
+    buyingPower: number;
+    accountValue: number;
+    cashBalance: number;
+  }): Promise<ATradPortfolio> {
+    this.logger.log(
+      `Processing pushed sync: ${data.holdings.length} holdings, ` +
+        `cash=${data.cashBalance}, buyingPower=${data.buyingPower}`,
+    );
+
+    const result: ATradPortfolio = {
+      holdings: data.holdings,
+      buyingPower: data.buyingPower,
+      accountValue: data.accountValue,
+      cashBalance: data.cashBalance,
+      lastSynced: new Date(),
+      syncSuccess: true,
+    };
+
+    this.lastSyncResult = result;
+
+    // Reconcile portfolio in DB
+    if (result.holdings.length > 0) {
+      await this.reconcilePortfolio(result.holdings);
+    }
+
+    // Detect deposits via buying power changes
+    await this.detectDeposit(result.buyingPower);
+
+    // Cache in Redis (24h TTL)
+    await this.redisService.setJson(
+      'atrad:last_sync',
+      {
+        ...result,
+        syncedAt: result.lastSynced.toISOString(),
+        lastSynced: result.lastSynced.toISOString(),
+      },
+      86400,
+    );
+
+    await this.redisService.setJson(
+      'atrad:balance',
+      {
+        cashBalance: result.cashBalance,
+        buyingPower: result.buyingPower,
+        accountValue: result.accountValue,
+        syncedAt: result.lastSynced.toISOString(),
+      },
+      86400,
+    );
+
+    await this.redisService.setJson('atrad:holdings', result.holdings, 86400);
+
+    this.logger.log('Pushed sync processed and cached successfully');
+
+    return result;
   }
 
   /**
