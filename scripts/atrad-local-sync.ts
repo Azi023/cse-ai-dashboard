@@ -143,78 +143,168 @@ async function scrapeATrad(): Promise<{
     await page.waitForLoadState('networkidle');
     console.log('Logged in, waiting for dashboard...');
 
-    // Wait for Dojo to render
-    await page.waitForTimeout(3000);
+    // Wait for Dojo to finish rendering the top menu bar — the Client
+    // menu item is what we need for navigation. Dojo can take 5-15s to
+    // hydrate the menu, especially on cold sessions.
+    try {
+      await page.waitForSelector('#dijit_PopupMenuBarItem_4', {
+        state: 'attached',
+        timeout: 30000,
+      });
+    } catch {
+      console.log(
+        'Client menu never rendered within 30s — dashboard layout may have changed',
+      );
+    }
+    await page.waitForTimeout(1500);
 
-    // Navigate to Account Summary
+    // Navigate to Account Summary.
+    //
+    // IMPORTANT: Dojo assigns widget IDs like `dijit_MenuItem_41` at creation
+    // time and they drift between sessions depending on render order. Find
+    // menu items by their visible text instead — stable across sessions.
     console.log('Opening Account Summary...');
-    const menuItem = await page.$('#dijit_PopupMenuBarItem_4');
-    if (menuItem) {
-      await menuItem.click();
-      await page.waitForTimeout(1000);
-      const accountSummary = await page.$('#dijit_MenuItem_41');
-      if (accountSummary) await accountSummary.click();
-      await page.waitForTimeout(2000);
+    const clientMenu = page.locator('[id^="dijit_PopupMenuBarItem_"]', {
+      hasText: /^Client$/i,
+    });
+    if ((await clientMenu.count()) > 0) {
+      await clientMenu.first().click();
+      await page.waitForTimeout(1500);
+
+      const accountSummary = page.locator('[id^="dijit_MenuItem_"]', {
+        hasText: /Account Summary/i,
+      });
+      if ((await accountSummary.count()) > 0) {
+        await accountSummary.first().click();
+      }
+
+      // Poll for cell to render + populate (Dojo + XHR, can take 5-15s).
+      for (let i = 0; i < 15; i++) {
+        const ready = await page.evaluate(() => {
+          const el = document.querySelector('#txtAccSumaryCashBalance');
+          return !!el && (el.textContent ?? '').trim().length > 0;
+        });
+        if (ready) break;
+        await page.waitForTimeout(2000);
+      }
     }
 
-    // Read cash balance and buying power
-    let cashBalance = 0;
-    let buyingPower = 0;
+    // Read cash balance, buying power, portfolio value.
+    // NOTE: ATrad switched these fields from <input> to <TD> at some point
+    // in 2026 — read via textContent, not inputValue.
+    const readTextAsNumber = async (sel: string): Promise<number> => {
+      const el = await page.$(sel);
+      if (!el) return 0;
+      const raw = (await el.textContent())?.trim() ?? '';
+      const n = parseFloat(raw.replace(/,/g, ''));
+      return isFinite(n) ? n : 0;
+    };
+
+    let cashBalance = await readTextAsNumber('#txtAccSumaryCashBalance');
+    let buyingPower = await readTextAsNumber('#txtAccSumaryBuyingPowr');
+    let portfolioMarketValue = await readTextAsNumber(
+      '#txtAccSumaryTMvaluePortfolio',
+    );
     let accountValue = 0;
-
-    const cashEl = await page.$('#txtAccSumaryCashBalance');
-    if (cashEl) {
-      const raw = await cashEl.inputValue();
-      cashBalance = parseFloat(raw.replace(/,/g, '')) || 0;
-    }
-
-    const bpEl = await page.$('#txtAccSumaryBuyingPowr');
-    if (bpEl) {
-      const raw = await bpEl.inputValue();
-      buyingPower = parseFloat(raw.replace(/,/g, '')) || 0;
-    }
 
     // Filter implausible values (account number in adjacent field)
     if (cashBalance > 50_000_000) cashBalance = 0;
     if (buyingPower > 50_000_000) buyingPower = 0;
+    if (portfolioMarketValue > 50_000_000) portfolioMarketValue = 0;
 
-    console.log(`Cash: ${cashBalance}, Buying Power: ${buyingPower}`);
+    console.log(
+      `Cash: ${cashBalance}, BP: ${buyingPower}, PortfolioMV: ${portfolioMarketValue}`,
+    );
 
-    // Fetch holdings via API
+    // Fetch holdings via API.
+    // ATrad's client account format varies ("128229LI0" vs "128229-LI-0"
+    // vs empty which returns the session default). Try progressively
+    // broader queries until one returns portfolios.
     const holdings: ATradHolding[] = [];
     try {
-      const holdingsResp = await page.evaluate(async () => {
-        const resp = await fetch('/atsweb/client', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-          body: 'action=getStockHolding&exchange=CSE&broker=FWS&stockHoldingClientAccount=128229LI0&stockHoldingSecurity=&format=json',
-        });
-        return resp.text();
-      });
-
-      // ATrad returns single-quoted JSON — normalize
-      const normalizedJson = holdingsResp.replace(/'/g, '"');
-      const parsed = JSON.parse(normalizedJson);
-
-      if (parsed.portfolios && Array.isArray(parsed.portfolios)) {
-        for (const p of parsed.portfolios) {
-          holdings.push({
-            symbol: p.securityId || p.security || 'UNKNOWN',
-            companyName: p.securityName || p.security || '',
-            quantity: parseFloat(p.quantity) || 0,
-            avgPrice: parseFloat(p.avgPrice) || 0,
-            currentPrice: parseFloat(p.lastTradedPrice) || 0,
-            marketValue: parseFloat(p.marketValue) || 0,
-            unrealizedPL: parseFloat(p.unrealizedPL) || 0,
-            unrealizedPLPct: parseFloat(p.unrealizedPLPercentage) || 0,
+      const accountVariants = ['', '128229LI0', '128229-LI-0'];
+      let holdingsResp = '';
+      for (const acct of accountVariants) {
+        holdingsResp = await page.evaluate(async (acctInner) => {
+          const resp = await fetch('/atsweb/client', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+            body: `action=getStockHolding&exchange=CSE&broker=FWS&stockHoldingClientAccount=${encodeURIComponent(acctInner)}&stockHoldingSecurity=&format=json`,
           });
+          return resp.text();
+        }, acct);
+        const probe = holdingsResp.replace(/'/g, '"');
+        if (/portfolios"?\s*:\s*\[\s*\{/.test(probe)) break;
+      }
+
+      const normalizedJson = holdingsResp.replace(/'/g, '"');
+      let parsed: unknown = {};
+      try {
+        parsed = JSON.parse(normalizedJson);
+      } catch {
+        /* non-JSON response — treat as no holdings */
+      }
+
+      // Try every known response shape. ATrad has used several over time:
+      //   { portfolios: [...] }            — legacy
+      //   { code, description, data: { portfolios: [...] } }  — current
+      //   { clientHoldings: [...] } / { holdings: [...] }
+      const candidates: unknown[] = [];
+      const p = parsed as Record<string, unknown>;
+      if (Array.isArray(p.portfolios)) candidates.push(...p.portfolios);
+      if (Array.isArray(p.clientHoldings)) candidates.push(...p.clientHoldings);
+      if (Array.isArray(p.holdings)) candidates.push(...p.holdings);
+
+      const data = p.data as Record<string, unknown> | unknown[] | undefined;
+      if (Array.isArray(data)) {
+        candidates.push(...data);
+      } else if (data && typeof data === 'object') {
+        for (const v of Object.values(data)) {
+          if (Array.isArray(v)) candidates.push(...v);
         }
+      }
+
+      for (const item of candidates) {
+        const h = item as Record<string, unknown>;
+        const symbol =
+          (h.securityId as string) ||
+          (h.security as string) ||
+          (h.symbol as string) ||
+          'UNKNOWN';
+        const qty = parseFloat(String(h.quantity ?? h.qty ?? 0));
+        if (qty === 0) continue;
+        holdings.push({
+          symbol,
+          companyName:
+            (h.securityName as string) ||
+            (h.security as string) ||
+            (h.name as string) ||
+            '',
+          quantity: qty,
+          avgPrice: parseFloat(String(h.avgPrice ?? h.averagePrice ?? 0)),
+          currentPrice: parseFloat(
+            String(h.lastTradedPrice ?? h.currentPrice ?? h.price ?? 0),
+          ),
+          marketValue: parseFloat(String(h.marketValue ?? 0)),
+          unrealizedPL: parseFloat(String(h.unrealizedPL ?? 0)),
+          unrealizedPLPct: parseFloat(
+            String(h.unrealizedPLPercentage ?? h.unrealizedPLPct ?? 0),
+          ),
+        });
       }
 
       accountValue =
         holdings.reduce((sum, h) => sum + h.marketValue, 0) + cashBalance;
     } catch (err) {
-      console.log('Could not fetch holdings via API, continuing with balance only');
+      console.log(
+        'Could not fetch holdings via API, continuing with balance only',
+      );
+    }
+
+    // Fallback: if holdings API returned nothing, derive account value
+    // from the UI-scraped portfolio market value cell.
+    if (holdings.length === 0 && portfolioMarketValue > 0) {
+      accountValue = portfolioMarketValue + cashBalance;
     }
 
     console.log(`Holdings: ${holdings.length}, Account Value: ${accountValue}`);
