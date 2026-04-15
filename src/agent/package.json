@@ -1,0 +1,21 @@
+{
+  "name": "cse-agent",
+  "version": "1.0.0",
+  "description": "WSL2 execution agent for CSE AI Dashboard — ATrad browser automation",
+  "private": true,
+  "scripts": {
+    "build": "tsc",
+    "start": "node dist/index.js",
+    "dev": "tsx src/index.ts",
+    "recon": "tsx scripts/recon.ts"
+  },
+  "dependencies": {
+    "playwright": "^1.58.0",
+    "dotenv": "^16.4.0"
+  },
+  "devDependencies": {
+    "typescript": "^5.5.0",
+    "tsx": "^4.19.0",
+    "@types/node": "^22.0.0"
+  }
+}
