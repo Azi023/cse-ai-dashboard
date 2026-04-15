@@ -60,32 +60,42 @@ jobs:
       - name: Trust VPS host key
         run: |
           mkdir -p ~/.ssh
-          ssh-keyscan -H "${{ secrets.VPS_HOST }}" >> ~/.ssh/known_hosts 2>/dev/null
-          chmod 600 ~/.ssh/known_hosts
+          chmod 700 ~/.ssh
+          # Try ssh-keyscan but don't fail the job if it's flaky — the
+          # subsequent ssh/rsync calls use StrictHostKeyChecking=accept-new
+          # which auto-trusts on first connect and errors on later mismatch.
+          ssh-keyscan -T 10 "${{ secrets.VPS_HOST }}" >> ~/.ssh/known_hosts 2>&1 || \
+            echo "ssh-keyscan failed; relying on accept-new on first connect"
+          chmod 600 ~/.ssh/known_hosts 2>/dev/null || true
 
       - name: rsync backend src
         run: |
           rsync -az --delete \
+            -e "ssh -o StrictHostKeyChecking=accept-new -o UserKnownHostsFile=$HOME/.ssh/known_hosts" \
             --exclude node_modules --exclude dist --exclude .env --exclude '*.log' \
             src/backend/src/ \
             ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }}:${{ secrets.VPS_APP_DIR }}/src/backend/src/
           rsync -az \
+            -e "ssh -o StrictHostKeyChecking=accept-new -o UserKnownHostsFile=$HOME/.ssh/known_hosts" \
             src/backend/package.json src/backend/package-lock.json \
             ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }}:${{ secrets.VPS_APP_DIR }}/src/backend/
 
       - name: rsync frontend src
         run: |
           rsync -az --delete \
+            -e "ssh -o StrictHostKeyChecking=accept-new -o UserKnownHostsFile=$HOME/.ssh/known_hosts" \
             --exclude node_modules --exclude .next --exclude .env --exclude '*.log' \
             src/frontend/src/ \
             ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }}:${{ secrets.VPS_APP_DIR }}/src/frontend/src/
           rsync -az \
+            -e "ssh -o StrictHostKeyChecking=accept-new -o UserKnownHostsFile=$HOME/.ssh/known_hosts" \
             src/frontend/package.json src/frontend/package-lock.json \
             ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }}:${{ secrets.VPS_APP_DIR }}/src/frontend/
 
       - name: Remote build + restart
         run: |
-          ssh ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }} '
+          ssh -o StrictHostKeyChecking=accept-new \
+            ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }} '
             set -e
             cd ${{ secrets.VPS_APP_DIR }}/src/backend
             npm ci --omit=dev=false
