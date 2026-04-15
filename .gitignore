@@ -62,6 +62,9 @@ data/tracking/
 # Script output — ATrad HTML dumps and screenshots contain brokerage account data
 scripts/*.html
 scripts/*.png
+src/data/atrad-sync/*.png
+src/data/atrad-sync/*.html
+src/agent/screenshots/
 
 # Excel files with financial data (KPI trackers, etc.)
 *.xlsx
