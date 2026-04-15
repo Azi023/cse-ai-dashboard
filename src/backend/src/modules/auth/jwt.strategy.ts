@@ -27,21 +27,20 @@ function extractJwtFromCookieOrHeader(req: Request): string | null {
 @Injectable()
 export class JwtStrategy extends PassportStrategy(Strategy, 'jwt') {
   constructor(private readonly authService: AuthService) {
-    const secret =
-      `access:${process.env.API_SECRET_KEY}` || 'access:fallback-dev-secret-change-me';
+    // MUST match auth.service.ts::getAccessSecret — any divergence produces
+    // silent 401s on every JWT-guarded endpoint.
+    const base = process.env.API_SECRET_KEY || 'fallback-dev-secret-change-me';
 
     super({
       jwtFromRequest: extractJwtFromCookieOrHeader,
       ignoreExpiration: false,
-      secretOrKey: secret,
+      secretOrKey: `access:${base}`,
     });
   }
 
-  validate(payload: {
-    sub: string;
+  validate(payload: { sub: string; username: string; type: string }): {
     username: string;
-    type: string;
-  }): { username: string } {
+  } {
     const user = this.authService.validateAccessToken(payload as any);
     if (!user) {
       throw new UnauthorizedException('Invalid token');
