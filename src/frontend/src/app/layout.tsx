@@ -1,5 +1,5 @@
 import type { Metadata, Viewport } from 'next';
-import { Inter, JetBrains_Mono } from 'next/font/google';
+import { Geist, Geist_Mono } from 'next/font/google';
 import './globals.css';
 import { AppShell } from '@/components/layout/app-shell';
 import { DisplayModeProvider } from '@/contexts/display-mode-context';
@@ -7,13 +7,15 @@ import { ThemeProvider } from '@/contexts/theme-context';
 import { AuthProvider } from '@/contexts/auth-context';
 import { ShariahModeProvider } from '@/contexts/shariah-mode-context';
 
-const inter = Inter({
+// Geist — Vercel's typeface, shipped via Google Fonts. Distinctive,
+// geometric, tuned for fintech density. Replaces Inter (too generic).
+const geistSans = Geist({
   variable: '--font-sans',
   subsets: ['latin'],
   display: 'swap',
 });
 
-const jetbrainsMono = JetBrains_Mono({
+const geistMono = Geist_Mono({
   variable: '--font-mono',
   subsets: ['latin'],
   display: 'swap',
@@ -42,7 +44,7 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en" className={`dark ${inter.variable} ${jetbrainsMono.variable}`} suppressHydrationWarning>
+    <html lang="en" className={`dark ${geistSans.variable} ${geistMono.variable}`} suppressHydrationWarning>
       <body className="antialiased">
         <a
           href="#main-content"

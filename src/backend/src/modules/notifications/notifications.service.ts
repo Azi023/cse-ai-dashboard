@@ -13,9 +13,8 @@ import {
 } from '../portfolio/portfolio.service';
 import { AnalysisService } from '../analysis/analysis.service';
 import { AiContextBridgeService } from '../strategy-engine/ai-context-bridge.service';
+import { AiUsageService } from '../ai-engine/ai-usage.service';
 
-const TOKEN_BUDGET_REDIS_KEY = 'ai:tokens';
-const MONTHLY_TOKEN_LIMIT = 500_000;
 const DAILY_DIGEST_PREFIX = 'digest:daily:';
 const WEEKLY_BRIEF_PREFIX = 'brief:weekly:';
 
@@ -47,6 +46,7 @@ export class NotificationsService {
     private readonly configService: ConfigService,
     private readonly analysisService: AnalysisService,
     private readonly aiContextBridge: AiContextBridgeService,
+    private readonly aiUsage: AiUsageService,
   ) {}
 
   // ---------------------------------------------------------------------------
@@ -207,21 +207,15 @@ export class NotificationsService {
     pct_used: number;
     model_note: string;
   }> {
-    const month = new Date().toISOString().slice(0, 7);
-    const raw = await this.redisService.get(
-      `${TOKEN_BUDGET_REDIS_KEY}:${month}`,
-    );
-    const tokensUsed = raw ? parseInt(raw, 10) : 0;
-    const pctUsed = Math.round((tokensUsed / MONTHLY_TOKEN_LIMIT) * 100);
+    const u = await this.aiUsage.usage();
     return {
-      month,
-      tokens_used: tokensUsed,
-      limit: MONTHLY_TOKEN_LIMIT,
-      pct_used: pctUsed,
-      model_note:
-        tokensUsed >= MONTHLY_TOKEN_LIMIT
-          ? 'Budget exceeded — weekly brief switched to Haiku'
-          : 'Budget OK — weekly brief uses Sonnet',
+      month: u.month,
+      tokens_used: u.tokens_used,
+      limit: u.limit,
+      pct_used: u.pct_used,
+      model_note: u.over_budget
+        ? 'Budget exceeded — weekly brief switched to Haiku'
+        : 'Budget OK — weekly brief uses Sonnet',
     };
   }
 
@@ -352,7 +346,7 @@ export class NotificationsService {
       prompt,
       350,
     );
-    await this.trackTokenUsage(tokensUsed);
+    await this.aiUsage.track(tokensUsed);
     return text || null;
   }
 
@@ -368,12 +362,11 @@ export class NotificationsService {
     if (!apiKey) return { content: null, modelUsed: '', tokensUsed: 0 };
 
     // Downgrade model if over monthly budget
-    const { tokens_used } = await this.getMonthlyTokenUsage();
-    const model =
-      tokens_used >= MONTHLY_TOKEN_LIMIT
-        ? 'claude-haiku-4-5-20251001'
-        : 'claude-sonnet-4-6';
-    if (tokens_used >= MONTHLY_TOKEN_LIMIT) {
+    const overBudget = await this.aiUsage.shouldUseHaiku();
+    const model = overBudget
+      ? 'claude-haiku-4-5-20251001'
+      : 'claude-sonnet-4-6';
+    if (overBudget) {
       this.logger.warn(
         'Monthly token budget exceeded — using Haiku for weekly brief',
       );
@@ -482,7 +475,7 @@ export class NotificationsService {
       `Keep it under 450 words. Be specific with numbers. This is educational analysis, not financial advice.\n\nContext:\n${context}`;
 
     const { text, tokensUsed } = await this.callClaude(model, prompt, 900);
-    await this.trackTokenUsage(tokensUsed);
+    await this.aiUsage.track(tokensUsed);
     return { content: text || null, modelUsed: model, tokensUsed };
   }
 
@@ -513,15 +506,6 @@ export class NotificationsService {
       (response.usage?.input_tokens ?? 0) +
       (response.usage?.output_tokens ?? 0);
     return { text, tokensUsed };
-  }
-
-  private async trackTokenUsage(tokens: number): Promise<void> {
-    if (tokens <= 0) return;
-    const month = new Date().toISOString().slice(0, 7);
-    const key = `${TOKEN_BUDGET_REDIS_KEY}:${month}`;
-    const current = await this.redisService.get(key);
-    const updated = (current ? parseInt(current, 10) : 0) + tokens;
-    await this.redisService.set(key, String(updated), 35 * 86_400); // 35d TTL — expires well after month end
   }
 
   private async createNotificationAlert(

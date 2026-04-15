@@ -9,6 +9,7 @@ import { CseDataModule } from '../cse-data/cse-data.module';
 import { PortfolioModule } from '../portfolio/portfolio.module';
 import { AnalysisModule } from '../analysis/analysis.module';
 import { StrategyEngineModule } from '../strategy-engine/strategy-engine.module';
+import { AiEngineModule } from '../ai-engine/ai-engine.module';
 
 @Module({
   imports: [
@@ -23,6 +24,7 @@ import { StrategyEngineModule } from '../strategy-engine/strategy-engine.module'
     PortfolioModule,
     forwardRef(() => AnalysisModule),
     StrategyEngineModule,
+    forwardRef(() => AiEngineModule),
   ],
   controllers: [NotificationsController],
   providers: [NotificationsService],

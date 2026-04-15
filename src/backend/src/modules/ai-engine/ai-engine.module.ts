@@ -2,6 +2,7 @@ import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { AiEngineController } from './ai-engine.controller';
 import { AiEngineService } from './ai-engine.service';
+import { AiUsageService } from './ai-usage.service';
 import { MockGenerator } from './mock-generator';
 import { CseDataModule } from '../cse-data/cse-data.module';
 import { SignalTrackingModule } from '../signal-tracking/signal-tracking.module';
@@ -18,7 +19,7 @@ import { Stock, MacroData } from '../../entities';
     UserPreferencesModule,
   ],
   controllers: [AiEngineController],
-  providers: [AiEngineService, MockGenerator],
-  exports: [AiEngineService],
+  providers: [AiEngineService, AiUsageService, MockGenerator],
+  exports: [AiEngineService, AiUsageService],
 })
 export class AiEngineModule {}

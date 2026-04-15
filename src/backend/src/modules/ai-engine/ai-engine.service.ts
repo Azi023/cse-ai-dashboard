@@ -8,6 +8,7 @@ import { UserPreferencesService } from '../user-preferences/user-preferences.ser
 import { RedisService } from '../cse-data/redis.service';
 import { SignalTrackingService } from '../signal-tracking/signal-tracking.service';
 import { AiContextBridgeService } from '../strategy-engine/ai-context-bridge.service';
+import { AiUsageService } from './ai-usage.service';
 import { MacroData, Stock } from '../../entities';
 import * as fs from 'fs';
 import * as path from 'path';
@@ -100,6 +101,7 @@ export class AiEngineService {
     @InjectRepository(Stock)
     private readonly stockRepo: Repository<Stock>,
     private readonly userPrefsService: UserPreferencesService,
+    private readonly aiUsage: AiUsageService,
   ) {
     const apiKey = this.configService.get<string>('ANTHROPIC_API_KEY');
     this.isLive = !!apiKey && apiKey.length > 0;
@@ -549,8 +551,10 @@ export class AiEngineService {
       const shariahMode = await this.userPrefsService.getDefaultShariahMode();
       const prompts = getPrompts(shariahMode);
 
+      // Daily brief runs on Haiku — reporting task, no extended reasoning
+      // needed. ~6× cheaper than Sonnet for the same output quality.
       const response = await client.messages.create({
-        model: 'claude-sonnet-4-6',
+        model: 'claude-haiku-4-5-20251001',
         max_tokens: 2000,
         system: prompts.dailyBrief,
         messages: [
@@ -560,6 +564,10 @@ export class AiEngineService {
           },
         ],
       });
+      await this.aiUsage.track(
+        (response.usage?.input_tokens ?? 0) +
+          (response.usage?.output_tokens ?? 0),
+      );
 
       const text =
         response.content[0].type === 'text' ? response.content[0].text : '';
@@ -600,8 +608,11 @@ export class AiEngineService {
       const mockResult = await this.mockGenerator.generateStockAnalysis(symbol);
       const marketData = await this.mockGenerator.getMarketData();
 
+      // Stock analysis runs on Haiku — structured summarisation task, no
+      // chain-of-thought needed. Users needing deeper reasoning can use the
+      // Strategy Chat (Sonnet).
       const response = await client.messages.create({
-        model: 'claude-sonnet-4-6',
+        model: 'claude-haiku-4-5-20251001',
         max_tokens: 2000,
         system: getPrompts(await this.userPrefsService.getDefaultShariahMode())
           .stockAnalysis,
@@ -612,6 +623,10 @@ export class AiEngineService {
           },
         ],
       });
+      await this.aiUsage.track(
+        (response.usage?.input_tokens ?? 0) +
+          (response.usage?.output_tokens ?? 0),
+      );
 
       const text =
         response.content[0].type === 'text' ? response.content[0].text : '';
@@ -649,12 +664,18 @@ export class AiEngineService {
         { role: 'user' as const, content: message },
       ];
 
+      // Strategy chat stays on Sonnet — multi-turn reasoning, user-facing
+      // quality matters more than cost per call.
       const response = await client.messages.create({
         model: 'claude-sonnet-4-6',
         max_tokens: 3000,
         system: systemPrompt,
         messages,
       });
+      await this.aiUsage.track(
+        (response.usage?.input_tokens ?? 0) +
+          (response.usage?.output_tokens ?? 0),
+      );
 
       return response.content[0].type === 'text'
         ? response.content[0].text
@@ -701,6 +722,8 @@ export class AiEngineService {
           : ''
         : '\n\nGenerate signals for ALL stocks regardless of sector — banks, insurance, consumer goods, etc. are all eligible.';
 
+      // Signals stay on Sonnet — structured multi-stock reasoning + JSON
+      // validity matters, Haiku misses edge cases here. Runs once/day.
       const response = await client.messages.create({
         model: 'claude-sonnet-4-6',
         max_tokens: 4096,
@@ -712,6 +735,10 @@ export class AiEngineService {
           },
         ],
       });
+      await this.aiUsage.track(
+        (response.usage?.input_tokens ?? 0) +
+          (response.usage?.output_tokens ?? 0),
+      );
 
       const text =
         response.content[0].type === 'text' ? response.content[0].text : '[]';
