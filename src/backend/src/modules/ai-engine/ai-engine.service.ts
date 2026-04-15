@@ -3,7 +3,8 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, In } from 'typeorm';
 import { ConfigService } from '@nestjs/config';
 import { MockGenerator } from './mock-generator';
-import { SYSTEM_PROMPTS } from './prompts';
+import { SYSTEM_PROMPTS, getPrompts } from './prompts';
+import { UserPreferencesService } from '../user-preferences/user-preferences.service';
 import { RedisService } from '../cse-data/redis.service';
 import { SignalTrackingService } from '../signal-tracking/signal-tracking.service';
 import { AiContextBridgeService } from '../strategy-engine/ai-context-bridge.service';
@@ -98,6 +99,7 @@ export class AiEngineService {
     private readonly macroDataRepo: Repository<MacroData>,
     @InjectRepository(Stock)
     private readonly stockRepo: Repository<Stock>,
+    private readonly userPrefsService: UserPreferencesService,
   ) {
     const apiKey = this.configService.get<string>('ANTHROPIC_API_KEY');
     this.isLive = !!apiKey && apiKey.length > 0;
@@ -544,11 +546,13 @@ export class AiEngineService {
       });
 
       const macroContext = await this.buildMacroContext();
+      const shariahMode = await this.userPrefsService.getDefaultShariahMode();
+      const prompts = getPrompts(shariahMode);
 
       const response = await client.messages.create({
         model: 'claude-sonnet-4-6',
         max_tokens: 2000,
-        system: SYSTEM_PROMPTS.dailyBrief,
+        system: prompts.dailyBrief,
         messages: [
           {
             role: 'user',
@@ -599,7 +603,8 @@ export class AiEngineService {
       const response = await client.messages.create({
         model: 'claude-sonnet-4-6',
         max_tokens: 2000,
-        system: SYSTEM_PROMPTS.stockAnalysis,
+        system: getPrompts(await this.userPrefsService.getDefaultShariahMode())
+          .stockAnalysis,
         messages: [
           {
             role: 'user',
@@ -631,7 +636,10 @@ export class AiEngineService {
       });
 
       const marketData = await this.mockGenerator.getMarketData();
-      const systemPrompt = `${SYSTEM_PROMPTS.chat}\n\nCurrent market data:\n${JSON.stringify(marketData, null, 2)}`;
+      const chatPrompt = getPrompts(
+        await this.userPrefsService.getDefaultShariahMode(),
+      ).chat;
+      const systemPrompt = `${chatPrompt}\n\nCurrent market data:\n${JSON.stringify(marketData, null, 2)}`;
 
       const messages = [
         ...history.map((h) => ({
@@ -684,16 +692,19 @@ export class AiEngineService {
       const macroContext = await this.buildMacroContext();
       const performanceContext = await this.buildPerformanceContext();
       const strategyContext = await this.aiContextBridge.buildStrategyContext();
+      const signalShariahMode =
+        await this.userPrefsService.getDefaultShariahMode();
       const compliantSymbols = await this.getCompliantSymbols();
-      const shariahContext =
-        compliantSymbols.length > 0
+      const shariahContext = signalShariahMode
+        ? compliantSymbols.length > 0
           ? `\n\nShariah-compliant stocks (ONLY generate signals for stocks from this list — do not include any non-compliant stocks): ${compliantSymbols.join(', ')}`
-          : '';
+          : ''
+        : '\n\nGenerate signals for ALL stocks regardless of sector — banks, insurance, consumer goods, etc. are all eligible.';
 
       const response = await client.messages.create({
         model: 'claude-sonnet-4-6',
         max_tokens: 4096,
-        system: SYSTEM_PROMPTS.signalGenerator,
+        system: getPrompts(signalShariahMode).signalGenerator,
         messages: [
           {
             role: 'user',

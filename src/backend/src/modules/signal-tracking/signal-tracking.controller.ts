@@ -9,6 +9,7 @@ import {
 } from '@nestjs/common';
 import { SignalTrackingService } from './signal-tracking.service';
 import { Public } from '../auth/public.decorator';
+import { RecordSignalDto } from './dto/record-signal.dto';
 
 @Controller('signal-tracking')
 export class SignalTrackingController {
@@ -32,17 +33,8 @@ export class SignalTrackingController {
 
   /** POST /api/signal-tracking/record — Requires JWT. */
   @Post('record')
-  async recordSignal(
-    @Body()
-    body: {
-      symbol: string;
-      direction: string;
-      confidence: string;
-      price_at_signal: number;
-      reasoning?: string;
-    },
-  ) {
-    return this.signalTrackingService.recordSignal(body);
+  async recordSignal(@Body() dto: RecordSignalDto) {
+    return this.signalTrackingService.recordSignal(dto);
   }
 
   /** POST /api/signal-tracking/check-outcomes — Requires JWT. */

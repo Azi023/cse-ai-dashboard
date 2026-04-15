@@ -6,6 +6,7 @@ import { MockGenerator } from './mock-generator';
 import { CseDataModule } from '../cse-data/cse-data.module';
 import { SignalTrackingModule } from '../signal-tracking/signal-tracking.module';
 import { StrategyEngineModule } from '../strategy-engine/strategy-engine.module';
+import { UserPreferencesModule } from '../user-preferences/user-preferences.module';
 import { Stock, MacroData } from '../../entities';
 
 @Module({
@@ -14,6 +15,7 @@ import { Stock, MacroData } from '../../entities';
     CseDataModule,
     SignalTrackingModule,
     StrategyEngineModule,
+    UserPreferencesModule,
   ],
   controllers: [AiEngineController],
   providers: [AiEngineService, MockGenerator],

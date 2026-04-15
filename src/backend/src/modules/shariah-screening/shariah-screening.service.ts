@@ -58,10 +58,10 @@ export class ShariahScreeningService implements OnModuleInit {
   }
 
   /**
-   * Scheduled Shariah screening: Monday and Thursday at 9:00 AM SLT (3:30 AM UTC).
-   * Runs before market open to refresh status using latest financial data.
+   * Scheduled Shariah screening: Monday and Thursday at 9:00 AM SLT.
+   * VPS timezone is Asia/Colombo — cron times are SLT directly.
    */
-  @Cron('30 3 * * 1,4', { name: 'shariah-screening' })
+  @Cron('0 9 * * 1,4', { name: 'shariah-screening' })
   async runScheduledScreening(): Promise<void> {
     this.logger.log('Scheduled Shariah screening triggered (Mon/Thu)');
     await this.runScreening();

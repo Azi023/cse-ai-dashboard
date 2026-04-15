@@ -221,3 +221,55 @@ Rules:
 - Consider second-order effects (e.g., oil price rise → fuel costs → transport sector → consumer spending)
 - Sri Lanka-specific: factor in the IMF program lens for all government policy news`,
 };
+
+// ── Generic (non-Shariah) prompt overrides ─────────────────────────────────
+// These replace Shariah-specific language when shariahMode is OFF.
+
+const GENERIC_OVERRIDES: Partial<typeof SYSTEM_PROMPTS> = {
+  dailyBrief: SYSTEM_PROMPTS.dailyBrief.replace(
+    '- Shariah-compliant stock movements should be flagged when material',
+    '- Flag notable stock movements across all sectors',
+  ),
+
+  stockAnalysis: SYSTEM_PROMPTS.stockAnalysis
+    .replace(
+      `### Shariah Compliance
+- Current status: Compliant / Non-Compliant / Pending Review
+- If compliant: any ratios approaching thresholds?
+- Purification rate guidance if applicable
+
+### Bottom Line`,
+      '### Bottom Line',
+    )
+    .replace(
+      '- Note when Shariah status is pending and what data is needed to complete screening',
+      '',
+    ),
+
+  chat: SYSTEM_PROMPTS.chat
+    .replace(
+      '- Shariah compliance: SEC Sri Lanka two-tier methodology (business activity screen + financial ratio screen)',
+      '',
+    )
+    .replace(
+      '- For portfolio questions, consider: diversification, sector concentration, Shariah compliance ratio, liquidity constraints',
+      '- For portfolio questions, consider: diversification, sector concentration, liquidity constraints',
+    ),
+
+  signalGenerator: SYSTEM_PROMPTS.signalGenerator
+    .replace('  "shariahStatus": "compliant",', '')
+    .replace(
+      'shariahStatus must be one of: compliant, non_compliant, pending_review\n\nShariah non-compliant: banks (COMB, HNB, SAMP, BOC, etc.), insurance companies, alcohol (LION, DIST, BREW), tobacco (CTC).',
+      'Include all stocks regardless of sector — banks, insurance, consumer goods, etc. are all eligible.',
+    ),
+};
+
+/**
+ * Get prompts appropriate for the current Shariah mode setting.
+ * When shariahMode is ON, returns original prompts with Islamic finance context.
+ * When OFF, returns generic value investing prompts.
+ */
+export function getPrompts(shariahMode: boolean): typeof SYSTEM_PROMPTS {
+  if (shariahMode) return SYSTEM_PROMPTS;
+  return { ...SYSTEM_PROMPTS, ...GENERIC_OVERRIDES };
+}

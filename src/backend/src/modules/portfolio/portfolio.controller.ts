@@ -10,6 +10,8 @@ import {
 } from '@nestjs/common';
 import { PortfolioService } from './portfolio.service';
 import { Public } from '../auth/public.decorator';
+import { AddHoldingDto } from './dto/add-holding.dto';
+import { UpdateHoldingDto } from './dto/update-holding.dto';
 
 @Controller('portfolio')
 export class PortfolioController {
@@ -45,36 +47,17 @@ export class PortfolioController {
 
   /** POST /api/portfolio — Add a new holding. Requires JWT. */
   @Post()
-  async addHolding(
-    @Body()
-    body: {
-      symbol: string;
-      quantity: number;
-      buy_price: number;
-      buy_date: string;
-      notes?: string;
-      dividends_received?: number;
-      purification_rate?: number;
-    },
-  ) {
-    return this.portfolioService.addHolding(body);
+  async addHolding(@Body() dto: AddHoldingDto) {
+    return this.portfolioService.addHolding(dto);
   }
 
   /** PUT /api/portfolio/:id — Update a holding. Requires JWT. */
   @Put(':id')
   async updateHolding(
     @Param('id', ParseIntPipe) id: number,
-    @Body()
-    body: {
-      quantity?: number;
-      buy_price?: number;
-      buy_date?: string;
-      notes?: string;
-      dividends_received?: number;
-      purification_rate?: number;
-    },
+    @Body() dto: UpdateHoldingDto,
   ) {
-    return this.portfolioService.updateHolding(id, body);
+    return this.portfolioService.updateHolding(id, dto);
   }
 
   /** DELETE /api/portfolio/:id — Remove a holding. Requires JWT. */

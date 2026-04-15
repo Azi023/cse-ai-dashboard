@@ -136,10 +136,9 @@ export class OrderService {
   ) {}
 
   // ── Cron: 2:47 PM SLT — Auto-suggest TP/SL from risk analysis ────────────
-  // Moved from 2:44 to avoid collision with run-risk-analysis (9:14) and
-  // check-exit-signals (9:16). Must run after risk analysis completes.
+  // VPS timezone is Asia/Colombo — cron times are SLT directly.
 
-  @Cron('17 9 * * 1-5', { name: 'suggest-tp-sl-orders' })
+  @Cron('47 14 * * 1-5', { name: 'suggest-tp-sl-orders' })
   async autoSuggestTpSlOrders(): Promise<void> {
     const today = new Date().toISOString().split('T')[0];
     this.logger.log(
@@ -240,10 +239,9 @@ export class OrderService {
   }
 
   // ── Cron: 2:48 PM SLT — Queue HIGH confidence BUY signals ────────────────
-  // Runs 5 minutes after signal generation (2:43 PM SLT) to ensure signals are
-  // saved before we process them.
+  // VPS timezone is Asia/Colombo — cron times are SLT directly.
 
-  @Cron('18 9 * * 1-5', { name: 'queue-strategy-buy-signals' })
+  @Cron('48 14 * * 1-5', { name: 'queue-strategy-buy-signals' })
   async processHighConfidenceSignals(): Promise<void> {
     if (!SAFETY_RAILS.ENABLED) {
       this.logger.log(

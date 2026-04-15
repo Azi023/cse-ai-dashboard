@@ -45,9 +45,10 @@ export class DemoCronService {
     private readonly aiTraderService: DemoAITraderService,
   ) {}
 
-  // ─── AI Demo Trader — every 30 min, 4:00–8:30 AM UTC (9:30 AM–2:00 PM SLT) ─
+  // ─── AI Demo Trader — every 30 min, 9:30 AM–2:00 PM SLT ─────────────────────
+  // VPS timezone is Asia/Colombo — cron times are SLT directly.
 
-  @Cron('0,30 4-8 * * 1-5')
+  @Cron('0,30 9-14 * * 1-5')
   async runAITrader(): Promise<void> {
     // Only trade if market is open (check Redis market status)
     const marketStatus = await this.redisService.getJson<{ isOpen?: boolean }>(
@@ -79,10 +80,10 @@ export class DemoCronService {
     }
   }
 
-  // ─── EOD Snapshot — 2:36 PM SLT (9:06 AM UTC), weekdays ──────────────────
-  // Offset by 1 min from postCloseSnapshot (cse-data, 2:35 PM) to avoid collision
+  // ─── EOD Snapshot — 2:36 PM SLT, weekdays ────────────────────────────────
+  // VPS timezone is Asia/Colombo — cron times are SLT directly.
 
-  @Cron('6 9 * * 1-5')
+  @Cron('36 14 * * 1-5')
   async captureEODSnapshot(): Promise<void> {
     const accounts = await this.accountRepo.find({
       where: { is_active: true },
@@ -103,10 +104,10 @@ export class DemoCronService {
     }
   }
 
-  // ─── Benchmark Update — 2:37 PM SLT (9:07 AM UTC), weekdays ─────────────
-  // Moved from 2:40 to avoid collision with save-daily-snapshots (9:10)
+  // ─── Benchmark Update — 2:37 PM SLT, weekdays ───────────────────────────
+  // VPS timezone is Asia/Colombo — cron times are SLT directly.
 
-  @Cron('7 9 * * 1-5')
+  @Cron('37 14 * * 1-5')
   async updateBenchmarks(): Promise<void> {
     const accounts = await this.accountRepo.find({
       where: { is_active: true },
@@ -126,9 +127,10 @@ export class DemoCronService {
     }
   }
 
-  // ─── Dividend Simulator — Fridays 3:30 PM SLT (10:00 AM UTC) ────────────
+  // ─── Dividend Simulator — Fridays 3:30 PM SLT ───────────────────────────
+  // VPS timezone is Asia/Colombo — cron times are SLT directly.
 
-  @Cron('0 10 * * 5')
+  @Cron('30 15 * * 5')
   async simulateDividends(): Promise<void> {
     const accounts = await this.accountRepo.find({
       where: { is_active: true },

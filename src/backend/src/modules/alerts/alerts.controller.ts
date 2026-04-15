@@ -11,6 +11,7 @@ import {
 } from '@nestjs/common';
 import { AlertsService } from './alerts.service';
 import { Public } from '../auth/public.decorator';
+import { CreateAlertDto } from './dto/create-alert.dto';
 
 @Controller('alerts')
 export class AlertsController {
@@ -41,16 +42,8 @@ export class AlertsController {
 
   /** POST /api/alerts — Create a new alert. Requires JWT. */
   @Post()
-  async createAlert(
-    @Body()
-    body: {
-      symbol: string;
-      alert_type: string;
-      title: string;
-      threshold?: number;
-    },
-  ) {
-    return this.alertsService.createAlert(body);
+  async createAlert(@Body() dto: CreateAlertDto) {
+    return this.alertsService.createAlert(dto);
   }
 
   /** POST /api/alerts/mark-read/:id — Mark one notification as read. Requires JWT. */

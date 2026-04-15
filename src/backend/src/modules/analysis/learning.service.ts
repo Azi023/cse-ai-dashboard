@@ -39,14 +39,16 @@ export class LearningService {
   ) {}
 
   // ---------------------------------------------------------------------------
-  // Cron — Monday 9:15 AM SLT (Monday 3:45 AM UTC)
+  // Cron — Monday 9:15 AM SLT (VPS timezone is Asia/Colombo)
   // ---------------------------------------------------------------------------
 
-  @Cron('45 3 * * 1', { name: 'update-recommendation-outcomes' })
+  @Cron('15 9 * * 1', { name: 'update-recommendation-outcomes' })
   async updateOutcomes(): Promise<void> {
     this.logger.log('Updating recommendation outcomes...');
 
-    const recommendations = await this.recRepo.find({ order: { week_start: 'ASC' } });
+    const recommendations = await this.recRepo.find({
+      order: { week_start: 'ASC' },
+    });
     let updated = 0;
 
     for (const rec of recommendations) {
@@ -54,12 +56,16 @@ export class LearningService {
         await this.processRecommendation(rec);
         updated++;
       } catch (err) {
-        this.logger.warn(`Outcome update failed for rec ${rec.id}: ${String(err)}`);
+        this.logger.warn(
+          `Outcome update failed for rec ${rec.id}: ${String(err)}`,
+        );
       }
     }
 
     await this.computeAndCachePerformance();
-    this.logger.log(`Outcome update complete: ${updated}/${recommendations.length} processed`);
+    this.logger.log(
+      `Outcome update complete: ${updated}/${recommendations.length} processed`,
+    );
   }
 
   // ---------------------------------------------------------------------------
@@ -71,7 +77,8 @@ export class LearningService {
   }
 
   async getModelPerformance(): Promise<ModelPerformance> {
-    const cached = await this.redisService.getJson<ModelPerformance>(MODEL_PERF_KEY);
+    const cached =
+      await this.redisService.getJson<ModelPerformance>(MODEL_PERF_KEY);
     if (cached) return cached;
     return this.computeAndCachePerformance();
   }
@@ -114,7 +121,12 @@ export class LearningService {
       const price = await this.getPriceNear(symbol, target);
       if (price !== null && outcome.recommended_price !== null) {
         outcome.price_1w = price;
-        outcome.return_1w = Math.round(((price - Number(outcome.recommended_price)) / Number(outcome.recommended_price)) * 10000) / 100;
+        outcome.return_1w =
+          Math.round(
+            ((price - Number(outcome.recommended_price)) /
+              Number(outcome.recommended_price)) *
+              10000,
+          ) / 100;
       }
     }
 
@@ -124,7 +136,12 @@ export class LearningService {
       const price = await this.getPriceNear(symbol, target);
       if (price !== null && outcome.recommended_price !== null) {
         outcome.price_1m = price;
-        outcome.return_1m = Math.round(((price - Number(outcome.recommended_price)) / Number(outcome.recommended_price)) * 10000) / 100;
+        outcome.return_1m =
+          Math.round(
+            ((price - Number(outcome.recommended_price)) /
+              Number(outcome.recommended_price)) *
+              10000,
+          ) / 100;
       }
     }
 
@@ -134,7 +151,12 @@ export class LearningService {
       const price = await this.getPriceNear(symbol, target);
       if (price !== null && outcome.recommended_price !== null) {
         outcome.price_3m = price;
-        outcome.return_3m = Math.round(((price - Number(outcome.recommended_price)) / Number(outcome.recommended_price)) * 10000) / 100;
+        outcome.return_3m =
+          Math.round(
+            ((price - Number(outcome.recommended_price)) /
+              Number(outcome.recommended_price)) *
+              10000,
+          ) / 100;
       }
     }
 
@@ -145,7 +167,10 @@ export class LearningService {
   // Private: get price for a symbol near a target date
   // ---------------------------------------------------------------------------
 
-  private async getPriceNear(symbol: string, targetDate: Date): Promise<number | null> {
+  private async getPriceNear(
+    symbol: string,
+    targetDate: Date,
+  ): Promise<number | null> {
     const stock = await this.stockRepo.findOne({ where: { symbol } });
     if (!stock) return null;
 
@@ -160,7 +185,9 @@ export class LearningService {
       .where('dp.stock_id = :id', { id: stock.id })
       .andWhere('dp.trade_date >= :from', { from: fromStr })
       .andWhere('dp.trade_date <= :to', { to: toStr })
-      .orderBy('ABS(EXTRACT(EPOCH FROM (dp.trade_date::timestamp - :target::timestamp)))')
+      .orderBy(
+        'ABS(EXTRACT(EPOCH FROM (dp.trade_date::timestamp - :target::timestamp)))',
+      )
       .setParameter('target', targetDate.toISOString().split('T')[0])
       .take(1)
       .getMany();
@@ -181,28 +208,56 @@ export class LearningService {
     const with1w = outcomes.filter((o) => o.return_1w !== null);
     const with1m = outcomes.filter((o) => o.return_1m !== null);
 
-    const winRate1w = with1w.length > 0
-      ? Math.round((with1w.filter((o) => Number(o.return_1w) > 0).length / with1w.length) * 100) / 100
-      : null;
+    const winRate1w =
+      with1w.length > 0
+        ? Math.round(
+            (with1w.filter((o) => Number(o.return_1w) > 0).length /
+              with1w.length) *
+              100,
+          ) / 100
+        : null;
 
-    const winRate1m = with1m.length > 0
-      ? Math.round((with1m.filter((o) => Number(o.return_1m) > 0).length / with1m.length) * 100) / 100
-      : null;
+    const winRate1m =
+      with1m.length > 0
+        ? Math.round(
+            (with1m.filter((o) => Number(o.return_1m) > 0).length /
+              with1m.length) *
+              100,
+          ) / 100
+        : null;
 
-    const avgReturn1w = with1w.length > 0
-      ? Math.round(with1w.reduce((s, o) => s + Number(o.return_1w), 0) / with1w.length * 100) / 100
-      : null;
+    const avgReturn1w =
+      with1w.length > 0
+        ? Math.round(
+            (with1w.reduce((s, o) => s + Number(o.return_1w), 0) /
+              with1w.length) *
+              100,
+          ) / 100
+        : null;
 
-    const avgReturn1m = with1m.length > 0
-      ? Math.round(with1m.reduce((s, o) => s + Number(o.return_1m), 0) / with1m.length * 100) / 100
-      : null;
+    const avgReturn1m =
+      with1m.length > 0
+        ? Math.round(
+            (with1m.reduce((s, o) => s + Number(o.return_1m), 0) /
+              with1m.length) *
+              100,
+          ) / 100
+        : null;
 
     let bestPick: { symbol: string; return_1m: number } | null = null;
     let worstPick: { symbol: string; return_1m: number } | null = null;
     if (with1m.length > 0) {
-      const sorted = [...with1m].sort((a, b) => Number(b.return_1m) - Number(a.return_1m));
-      bestPick = { symbol: sorted[0].symbol, return_1m: Number(sorted[0].return_1m) };
-      worstPick = { symbol: sorted[sorted.length - 1].symbol, return_1m: Number(sorted[sorted.length - 1].return_1m) };
+      const sorted = [...with1m].sort(
+        (a, b) => Number(b.return_1m) - Number(a.return_1m),
+      );
+      bestPick = {
+        symbol: sorted[0].symbol,
+        return_1m: Number(sorted[0].return_1m),
+      };
+      worstPick = {
+        symbol: sorted[sorted.length - 1].symbol,
+        return_1m: Number(sorted[sorted.length - 1].return_1m),
+      };
     }
 
     const perf: ModelPerformance = {
@@ -217,7 +272,11 @@ export class LearningService {
       last_updated: new Date().toISOString(),
     };
 
-    await this.redisService.set(MODEL_PERF_KEY, JSON.stringify(perf), 7 * 24 * 3600);
+    await this.redisService.set(
+      MODEL_PERF_KEY,
+      JSON.stringify(perf),
+      7 * 24 * 3600,
+    );
     return perf;
   }
 }

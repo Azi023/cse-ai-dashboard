@@ -13,6 +13,7 @@ import { ATradSyncService } from './atrad-sync.service';
 import { OrderService, CreateOrderDto } from './order.service';
 import { ApiKeyGuard } from '../../common/guards/api-key.guard';
 import { Public } from '../auth/public.decorator';
+import { SyncPushDto } from './dto/sync-push.dto';
 
 /**
  * ATrad Sync controller.
@@ -46,25 +47,8 @@ export class ATradSyncController {
    */
   @Throttle({ default: { ttl: 60_000, limit: 5 } })
   @Post('sync-push')
-  async syncPush(
-    @Body()
-    body: {
-      holdings: Array<{
-        symbol: string;
-        companyName: string;
-        quantity: number;
-        avgPrice: number;
-        currentPrice: number;
-        marketValue: number;
-        unrealizedPL: number;
-        unrealizedPLPct: number;
-      }>;
-      buyingPower: number;
-      accountValue: number;
-      cashBalance: number;
-    },
-  ) {
-    return this.atradSyncService.processPushedSync(body);
+  async syncPush(@Body() dto: SyncPushDto) {
+    return this.atradSyncService.processPushedSync(dto);
   }
 
   /** GET /api/atrad/status — Last sync time, success/failure, holdings count. */

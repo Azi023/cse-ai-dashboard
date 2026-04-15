@@ -10,6 +10,9 @@ import {
 } from '@nestjs/common';
 import { JourneyService } from './journey.service';
 import { Public } from '../auth/public.decorator';
+import { RecordDepositDto } from './dto/record-deposit.dto';
+import { CreateGoalDto } from './dto/create-goal.dto';
+import { UpdateGoalDto } from './dto/update-goal.dto';
 
 @Controller('journey')
 export class JourneyController {
@@ -17,16 +20,8 @@ export class JourneyController {
 
   /** POST /api/journey/deposit — Record a monthly deposit. Requires JWT. */
   @Post('deposit')
-  async recordDeposit(
-    @Body()
-    body: {
-      month: string;
-      depositAmount: number;
-      depositDate: string;
-      notes?: string;
-    },
-  ) {
-    return this.journeyService.recordDeposit(body);
+  async recordDeposit(@Body() dto: RecordDepositDto) {
+    return this.journeyService.recordDeposit(dto);
   }
 
   /** GET /api/journey — Full journey timeline data. */
@@ -59,30 +54,17 @@ export class JourneyController {
 
   /** POST /api/journey/goals — Create a new investment goal. Requires JWT. */
   @Post('goals')
-  async createGoal(
-    @Body()
-    body: {
-      targetAmount: number;
-      targetDate?: string;
-      label?: string;
-    },
-  ) {
-    return this.journeyService.createGoal(body);
+  async createGoal(@Body() dto: CreateGoalDto) {
+    return this.journeyService.createGoal(dto);
   }
 
   /** PUT /api/journey/goals/:id — Update an investment goal. Requires JWT. */
   @Put('goals/:id')
   async updateGoal(
     @Param('id', ParseIntPipe) id: number,
-    @Body()
-    body: {
-      targetAmount?: number;
-      targetDate?: string;
-      label?: string;
-      is_active?: boolean;
-    },
+    @Body() dto: UpdateGoalDto,
   ) {
-    return this.journeyService.updateGoal(id, body);
+    return this.journeyService.updateGoal(id, dto);
   }
 
   /** DELETE /api/journey/goals/:id — Delete an investment goal. Requires JWT. */

@@ -1021,6 +1021,21 @@ export class JourneyService {
     });
     const streak = this.calculateDepositStreak(deposits);
 
+    // Grace period: if account is < 60 days old and has at least 1 deposit,
+    // don't penalize for missing months — they just started
+    if (deposits.length > 0 && streak === 0) {
+      const firstDepositMonth = deposits[0].month; // "YYYY-MM"
+      const firstDate = new Date(`${firstDepositMonth}-01`);
+      const daysSinceFirst =
+        (Date.now() - firstDate.getTime()) / (1000 * 60 * 60 * 24);
+      if (daysSinceFirst < 60) {
+        return {
+          score: 50,
+          label: 'New investor — deposit LKR 10,000 monthly to build streak',
+        };
+      }
+    }
+
     let score: number;
     let label: string;
 
@@ -1038,7 +1053,7 @@ export class JourneyService {
       label = `Building habit — ${streak} month streak`;
     } else {
       score = 0;
-      label = 'No deposits yet';
+      label = 'No deposits yet — deposit LKR 10,000 monthly to build streak';
     }
 
     return { score, label };

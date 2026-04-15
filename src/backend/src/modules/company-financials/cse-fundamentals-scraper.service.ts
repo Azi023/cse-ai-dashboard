@@ -197,8 +197,9 @@ export class CseFundamentalsScraperService {
 
   // ── Scheduled weekly scrape ──────────────────────────────────────────────
 
-  // Friday 22:00 UTC = Saturday 03:30 SLT (no market activity, low risk window)
-  @Cron('0 22 * * 5')
+  // Saturday 03:30 SLT (no market activity, low risk window)
+  // VPS timezone is Asia/Colombo — cron times are SLT directly.
+  @Cron('30 3 * * 6')
   async scheduledWeeklyScrape(): Promise<void> {
     const LOCK_KEY = 'scraper:running';
     const LOCK_TTL_S = 30 * 60; // 30 minutes

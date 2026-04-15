@@ -74,7 +74,7 @@ export class GlobalDataService {
    * Runs weekdays at 8:00 AM SLT (2:30 AM UTC) and 6:00 PM SLT (12:30 PM UTC).
    * Comma-separated hours: 2 and 12 UTC.
    */
-  @Cron('0 30 2,12 * * 1-5', { name: 'global-data-fetch' })
+  @Cron('0 0 8,18 * * 1-5', { name: 'global-data-fetch' }) // 8:00 AM & 6:00 PM SLT (VPS is Asia/Colombo)
   async fetchAllGlobalData(): Promise<{ message: string; errors: string[] }> {
     this.logger.log('Fetching global market data...');
     const errors: string[] = [];

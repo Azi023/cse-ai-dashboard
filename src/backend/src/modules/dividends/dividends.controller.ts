@@ -9,6 +9,7 @@ import {
 } from '@nestjs/common';
 import { DividendsService } from './dividends.service';
 import { Public } from '../auth/public.decorator';
+import { AddDividendDto } from './dto/add-dividend.dto';
 
 @Controller('dividends')
 export class DividendsController {
@@ -44,17 +45,8 @@ export class DividendsController {
 
   /** POST /api/dividends — Add a dividend record. Requires JWT. */
   @Post()
-  async addDividend(
-    @Body()
-    body: {
-      symbol: string;
-      ex_date: string;
-      amount_per_share: number;
-      payment_date?: string;
-      notes?: string;
-    },
-  ) {
-    return this.dividendsService.addDividend(body);
+  async addDividend(@Body() dto: AddDividendDto) {
+    return this.dividendsService.addDividend(dto);
   }
 
   /** DELETE /api/dividends/:id — Remove a dividend record. Requires JWT. */

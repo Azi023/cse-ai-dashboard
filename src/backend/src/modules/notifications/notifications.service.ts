@@ -54,9 +54,10 @@ export class NotificationsService {
   // ---------------------------------------------------------------------------
 
   /**
-   * Daily digest at 2:45 PM SLT (9:15 AM UTC) on weekdays.
+   * Daily digest at 2:45 PM SLT on weekdays.
+   * VPS timezone is Asia/Colombo — cron times are SLT directly.
    */
-  @Cron('15 9 * * 1-5', { name: 'daily-digest-generator' })
+  @Cron('45 14 * * 1-5', { name: 'daily-digest-generator' })
   async generateDailyDigest(): Promise<void> {
     const today = this.getTodayDateStr();
     this.logger.log(`Generating daily digest for ${today}`);
@@ -106,9 +107,10 @@ export class NotificationsService {
   }
 
   /**
-   * Weekly strategic brief at 3:00 PM SLT on Fridays (9:30 AM UTC).
+   * Weekly strategic brief at 3:00 PM SLT on Fridays.
+   * VPS timezone is Asia/Colombo — cron times are SLT directly.
    */
-  @Cron('30 9 * * 5', { name: 'weekly-brief-generator' })
+  @Cron('0 15 * * 5', { name: 'weekly-brief-generator' })
   async generateWeeklyBrief(): Promise<void> {
     const { weekStart, weekEnd, weekId } = this.getCurrentWeekRange();
     this.logger.log(`Generating weekly brief for week ${weekId}`);

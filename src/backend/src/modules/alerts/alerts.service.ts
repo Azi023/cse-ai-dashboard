@@ -23,7 +23,7 @@ export class AlertsService {
    * Check all active alerts against current data.
    * Runs every 60 seconds during market hours.
    */
-  @Cron('0 */1 4-9 * * 1-5', { name: 'alert-checker' }) // UTC: 4-9 = SLT 9:30-14:30 approx
+  @Cron('0 */1 9-15 * * 1-5', { name: 'alert-checker' }) // SLT market hours (VPS is Asia/Colombo)
   async checkAlerts(): Promise<void> {
     const activeAlerts = await this.alertRepository.find({
       where: { is_active: true, is_triggered: false },

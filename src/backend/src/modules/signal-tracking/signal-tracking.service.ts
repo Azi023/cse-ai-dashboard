@@ -74,7 +74,7 @@ export class SignalTrackingService {
    * Check outcomes for signals that are 7/14/30 days old.
    * Runs daily at 15:30 SLT (after market close).
    */
-  @Cron('0 0 10 * * 1-5', { name: 'signal-outcome-check' }) // 10:00 UTC = 15:30 SLT
+  @Cron('0 30 15 * * 1-5', { name: 'signal-outcome-check' }) // 15:30 SLT (VPS is Asia/Colombo)
   async checkOutcomes(): Promise<void> {
     this.logger.log('Checking signal outcomes...');
 
