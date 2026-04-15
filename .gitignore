@@ -27,6 +27,10 @@ out/
 .DS_Store
 Thumbs.db
 *.Zone.Identifier
+*:Zone.Identifier
+
+# Tooling state
+.observer.lock
 
 # Logs
 logs/
