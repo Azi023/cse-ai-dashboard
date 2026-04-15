@@ -4,6 +4,9 @@ import { AiEngineController } from './ai-engine.controller';
 import { AiEngineService } from './ai-engine.service';
 import { AiUsageService } from './ai-usage.service';
 import { MockGenerator } from './mock-generator';
+import { ClaudeProvider } from './providers/claude.provider';
+import { OpenAIProvider } from './providers/openai.provider';
+import { AiProviderFactory } from './providers/provider.factory';
 import { CseDataModule } from '../cse-data/cse-data.module';
 import { SignalTrackingModule } from '../signal-tracking/signal-tracking.module';
 import { StrategyEngineModule } from '../strategy-engine/strategy-engine.module';
@@ -19,7 +22,14 @@ import { Stock, MacroData } from '../../entities';
     UserPreferencesModule,
   ],
   controllers: [AiEngineController],
-  providers: [AiEngineService, AiUsageService, MockGenerator],
-  exports: [AiEngineService, AiUsageService],
+  providers: [
+    AiEngineService,
+    AiUsageService,
+    MockGenerator,
+    ClaudeProvider,
+    OpenAIProvider,
+    AiProviderFactory,
+  ],
+  exports: [AiEngineService, AiUsageService, AiProviderFactory],
 })
 export class AiEngineModule {}
