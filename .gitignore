@@ -65,6 +65,7 @@ scripts/*.png
 src/data/atrad-sync/*.png
 src/data/atrad-sync/*.html
 src/agent/screenshots/
+src/agent/logs/
 
 # Excel files with financial data (KPI trackers, etc.)
 *.xlsx
