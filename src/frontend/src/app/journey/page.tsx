@@ -18,6 +18,8 @@ import {
   Trophy,
   Loader2,
   AlertCircle,
+  AlertTriangle,
+  ChevronDown,
   X,
 } from 'lucide-react';
 import {
@@ -48,6 +50,87 @@ function Tooltip({ tipKey }: { tipKey: string }) {
         {tip}
       </span>
     </span>
+  );
+}
+
+interface OutlookScenario {
+  price: number;
+  scenario: string;
+}
+
+function PriceOutlookCard({ raw }: { raw: string }) {
+  let parsed: { bear?: OutlookScenario; base?: OutlookScenario; bull?: OutlookScenario } | null = null;
+  try {
+    parsed = JSON.parse(raw);
+  } catch {
+    // Plain text or malformed — render as text
+  }
+
+  if (!parsed || (!parsed.bear && !parsed.base && !parsed.bull)) {
+    return (
+      <p className="text-xs text-muted-foreground border-t border-border/50 pt-2">
+        <span className="text-foreground font-medium">3m outlook:</span> {raw}
+      </p>
+    );
+  }
+
+  const scenarios = [
+    { key: 'bear', label: 'Bear', data: parsed.bear, accent: 'border-l-loss', textColor: 'text-loss', bg: 'bg-loss/5' },
+    { key: 'base', label: 'Base', data: parsed.base, accent: 'border-l-warning-color', textColor: 'text-warning-color', bg: 'bg-warning-color/5' },
+    { key: 'bull', label: 'Bull', data: parsed.bull, accent: 'border-l-profit', textColor: 'text-profit', bg: 'bg-profit/5' },
+  ] as const;
+
+  return (
+    <div className="border-t border-border/50 pt-3 space-y-1.5">
+      <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">3-Month Price Outlook</p>
+      <div className="grid gap-2 sm:grid-cols-3">
+        {scenarios.map(({ key, label, data, accent, textColor, bg }) =>
+          data ? (
+            <div key={key} className={`rounded-lg border-l-2 ${accent} ${bg} px-3 py-2`}>
+              <div className="flex items-baseline justify-between gap-2">
+                <span className="text-[11px] font-medium text-muted-foreground uppercase tracking-wider">{label}</span>
+                <span className={`text-sm font-semibold tabular-nums ${textColor}`}>
+                  LKR {Number(data.price).toFixed(2)}
+                </span>
+              </div>
+              <p className="text-[11px] text-muted-foreground mt-1 leading-relaxed">{data.scenario}</p>
+            </div>
+          ) : null,
+        )}
+      </div>
+    </div>
+  );
+}
+
+function RiskFlagsList({ flags }: { flags: string[] }) {
+  const [expanded, setExpanded] = useState(false);
+  const visibleCount = 3;
+  const hasMore = flags.length > visibleCount;
+  const visible = expanded ? flags : flags.slice(0, visibleCount);
+
+  return (
+    <div className="space-y-1.5 pt-1">
+      <div className="flex flex-wrap gap-1.5">
+        {visible.map((flag, i) => (
+          <span
+            key={i}
+            className="inline-flex items-center gap-1 text-xs rounded-md bg-destructive/10 text-destructive px-2 py-1"
+          >
+            <AlertTriangle className="h-3 w-3 flex-shrink-0" />
+            {flag}
+          </span>
+        ))}
+      </div>
+      {hasMore && (
+        <button
+          onClick={() => setExpanded(!expanded)}
+          className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors"
+        >
+          <ChevronDown className={`h-3 w-3 transition-transform ${expanded ? 'rotate-180' : ''}`} />
+          {expanded ? 'Show fewer' : `Show ${flags.length - visibleCount} more warnings`}
+        </button>
+      )}
+    </div>
   );
 }
 
@@ -438,19 +521,9 @@ export default function JourneyPage() {
               </span>
             </div>
             <p className="text-sm text-muted-foreground">{aiRec.reasoning}</p>
-            {aiRec.price_outlook_3m && (
-              <p className="text-xs text-muted-foreground border-t border-border/50 pt-2">
-                <span className="text-foreground font-medium">3m outlook:</span> {aiRec.price_outlook_3m}
-              </p>
-            )}
+            {aiRec.price_outlook_3m && <PriceOutlookCard raw={aiRec.price_outlook_3m} />}
             {aiRec.risk_flags && Array.isArray(aiRec.risk_flags) && aiRec.risk_flags.length > 0 && (
-              <div className="flex flex-wrap gap-1 pt-1">
-                {aiRec.risk_flags.map((flag, i) => (
-                  <span key={i} className="text-xs rounded-full bg-red-500/10 text-red-400 px-2 py-0.5">
-                    ⚠ {flag}
-                  </span>
-                ))}
-              </div>
+              <RiskFlagsList flags={aiRec.risk_flags} />
             )}
             {aiRec.alternative && (
               <p className="text-xs text-muted-foreground">

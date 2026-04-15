@@ -19,6 +19,7 @@ import {
 } from 'lucide-react';
 import { atradApi, aiApi, type ATradSyncStatus, type AiStatus } from '@/lib/api';
 import { useDisplayMode } from '@/contexts/display-mode-context';
+import { useShariahMode } from '@/contexts/shariah-mode-context';
 import { safeNum } from '@/lib/format';
 
 const PROFILE_KEY = 'cse_investment_profile';
@@ -49,6 +50,7 @@ export function getInvestmentProfile(): InvestmentProfile {
 
 export default function SettingsPage() {
   const { mode, setMode } = useDisplayMode();
+  const { shariahMode, setShariahMode } = useShariahMode();
   const [atradStatus, setAtradStatus] = useState<ATradSyncStatus | null>(null);
   const [aiStatus, setAiStatus] = useState<AiStatus | null>(null);
   const [loading, setLoading] = useState(true);
@@ -297,6 +299,44 @@ export default function SettingsPage() {
         </div>
       </div>
 
+      {/* Shariah Screening */}
+      <div className="rounded-xl border bg-card p-6 space-y-4">
+        <h2 className="text-lg font-semibold flex items-center gap-2">
+          <ShieldCheck className="h-5 w-5 text-primary" />
+          Shariah Screening
+        </h2>
+        <div className="flex items-center justify-between">
+          <div>
+            <p className="text-sm font-medium">
+              {shariahMode ? 'Active — Filtering for Islamic compliance' : 'Inactive — Showing all stocks'}
+            </p>
+            <p className="text-xs text-muted-foreground mt-1">
+              When active, stocks, crypto pairs, and AI recommendations are filtered for AAOIFI-standard Shariah compliance.
+            </p>
+          </div>
+          <button
+            onClick={() => setShariahMode(!shariahMode)}
+            className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${
+              shariahMode ? 'bg-emerald-500' : 'bg-muted'
+            }`}
+            role="switch"
+            aria-checked={shariahMode}
+            aria-label="Shariah screening toggle"
+          >
+            <span
+              className={`inline-block h-4 w-4 rounded-full bg-white transition-transform ${
+                shariahMode ? 'translate-x-6' : 'translate-x-1'
+              }`}
+            />
+          </button>
+        </div>
+        {!shariahMode && (
+          <div className="rounded-lg bg-amber-500/10 border border-amber-500/20 p-3 text-sm text-amber-400">
+            Shariah screening is disabled. All stocks and crypto pairs are visible. AI recommendations will use generic value investing context.
+          </div>
+        )}
+      </div>
+
       {/* AI Mode */}
       <div className="rounded-xl border bg-card p-6 space-y-3">
         <h2 className="text-lg font-semibold flex items-center gap-2">
@@ -418,8 +458,17 @@ export default function SettingsPage() {
             </div>
             <div className="rounded-lg bg-muted/30 p-3">
               <p className="text-xs text-muted-foreground">Shariah Filter</p>
-              <p className="font-medium mt-0.5 text-green-400">Always ON ✅</p>
-              <p className="text-xs text-muted-foreground mt-1">Shariah compliance is always enforced and cannot be disabled.</p>
+              <button
+                onClick={() => setShariahMode(!shariahMode)}
+                className={`font-medium mt-0.5 ${shariahMode ? 'text-green-400' : 'text-muted-foreground'}`}
+              >
+                {shariahMode ? 'ON — Shariah Compliant' : 'OFF — All Stocks'}
+              </button>
+              <p className="text-xs text-muted-foreground mt-1">
+                {shariahMode
+                  ? 'Only Shariah-compliant stocks and crypto pairs are shown.'
+                  : 'All stocks and crypto pairs are visible. Shariah badges hidden.'}
+              </p>
             </div>
           </div>
         ) : (

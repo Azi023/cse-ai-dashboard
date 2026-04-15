@@ -1519,5 +1519,112 @@ export const strategyEngineApi = {
     ),
 };
 
+// ── Paper Trading ─────────────────────────────────────────────────────────
+
+export interface PaperHolding {
+  symbol: string;
+  quantity: number;
+  avg_cost: number;
+  total_invested: number;
+  current_price: number;
+  market_value: number;
+  unrealized_pnl: number;
+  unrealized_pnl_pct: number;
+}
+
+export interface PaperPortfolioSummary {
+  portfolio_type: string;
+  asset_type: string;
+  initial_balance: number;
+  current_cash: number;
+  holdings_value: number;
+  total_value: number;
+  total_return: number;
+  total_return_pct: number;
+  holdings: PaperHolding[];
+}
+
+export interface PaperTradeRecord {
+  id: number;
+  portfolio_type: string;
+  symbol: string;
+  asset_type: string;
+  direction: string;
+  quantity: number;
+  price: number;
+  total_cost: number;
+  fees: number;
+  notes: string | null;
+  executed_at: string;
+  created_at: string;
+}
+
+export interface PaperPerformance {
+  total_trades: number;
+  buy_trades: number;
+  sell_trades: number;
+  total_return_pct: number;
+  win_rate: number;
+  avg_trade_return: number;
+  best_trade: { symbol: string; return_pct: number } | null;
+  worst_trade: { symbol: string; return_pct: number } | null;
+  equity_curve: { date: string; value: number }[];
+}
+
+export const paperTradingApi = {
+  getPortfolio: (type = 'paper_human', asset = 'stock') =>
+    api.get<PaperPortfolioSummary>(
+      `/paper-trading/portfolio?type=${type}&asset=${asset}`,
+    ),
+  getHistory: (type = 'paper_human', asset?: string, limit = 50) =>
+    api.get<PaperTradeRecord[]>(
+      `/paper-trading/history?type=${type}${asset ? `&asset=${asset}` : ''}&limit=${limit}`,
+    ),
+  getPerformance: (type = 'paper_human', asset = 'stock') =>
+    api.get<PaperPerformance>(
+      `/paper-trading/performance?type=${type}&asset=${asset}`,
+    ),
+  executeTrade: (data: {
+    symbol: string;
+    direction: string;
+    quantity: number;
+    price?: number;
+    notes?: string;
+    asset_type?: string;
+  }) => api.post('/paper-trading/trade', data),
+  resetPortfolio: (type = 'paper_human', asset = 'stock') =>
+    api.post(`/paper-trading/reset?type=${type}&asset=${asset}`),
+  compare: () =>
+    api.get<{ ai_demo: PaperPortfolioSummary; paper_human: PaperPortfolioSummary }>(
+      '/paper-trading/compare',
+    ),
+};
+
+// ── User Preferences ──────────────────────────────────────────────────────
+
+export const preferencesApi = {
+  get: () => api.get('/user/preferences'),
+  update: (data: { shariah_mode?: boolean; dashboard_mode?: string; language?: string }) =>
+    api.patch('/user/preferences', data),
+};
+
+// ── Crypto (filtered markets) ─────────────────────────────────────────────
+
+export interface CryptoMarketPair {
+  symbol: string;
+  base: string;
+  quote: string;
+  price: number;
+  change24h: number;
+  volume24h: number;
+}
+
+export const cryptoApi = {
+  getFilteredMarkets: (limit = 30) =>
+    api.get<CryptoMarketPair[]>(`/crypto/filtered-markets?limit=${limit}`),
+  getTicker: (symbol: string) =>
+    api.get(`/crypto/ticker/${symbol.replace('/', '-')}`),
+};
+
 export default api;
 

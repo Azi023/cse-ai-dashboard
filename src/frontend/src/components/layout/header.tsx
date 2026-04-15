@@ -32,11 +32,13 @@ import {
   Crosshair,
   Scale,
   LogOut,
+  Bitcoin,
 } from 'lucide-react';
 import { marketApi, alertsApi } from '@/lib/api';
 import { useDisplayMode } from '@/contexts/display-mode-context';
 import { useTheme } from '@/contexts/theme-context';
 import { useAuth } from '@/contexts/auth-context';
+import { useShariahMode } from '@/contexts/shariah-mode-context';
 
 function checkMarketHours(): boolean {
   const now = new Date();
@@ -67,60 +69,73 @@ interface NavGroup {
   badge?: string;
 }
 
+/* ─── Navigation Structure ──────────────────────────────────────────────── */
+
 const topLinks: NavLink[] = [
-  { href: '/journey', label: 'My Journey', icon: Star },
   { href: '/', label: 'Dashboard', icon: TrendingUp },
-  { href: '/stocks', label: 'Stocks', icon: BarChart3 },
   { href: '/portfolio', label: 'Portfolio', icon: Wallet },
+  { href: '/stocks', label: 'Stocks', icon: BarChart3 },
   { href: '/signals', label: 'Signals', icon: Zap },
-  { href: '/opportunities', label: 'Opportunities', icon: Crosshair },
-  { href: '/orders', label: 'Orders', icon: ClipboardList },
 ];
 
-const analysisGroup: NavGroup = {
-  label: 'Analysis',
-  icon: PieChart,
+const tradingGroup: NavGroup = {
+  label: 'Trading',
+  icon: ClipboardList,
   links: [
-    { href: '/sectors', label: 'Sectors', icon: PieChart },
-    { href: '/compare', label: 'Compare', icon: GitCompare },
-    { href: '/shariah', label: 'Shariah', icon: ShieldCheck },
-    { href: '/performance', label: 'AI Performance', icon: Target },
+    { href: '/orders', label: 'Orders', icon: ClipboardList },
+    { href: '/opportunities', label: 'Opportunities', icon: Crosshair },
+    { href: '/demo', label: 'Demo Trading', icon: FlaskConical },
     { href: '/backtest', label: 'Backtester', icon: FlaskConical },
   ],
 };
 
-const intelligenceGroup: NavGroup = {
-  label: 'Intelligence',
-  icon: Newspaper,
+const researchGroup: NavGroup = {
+  label: 'Research',
+  icon: PieChart,
   links: [
-    { href: '/news', label: 'News Feed', icon: Newspaper },
-    { href: '/announcements', label: 'Announcements', icon: Megaphone },
-    { href: '/chat', label: 'Strategy Chat', icon: Sparkles },
+    { href: '/journey', label: 'Journey', icon: Star },
+    { href: '/sectors', label: 'Sectors', icon: PieChart },
+    { href: '/compare', label: 'Compare', icon: GitCompare },
+    { href: '/crypto', label: 'Crypto', icon: Bitcoin },
   ],
 };
 
-const toolsGroup: NavGroup = {
-  label: 'Tools',
-  icon: FileSpreadsheet,
+const moreGroup: NavGroup = {
+  label: 'More',
+  icon: Settings,
   links: [
+    { href: '/news', label: 'News', icon: Newspaper },
+    { href: '/announcements', label: 'Announcements', icon: Megaphone },
+    { href: '/chat', label: 'AI Chat', icon: Sparkles },
+    { href: '/shariah', label: 'Shariah', icon: ShieldCheck },
     { href: '/dividends', label: 'Dividends', icon: CalendarDays },
-    { href: '/zakat', label: 'Zakat Calculator', icon: Scale },
-    { href: '/admin/financials', label: 'Financials', icon: FileSpreadsheet },
+    { href: '/zakat', label: 'Zakat', icon: Scale },
+    { href: '/performance', label: 'AI Performance', icon: Target },
     { href: '/settings', label: 'Settings', icon: Settings },
   ],
 };
 
-const demoGroup: NavGroup = {
-  label: 'Demo',
-  icon: FlaskConical,
-  badge: 'DEMO',
+const dropdownGroups = [tradingGroup, researchGroup, moreGroup];
+
+/* ─── Simple Mode Navigation ────────────────────────────────────────────── */
+
+const simpleTopLinks: NavLink[] = [
+  { href: '/journey', label: 'Journey', icon: Star },
+  { href: '/', label: 'Dashboard', icon: TrendingUp },
+  { href: '/portfolio', label: 'Portfolio', icon: Wallet },
+];
+
+const simpleMoreGroup: NavGroup = {
+  label: 'More',
+  icon: Settings,
   links: [
-    { href: '/demo', label: 'Demo Portfolio', icon: FlaskConical },
-    { href: '/demo/performance', label: 'Performance', icon: TrendingUp },
+    { href: '/stocks', label: 'Stocks', icon: BarChart3 },
+    { href: '/news', label: 'News', icon: Newspaper },
+    { href: '/settings', label: 'Settings', icon: Settings },
   ],
 };
 
-const dropdownGroups = [analysisGroup, intelligenceGroup, toolsGroup, demoGroup];
+/* ─── Desktop Dropdown ──────────────────────────────────────────────────── */
 
 function DropdownMenu({ group, pathname }: { group: NavGroup; pathname: string }) {
   const [open, setOpen] = useState(false);
@@ -142,12 +157,8 @@ function DropdownMenu({ group, pathname }: { group: NavGroup; pathname: string }
     <div className="relative" ref={ref}>
       <button
         onClick={() => setOpen(!open)}
-        className={`flex items-center gap-1 rounded-md px-2.5 py-1.5 text-sm font-medium transition-colors ${
-          group.badge
-            ? groupIsActive
-              ? 'bg-amber-500/10 text-amber-500'
-              : 'text-muted-foreground hover:text-amber-500 hover:bg-amber-500/10'
-            : groupIsActive
+        className={`flex items-center gap-1 rounded-md px-2 py-1.5 text-[13px] font-medium transition-colors ${
+          groupIsActive
             ? 'bg-primary/10 text-primary'
             : 'text-muted-foreground hover:text-foreground hover:bg-muted/50'
         }`}
@@ -188,11 +199,14 @@ function DropdownMenu({ group, pathname }: { group: NavGroup; pathname: string }
   );
 }
 
+/* ─── Header Component ──────────────────────────────────────────────────── */
+
 export function Header() {
   const pathname = usePathname();
   const { mode, toggleMode } = useDisplayMode();
   const { theme, toggleTheme } = useTheme();
   const { logout } = useAuth();
+  const { shariahMode, toggleShariahMode } = useShariahMode();
   const [mounted, setMounted] = useState(false);
   const [currentTime, setCurrentTime] = useState<Date | null>(null);
   const [marketOpen, setMarketOpen] = useState(false);
@@ -247,323 +261,324 @@ export function Header() {
     return () => clearInterval(interval);
   }, []);
 
+  // Close mobile menu on navigation
+  useEffect(() => {
+    setMobileMenuOpen(false);
+  }, [pathname]);
+
   const isActive = (href: string) => {
     if (href === '/') return pathname === '/';
     return pathname.startsWith(href);
   };
 
+  const isSimple = mode === 'simple';
+
+  // Filter Shariah-specific nav items when shariahMode is OFF
+  const filterShariahLinks = (links: NavLink[]): NavLink[] => {
+    if (shariahMode) return links;
+    return links.filter((l) => l.href !== '/shariah' && l.href !== '/zakat');
+  };
+
+  const activeTopLinks = isSimple ? simpleTopLinks : topLinks;
+  const activeDropdownGroups = (isSimple ? [simpleMoreGroup] : dropdownGroups).map((g) => ({
+    ...g,
+    links: filterShariahLinks(g.links),
+  }));
+
+  // Collect all nav links for mobile menu
+  const allMobileLinks: { section: string; links: NavLink[]; badge?: string }[] = [
+    { section: 'Main', links: activeTopLinks },
+    ...activeDropdownGroups.map((g) => ({ section: g.label, links: g.links, badge: g.badge })),
+  ];
+
   return (
-    <header className="sticky top-0 z-50 border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
-      <div className="container flex h-14 items-center justify-between px-4 max-w-[1400px] mx-auto">
-        {/* Logo + Nav */}
-        <div className="flex items-center gap-5">
-          <Link href={mode === 'simple' ? '/journey' : '/'} className="flex items-center gap-2 group">
-            <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-primary/10">
-              <TrendingUp className="h-4 w-4 text-primary" />
-            </div>
-            <span className="text-sm font-semibold tracking-tight hidden sm:block">CSE Dashboard</span>
-          </Link>
+    <>
+      <header className="sticky top-0 z-50 border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
+        <div className="container flex h-14 items-center justify-between px-4 max-w-[1400px] mx-auto">
+          {/* Logo + Nav */}
+          <div className="flex items-center gap-5">
+            <Link href={isSimple ? '/journey' : '/'} className="flex items-center gap-2 group">
+              <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-primary/10">
+                <TrendingUp className="h-4 w-4 text-primary" />
+              </div>
+              <span className="text-sm font-semibold tracking-tight hidden sm:block">CSE Dashboard</span>
+            </Link>
 
-          {/* Desktop Nav */}
-          <nav className="hidden md:flex items-center gap-0.5">
-            {topLinks
-              .filter((link) => {
-                if (mode !== 'simple') return true;
-                // Simple mode: show only Journey, Portfolio, Settings
-                return ['/journey', '/portfolio'].includes(link.href);
-              })
-              .map((link) => {
-              const Icon = link.icon;
-              const active = isActive(link.href);
-              return (
-                <Link
-                  key={link.href}
-                  href={link.href}
-                  className={`flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-sm font-medium transition-all duration-150 ${
-                    active
-                      ? 'bg-primary/10 text-primary'
-                      : 'text-muted-foreground hover:text-foreground hover:bg-accent'
-                  }`}
-                >
-                  <Icon className="h-3.5 w-3.5" />
-                  {link.label}
-                </Link>
-              );
-            })}
-
-            {dropdownGroups
-              .filter((group) => {
-                if (mode !== 'simple') return true;
-                // Simple mode: show only Intelligence (news/chat) and Settings (under Tools)
-                return group.label === 'Intelligence' || group.label === 'Tools';
-              })
-              .map((group) => {
-                // In simple mode, Intelligence = only News; Tools = only Settings
-                const filteredGroup =
-                  mode === 'simple'
-                    ? {
-                        ...group,
-                        links:
-                          group.label === 'Intelligence'
-                            ? group.links.filter((l) => l.href === '/news')
-                            : group.links.filter((l) => l.href === '/settings'),
-                      }
-                    : group;
-                return (
-                  <DropdownMenu
-                    key={group.label}
-                    group={filteredGroup}
-                    pathname={pathname}
-                  />
-                );
-              })}
-          </nav>
-        </div>
-
-        {/* Right side */}
-        <div className="flex items-center gap-2 text-sm">
-          {/* ASPI ticker */}
-          {aspiValue != null && (
-            <div
-              className={`hidden sm:flex items-center gap-1.5 rounded-md border px-2.5 py-1 transition-colors num ${
-                aspiFlash === 'up'
-                  ? 'price-flash-up'
-                  : aspiFlash === 'down'
-                  ? 'price-flash-down'
-                  : ''
-              }`}
-            >
-              <span className="text-[10px] text-muted-foreground font-medium tracking-wider">ASPI</span>
-              <span className="text-sm font-semibold">{Number(aspiValue).toFixed(2)}</span>
-              {aspiChange != null && (
-                <span
-                  className={`text-xs font-medium ${
-                    Number(aspiChange) > 0
-                      ? 'text-emerald-500'
-                      : Number(aspiChange) < 0
-                        ? 'text-red-500'
-                        : 'text-muted-foreground'
-                  }`}
-                >
-                  {Number(aspiChange) > 0 ? '+' : ''}
-                  {Number(aspiChange).toFixed(2)}%
-                </span>
-              )}
-            </div>
-          )}
-
-          {/* Market status + data freshness */}
-          {mounted && (
-            <div className="hidden sm:flex items-center gap-1.5 rounded-md border px-2.5 py-1">
-              <span
-                className={`h-1.5 w-1.5 rounded-full flex-shrink-0 ${marketOpen ? 'bg-emerald-500' : 'bg-red-500/70'}`}
-                style={marketOpen ? { boxShadow: '0 0 6px oklch(0.696 0.172 162)' } : undefined}
-              />
-              <span className="text-xs text-muted-foreground">
-                {marketOpen ? 'Live' : 'Closed'}
-              </span>
-              {!marketOpen && currentTime && (
-                <span className="text-[10px] text-muted-foreground/60 border-l pl-1.5 ml-0.5">
-                  Data: 14:30 SLT
-                </span>
-              )}
-            </div>
-          )}
-
-          {/* Time */}
-          <span
-            className="hidden lg:block text-xs text-muted-foreground num"
-            suppressHydrationWarning
-          >
-            {currentTime ? format(currentTime, 'EEE, MMM d HH:mm:ss') : ''}
-          </span>
-
-          {/* Theme toggle (dark/light) */}
-          {mounted && (
-            <button
-              onClick={toggleTheme}
-              className="flex items-center justify-center h-8 w-8 rounded-md border text-muted-foreground hover:text-foreground hover:bg-accent transition-all duration-150"
-              title={theme === 'dark' ? 'Switch to Light Mode' : 'Switch to Dark Mode'}
-            >
-              {theme === 'dark' ? (
-                <Sun className="h-3.5 w-3.5" />
-              ) : (
-                <Moon className="h-3.5 w-3.5" />
-              )}
-            </button>
-          )}
-
-          {/* Simple/Pro mode toggle */}
-          {mounted && (
-            <button
-              onClick={toggleMode}
-              className="hidden sm:flex items-center gap-1 rounded-md border px-2.5 py-1 text-xs text-muted-foreground transition-all duration-150 hover:text-foreground hover:bg-accent"
-              title={mode === 'simple' ? 'Switch to Pro Mode — shows all analysis tools' : 'Switch to Beginner Mode — simplified view'}
-            >
-              {mode === 'simple' ? '● Beginner' : '◈ Pro'}
-            </button>
-          )}
-
-          {/* Alert bell */}
-          <Link
-            href="/alerts"
-            className="relative flex items-center justify-center h-8 w-8 rounded-md border text-muted-foreground hover:text-foreground hover:bg-accent transition-all duration-150"
-          >
-            <Bell className={`h-3.5 w-3.5 ${unreadAlerts > 0 ? 'bell-pulse' : ''}`} />
-            {unreadAlerts > 0 && (
-              <span className="absolute -top-1 -right-1 flex h-4 min-w-[16px] items-center justify-center rounded-full bg-red-500 px-1 text-[9px] font-bold text-white leading-none">
-                {unreadAlerts > 99 ? '99+' : unreadAlerts}
-              </span>
-            )}
-          </Link>
-
-          {/* Logout */}
-          <button
-            onClick={() => logout()}
-            className="flex items-center justify-center h-8 w-8 rounded-md border text-muted-foreground hover:text-red-400 hover:border-red-400/30 hover:bg-red-400/5 transition-all duration-150"
-            title="Sign out"
-          >
-            <LogOut className="h-3.5 w-3.5" />
-          </button>
-
-          {/* Mobile menu toggle */}
-          <button
-            className="md:hidden flex items-center justify-center h-8 w-8 rounded-md border text-muted-foreground hover:text-foreground hover:bg-accent transition-all"
-            onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-          >
-            {mobileMenuOpen ? <X className="h-4 w-4" /> : <Menu className="h-4 w-4" />}
-          </button>
-        </div>
-      </div>
-
-      {/* Mobile Nav */}
-      {mobileMenuOpen && (
-        <nav className="md:hidden border-t px-4 py-2 space-y-0.5 max-h-[70vh] overflow-y-auto bg-background/98">
-          {/* Controls row */}
-          <div className="flex items-center justify-between px-3 py-2 border-b mb-1 pb-2 gap-2">
-            <span className="text-xs text-muted-foreground">Display</span>
-            <div className="flex items-center gap-2">
-              {mounted && (
-                <button
-                  onClick={toggleTheme}
-                  className="flex items-center justify-center h-7 w-7 rounded-md border text-muted-foreground hover:text-foreground hover:bg-accent"
-                >
-                  {theme === 'dark' ? <Sun className="h-3 w-3" /> : <Moon className="h-3 w-3" />}
-                </button>
-              )}
-              <button
-                onClick={toggleMode}
-                className="inline-flex items-center gap-1 rounded-md border px-2.5 py-1 text-xs text-muted-foreground hover:text-foreground hover:bg-accent"
-              >
-                {mode === 'simple' ? 'Simple' : 'Pro'}
-              </button>
-            </div>
-          </div>
-
-          <p className="text-[10px] text-muted-foreground uppercase tracking-wider px-3 pt-1 pb-0.5">
-            Main
-          </p>
-          {topLinks
-            .filter((link) => {
-              if (mode !== 'simple') return true;
-              return ['/journey', '/portfolio'].includes(link.href);
-            })
-            .map((link) => {
-            const Icon = link.icon;
-            const active = isActive(link.href);
-            return (
-              <Link
-                key={link.href}
-                href={link.href}
-                onClick={() => setMobileMenuOpen(false)}
-                className={`flex items-center gap-2.5 rounded-md px-3 py-2 text-sm font-medium transition-colors ${
-                  active
-                    ? 'bg-primary/10 text-primary'
-                    : 'text-muted-foreground hover:text-foreground hover:bg-accent'
-                }`}
-              >
-                <Icon className="h-4 w-4" />
-                {link.label}
-              </Link>
-            );
-          })}
-
-          {dropdownGroups
-            .filter((group) => {
-              if (mode !== 'simple') return true;
-              return group.label === 'Intelligence' || group.label === 'Tools';
-            })
-            .map((group) => {
-              const filteredGroup =
-                mode === 'simple'
-                  ? {
-                      ...group,
-                      links:
-                        group.label === 'Intelligence'
-                          ? group.links.filter((l) => l.href === '/news')
-                          : group.links.filter((l) => l.href === '/settings'),
-                    }
-                  : group;
-              return (
-            <div key={filteredGroup.label}>
-              <p className="text-[10px] text-muted-foreground uppercase tracking-wider px-3 pt-2 pb-0.5 border-t mt-1 flex items-center gap-1.5">
-                {filteredGroup.label}
-                {filteredGroup.badge && (
-                  <span className="text-[9px] font-bold bg-amber-500/20 text-amber-500 border border-amber-500/30 rounded px-1 py-px leading-none normal-case">
-                    {filteredGroup.badge}
-                  </span>
-                )}
-              </p>
-              {filteredGroup.links.map((link) => {
-                const Icon = link.icon;
+            {/* Desktop Nav */}
+            <nav className="hidden md:flex items-center gap-px" aria-label="Main navigation">
+              {activeTopLinks.map((link) => {
                 const active = isActive(link.href);
                 return (
                   <Link
                     key={link.href}
                     href={link.href}
-                    onClick={() => setMobileMenuOpen(false)}
-                    className={`flex items-center gap-2.5 rounded-md px-3 py-2 text-sm font-medium transition-colors ${
+                    className={`rounded-md px-2 py-1.5 text-[13px] font-medium transition-all duration-150 ${
                       active
                         ? 'bg-primary/10 text-primary'
                         : 'text-muted-foreground hover:text-foreground hover:bg-accent'
                     }`}
                   >
-                    <Icon className="h-4 w-4" />
                     {link.label}
                   </Link>
                 );
               })}
-            </div>
-          );
-        })}
 
-          {/* Mobile ASPI + status */}
-          <div className="flex items-center gap-4 px-3 py-2 text-xs text-muted-foreground border-t mt-1 pt-2 num">
+              {activeDropdownGroups.map((group) => (
+                <DropdownMenu key={group.label} group={group} pathname={pathname} />
+              ))}
+            </nav>
+          </div>
+
+          {/* Right side */}
+          <div className="flex items-center gap-2 text-sm">
+            {/* ASPI ticker */}
             {aspiValue != null && (
-              <span>
-                ASPI <span className="font-medium text-foreground">{Number(aspiValue).toFixed(2)}</span>{' '}
+              <div
+                className={`hidden sm:flex items-center gap-1.5 rounded-md border px-2.5 py-1 transition-colors num ${
+                  aspiFlash === 'up'
+                    ? 'price-flash-up'
+                    : aspiFlash === 'down'
+                    ? 'price-flash-down'
+                    : ''
+                }`}
+              >
+                <span className="text-[10px] text-muted-foreground font-medium tracking-wider">ASPI</span>
+                <span className="text-sm font-semibold">{Number(aspiValue).toFixed(2)}</span>
                 {aspiChange != null && (
                   <span
-                    className={
+                    className={`text-xs font-medium ${
                       Number(aspiChange) > 0
-                        ? 'text-emerald-500'
+                        ? 'text-profit'
                         : Number(aspiChange) < 0
-                          ? 'text-red-500'
-                          : ''
-                    }
+                          ? 'text-loss'
+                          : 'text-muted-foreground'
+                    }`}
                   >
-                    ({Number(aspiChange) > 0 ? '+' : ''}
-                    {Number(aspiChange).toFixed(2)}%)
+                    {Number(aspiChange) > 0 ? '+' : ''}
+                    {Number(aspiChange).toFixed(2)}%
                   </span>
                 )}
-              </span>
+              </div>
             )}
+
+            {/* Market status */}
             {mounted && (
-              <span>Market {marketOpen ? 'Open' : 'Closed'}</span>
+              <div className="hidden sm:flex items-center gap-1.5 rounded-md border px-2.5 py-1">
+                <span
+                  className={`h-1.5 w-1.5 rounded-full flex-shrink-0 ${marketOpen ? 'bg-profit' : 'bg-loss/70'}`}
+                  style={marketOpen ? { boxShadow: '0 0 6px oklch(0.696 0.172 162)' } : undefined}
+                />
+                <span className="text-xs text-muted-foreground">
+                  {marketOpen ? 'Live' : 'Closed'}
+                </span>
+                {!marketOpen && currentTime && (
+                  <span className="text-[10px] text-muted-foreground/60 border-l pl-1.5 ml-0.5">
+                    Data: 14:30 SLT
+                  </span>
+                )}
+              </div>
             )}
+
+            {/* Time */}
+            <span
+              className="hidden lg:block text-xs text-muted-foreground num"
+              suppressHydrationWarning
+            >
+              {currentTime ? format(currentTime, 'EEE, MMM d HH:mm:ss') : ''}
+            </span>
+
+            {/* Theme toggle */}
+            {mounted && (
+              <button
+                onClick={toggleTheme}
+                className="flex items-center justify-center h-8 w-8 rounded-md border text-muted-foreground hover:text-foreground hover:bg-accent transition-all duration-150"
+                aria-label={theme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'}
+              >
+                {theme === 'dark' ? (
+                  <Sun className="h-3.5 w-3.5" />
+                ) : (
+                  <Moon className="h-3.5 w-3.5" />
+                )}
+              </button>
+            )}
+
+            {/* Simple/Pro mode toggle */}
+            {mounted && (
+              <button
+                onClick={toggleMode}
+                className="hidden sm:flex items-center gap-1 rounded-md border px-2.5 py-1 text-xs text-muted-foreground transition-all duration-150 hover:text-foreground hover:bg-accent"
+                aria-label={isSimple ? 'Switch to Pro mode' : 'Switch to Beginner mode'}
+              >
+                {isSimple ? '● Beginner' : '◈ Pro'}
+              </button>
+            )}
+
+            {/* Shariah toggle */}
+            {mounted && (
+              <button
+                onClick={toggleShariahMode}
+                className={`hidden sm:flex items-center gap-1 rounded-md border px-2.5 py-1 text-xs font-medium transition-all duration-150 ${
+                  shariahMode
+                    ? 'border-emerald-500/30 bg-emerald-500/10 text-emerald-500 hover:bg-emerald-500/20'
+                    : 'text-muted-foreground hover:text-foreground hover:bg-accent'
+                }`}
+                aria-label={shariahMode ? 'Disable Shariah screening' : 'Enable Shariah screening'}
+                title="Filter stocks and recommendations for Islamic finance compliance (AAOIFI standards)"
+              >
+                <ShieldCheck className="h-3 w-3" />
+                {shariahMode ? 'Shariah' : 'All'}
+              </button>
+            )}
+
+            {/* Alert bell */}
+            <Link
+              href="/alerts"
+              className="relative flex items-center justify-center h-8 w-8 rounded-md border text-muted-foreground hover:text-foreground hover:bg-accent transition-all duration-150"
+              aria-label={`Notifications${unreadAlerts > 0 ? ` (${unreadAlerts} unread)` : ''}`}
+            >
+              <Bell className={`h-3.5 w-3.5 ${unreadAlerts > 0 ? 'bell-pulse' : ''}`} />
+              {unreadAlerts > 0 && (
+                <span className="absolute -top-1 -right-1 flex h-4 min-w-[16px] items-center justify-center rounded-full bg-destructive px-1 text-[9px] font-bold text-white leading-none">
+                  {unreadAlerts > 99 ? '99+' : unreadAlerts}
+                </span>
+              )}
+            </Link>
+
+            {/* Logout */}
+            <button
+              onClick={() => logout()}
+              className="flex items-center justify-center h-8 w-8 rounded-md border text-muted-foreground hover:text-destructive hover:border-destructive/30 hover:bg-destructive/5 transition-all duration-150"
+              aria-label="Sign out"
+            >
+              <LogOut className="h-3.5 w-3.5" />
+            </button>
+
+            {/* Mobile menu toggle */}
+            <button
+              className="md:hidden flex items-center justify-center h-8 w-8 rounded-md border text-muted-foreground hover:text-foreground hover:bg-accent transition-all"
+              onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
+              aria-label={mobileMenuOpen ? 'Close menu' : 'Open menu'}
+              aria-expanded={mobileMenuOpen}
+            >
+              {mobileMenuOpen ? <X className="h-4 w-4" /> : <Menu className="h-4 w-4" />}
+            </button>
           </div>
-        </nav>
+        </div>
+      </header>
+
+      {/* ─── Full-Screen Mobile Drawer ─────────────────────────────────────── */}
+      {mobileMenuOpen && (
+        <>
+          {/* Backdrop */}
+          <div
+            className="fixed inset-0 z-40 bg-black/50 md:hidden"
+            onClick={() => setMobileMenuOpen(false)}
+            aria-hidden="true"
+          />
+          {/* Drawer */}
+          <nav
+            className="fixed inset-y-0 right-0 z-50 w-[280px] bg-background border-l shadow-2xl md:hidden flex flex-col"
+            aria-label="Mobile navigation"
+          >
+            {/* Drawer header */}
+            <div className="flex items-center justify-between px-4 h-14 border-b flex-shrink-0">
+              <span className="text-sm font-semibold">Menu</span>
+              <div className="flex items-center gap-2">
+                {mounted && (
+                  <button
+                    onClick={toggleTheme}
+                    className="flex items-center justify-center h-8 w-8 rounded-md border text-muted-foreground hover:text-foreground hover:bg-accent"
+                    aria-label={theme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'}
+                  >
+                    {theme === 'dark' ? <Sun className="h-3.5 w-3.5" /> : <Moon className="h-3.5 w-3.5" />}
+                  </button>
+                )}
+                <button
+                  onClick={toggleMode}
+                  className="inline-flex items-center gap-1 rounded-md border px-2 py-1 text-xs text-muted-foreground hover:text-foreground hover:bg-accent"
+                  aria-label={isSimple ? 'Switch to Pro mode' : 'Switch to Beginner mode'}
+                >
+                  {isSimple ? 'Simple' : 'Pro'}
+                </button>
+                <button
+                  onClick={toggleShariahMode}
+                  className={`inline-flex items-center gap-1 rounded-md border px-2 py-1 text-xs font-medium ${
+                    shariahMode
+                      ? 'border-emerald-500/30 bg-emerald-500/10 text-emerald-500'
+                      : 'text-muted-foreground hover:text-foreground hover:bg-accent'
+                  }`}
+                  aria-label={shariahMode ? 'Disable Shariah screening' : 'Enable Shariah screening'}
+                >
+                  <ShieldCheck className="h-3 w-3" />
+                  {shariahMode ? 'Shariah' : 'All'}
+                </button>
+                <button
+                  onClick={() => setMobileMenuOpen(false)}
+                  className="flex items-center justify-center h-8 w-8 rounded-md text-muted-foreground hover:text-foreground hover:bg-accent"
+                  aria-label="Close menu"
+                >
+                  <X className="h-4 w-4" />
+                </button>
+              </div>
+            </div>
+
+            {/* Drawer body — scrollable */}
+            <div className="flex-1 overflow-y-auto py-2">
+              {allMobileLinks.map(({ section, links, badge }) => (
+                <div key={section}>
+                  <p className="text-[10px] text-muted-foreground uppercase tracking-wider px-4 pt-3 pb-1 flex items-center gap-1.5">
+                    {section}
+                    {badge && (
+                      <span className="text-[9px] font-bold bg-amber-500/20 text-amber-500 border border-amber-500/30 rounded px-1 py-px leading-none normal-case">
+                        {badge}
+                      </span>
+                    )}
+                  </p>
+                  {links.map((link) => {
+                    const Icon = link.icon;
+                    const active = isActive(link.href);
+                    return (
+                      <Link
+                        key={link.href}
+                        href={link.href}
+                        className={`flex items-center gap-3 mx-2 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors ${
+                          active
+                            ? 'bg-primary/10 text-primary'
+                            : 'text-muted-foreground hover:text-foreground hover:bg-accent'
+                        }`}
+                      >
+                        <Icon className="h-4 w-4 flex-shrink-0" />
+                        {link.label}
+                      </Link>
+                    );
+                  })}
+                </div>
+              ))}
+            </div>
+
+            {/* Drawer footer — market status */}
+            <div className="flex-shrink-0 border-t px-4 py-3 space-y-2">
+              {aspiValue != null && (
+                <div className="flex items-center gap-2 text-xs num">
+                  <span className="text-muted-foreground">ASPI</span>
+                  <span className="font-semibold text-foreground">{Number(aspiValue).toFixed(2)}</span>
+                  {aspiChange != null && (
+                    <span className={Number(aspiChange) > 0 ? 'text-profit' : Number(aspiChange) < 0 ? 'text-loss' : 'text-muted-foreground'}>
+                      ({Number(aspiChange) > 0 ? '+' : ''}{Number(aspiChange).toFixed(2)}%)
+                    </span>
+                  )}
+                </div>
+              )}
+              {mounted && (
+                <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                  <span className={`h-1.5 w-1.5 rounded-full ${marketOpen ? 'bg-profit' : 'bg-loss/70'}`} />
+                  Market {marketOpen ? 'Open' : 'Closed'}
+                </div>
+              )}
+            </div>
+          </nav>
+        </>
       )}
-    </header>
+    </>
   );
 }

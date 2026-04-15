@@ -170,70 +170,108 @@ export default function StocksPage() {
                 : 'No stocks match your filters.'}
             </p>
           ) : (
-            <div className="overflow-x-auto">
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Symbol</TableHead>
-                    <TableHead>Name</TableHead>
-                    <TableHead>Sector</TableHead>
-                    <TableHead className="text-right">Price</TableHead>
-                    <TableHead className="text-right">Change %</TableHead>
-                    <TableHead>Shariah</TableHead>
-                    <TableHead className="text-right">Score</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {filtered.map((stock) => (
-                    <TableRow key={stock.symbol}>
-                      <TableCell className="font-medium">
-                        <Link
-                          href={`/stocks/${stock.symbol}`}
-                          className="text-primary hover:underline"
-                        >
-                          {stock.symbol}
-                        </Link>
-                      </TableCell>
-                      <TableCell className="max-w-[250px] truncate">
-                        {stock.name}
-                      </TableCell>
-                      <TableCell className="text-muted-foreground">
-                        {stock.sector ?? '—'}
-                      </TableCell>
-                      <TableCell className="text-right">
-                        {stock.last_price != null
-                          ? Number(stock.last_price).toFixed(2)
-                          : '—'}
-                      </TableCell>
-                      <TableCell className="text-right">
-                        {stock.change_percent != null ? (
-                          <span
-                            className={
-                              Number(stock.change_percent) > 0
-                                ? 'text-green-500'
-                                : Number(stock.change_percent) < 0
-                                  ? 'text-red-500'
-                                  : ''
-                            }
-                          >
-                            {Number(stock.change_percent) > 0 ? '+' : ''}
-                            {Number(stock.change_percent).toFixed(2)}%
-                          </span>
+            <>
+              {/* Mobile: Card layout */}
+              <div className="space-y-2 md:hidden">
+                {filtered.map((stock) => {
+                  const changePct = stock.change_percent != null ? Number(stock.change_percent) : null;
+                  return (
+                    <Link
+                      key={stock.symbol}
+                      href={`/stocks/${stock.symbol}`}
+                      className="flex items-center justify-between gap-3 rounded-lg border bg-card/50 px-3 py-2.5 active:bg-accent/50 transition-colors"
+                    >
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-center gap-2">
+                          <span className="font-semibold text-primary text-sm">{stock.symbol}</span>
+                          <ShariahBadge status={stock.shariah_status} simple={isSimple} />
+                        </div>
+                        <p className="text-xs text-muted-foreground truncate">{stock.name}</p>
+                        <p className="text-[11px] text-muted-foreground/70 mt-0.5">{stock.sector ?? '—'}</p>
+                      </div>
+                      <div className="text-right flex-shrink-0 space-y-0.5">
+                        <p className="text-sm font-medium num">
+                          {stock.last_price != null ? Number(stock.last_price).toFixed(2) : '—'}
+                        </p>
+                        {changePct != null ? (
+                          <p className={`text-xs font-medium num ${changePct > 0 ? 'text-profit' : changePct < 0 ? 'text-loss' : 'text-muted-foreground'}`}>
+                            {changePct > 0 ? '+' : ''}{changePct.toFixed(2)}%
+                          </p>
                         ) : (
-                          '—'
+                          <p className="text-xs text-muted-foreground">—</p>
                         )}
-                      </TableCell>
-                      <TableCell>
-                        <ShariahBadge status={stock.shariah_status} simple={isSimple} />
-                      </TableCell>
-                      <TableCell className="text-right">
                         <ScoreBadge score={scoreMap.get(stock.symbol)} />
-                      </TableCell>
+                      </div>
+                    </Link>
+                  );
+                })}
+              </div>
+              {/* Desktop: Table layout */}
+              <div className="overflow-x-auto hidden md:block">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Symbol</TableHead>
+                      <TableHead>Name</TableHead>
+                      <TableHead>Sector</TableHead>
+                      <TableHead className="text-right">Price</TableHead>
+                      <TableHead className="text-right">Change %</TableHead>
+                      <TableHead>Shariah</TableHead>
+                      <TableHead className="text-right">Score</TableHead>
                     </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </div>
+                  </TableHeader>
+                  <TableBody>
+                    {filtered.map((stock) => (
+                      <TableRow key={stock.symbol}>
+                        <TableCell className="font-medium">
+                          <Link
+                            href={`/stocks/${stock.symbol}`}
+                            className="text-primary hover:underline"
+                          >
+                            {stock.symbol}
+                          </Link>
+                        </TableCell>
+                        <TableCell className="max-w-[250px] truncate">
+                          {stock.name}
+                        </TableCell>
+                        <TableCell className="text-muted-foreground">
+                          {stock.sector ?? '—'}
+                        </TableCell>
+                        <TableCell className="text-right">
+                          {stock.last_price != null
+                            ? Number(stock.last_price).toFixed(2)
+                            : '—'}
+                        </TableCell>
+                        <TableCell className="text-right">
+                          {stock.change_percent != null ? (
+                            <span
+                              className={
+                                Number(stock.change_percent) > 0
+                                  ? 'text-profit'
+                                  : Number(stock.change_percent) < 0
+                                    ? 'text-loss'
+                                    : ''
+                              }
+                            >
+                              {Number(stock.change_percent) > 0 ? '+' : ''}
+                              {Number(stock.change_percent).toFixed(2)}%
+                            </span>
+                          ) : (
+                            '—'
+                          )}
+                        </TableCell>
+                        <TableCell>
+                          <ShariahBadge status={stock.shariah_status} simple={isSimple} />
+                        </TableCell>
+                        <TableCell className="text-right">
+                          <ScoreBadge score={scoreMap.get(stock.symbol)} />
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </div>
+            </>
           )}
         </CardContent>
       </Card>

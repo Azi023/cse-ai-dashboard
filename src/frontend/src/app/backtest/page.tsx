@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import {
@@ -175,9 +175,8 @@ export default function BacktestPage() {
                   </thead>
                   <tbody>
                     {engineResults.map((r) => (
-                      <>
+                      <React.Fragment key={r.strategy_id}>
                         <tr
-                          key={r.strategy_id}
                           className="border-b border-muted/30 hover:bg-muted/10 cursor-pointer"
                           onClick={() =>
                             setExpandedStrategy(
@@ -306,7 +305,7 @@ export default function BacktestPage() {
                             </td>
                           </tr>
                         )}
-                      </>
+                      </React.Fragment>
                     ))}
                   </tbody>
                 </table>

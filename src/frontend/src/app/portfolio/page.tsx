@@ -208,7 +208,7 @@ export default function PortfolioPage() {
       )}
 
       {/* Summary Cards */}
-      <div className="grid gap-4 md:grid-cols-4">
+      <div className="grid grid-cols-2 gap-3 md:grid-cols-4 md:gap-4">
         <SummaryCard
           title="Total Value"
           value={summary?.total_value ?? null}
@@ -273,83 +273,149 @@ export default function PortfolioPage() {
               )}
             </div>
           ) : (
-            <div className="overflow-x-auto">
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Symbol</TableHead>
-                    <TableHead>Name</TableHead>
-                    <TableHead className="text-right">Qty</TableHead>
-                    <TableHead className="text-right">Avg Price</TableHead>
-                    <TableHead className="text-right">Current</TableHead>
-                    <TableHead className="text-right">P&L</TableHead>
-                    <TableHead className="text-right">P&L %</TableHead>
-                    <TableHead className="text-right">Alloc %</TableHead>
-                    <TableHead>Shariah</TableHead>
-                    <TableHead className="text-right">Actions</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {holdings.map((h) => (
-                    <TableRow key={h.id}>
-                      <TableCell className="font-medium">
-                        <Link
-                          href={`/stocks/${h.symbol}`}
-                          className="text-primary hover:underline"
-                        >
-                          {h.symbol}
-                        </Link>
-                      </TableCell>
-                      <TableCell className="max-w-[150px] truncate">
-                        {h.name}
-                      </TableCell>
-                      <TableCell className="text-right">{h.quantity}</TableCell>
-                      <TableCell className="text-right">
-                        {Number(h.buy_price).toFixed(2)}
-                      </TableCell>
-                      <TableCell className="text-right">
-                        {h.current_price != null
-                          ? Number(h.current_price).toFixed(2)
-                          : '—'}
-                      </TableCell>
-                      <TableCell className="text-right">
-                        <PnLValue value={h.pnl} />
-                      </TableCell>
-                      <TableCell className="text-right">
-                        <PnLValue value={h.pnl_percent} suffix="%" />
-                      </TableCell>
-                      <TableCell className="text-right">
-                        {h.allocation_percent != null
-                          ? safeNum(h.allocation_percent).toFixed(1) + '%'
-                          : '—'}
-                      </TableCell>
-                      <TableCell>
-                        <ShariahBadge status={h.shariah_status} />
-                      </TableCell>
-                      <TableCell className="text-right">
-                        <div className="flex justify-end gap-1">
-                          <button
-                            onClick={() => {
-                              setEditingId(h.id);
-                              setShowAddForm(false);
-                            }}
-                            className="p-1 text-muted-foreground hover:text-foreground"
-                          >
-                            <Pencil className="h-3.5 w-3.5" />
-                          </button>
-                          <button
-                            onClick={() => handleDelete(h.id)}
-                            className="p-1 text-muted-foreground hover:text-red-500"
-                          >
-                            <Trash2 className="h-3.5 w-3.5" />
-                          </button>
+            <>
+              {/* Mobile: Card layout */}
+              <div className="space-y-3 md:hidden">
+                {holdings.map((h) => (
+                  <Link
+                    key={h.id}
+                    href={`/stocks/${h.symbol}`}
+                    className="block rounded-lg border bg-card/50 p-3 space-y-2 active:bg-accent/50 transition-colors"
+                  >
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="min-w-0">
+                        <div className="flex items-center gap-2">
+                          <span className="font-semibold text-primary">{h.symbol}</span>
+                          <ShariahBadge status={h.shariah_status} />
                         </div>
-                      </TableCell>
+                        <p className="text-xs text-muted-foreground truncate">{h.name}</p>
+                      </div>
+                      <div className="text-right flex-shrink-0">
+                        <p className="text-sm font-medium num">
+                          {h.current_price != null ? Number(h.current_price).toFixed(2) : '—'}
+                        </p>
+                        <PnLValue value={h.pnl_percent} suffix="%" />
+                      </div>
+                    </div>
+                    <div className="grid grid-cols-3 gap-2 text-xs">
+                      <div>
+                        <span className="text-muted-foreground">Qty</span>
+                        <p className="font-medium num">{h.quantity}</p>
+                      </div>
+                      <div>
+                        <span className="text-muted-foreground">Avg Price</span>
+                        <p className="font-medium num">{Number(h.buy_price).toFixed(2)}</p>
+                      </div>
+                      <div>
+                        <span className="text-muted-foreground">P&L</span>
+                        <p className="font-medium"><PnLValue value={h.pnl} /></p>
+                      </div>
+                    </div>
+                    <div className="flex items-center justify-between pt-1 border-t border-border/30">
+                      <span className="text-xs text-muted-foreground">
+                        Alloc: {h.allocation_percent != null ? safeNum(h.allocation_percent).toFixed(1) + '%' : '—'}
+                      </span>
+                      <div className="flex gap-1" onClick={(e) => e.preventDefault()}>
+                        <button
+                          onClick={(e) => { e.preventDefault(); setEditingId(h.id); setShowAddForm(false); }}
+                          className="p-1.5 text-muted-foreground hover:text-foreground rounded-md hover:bg-accent"
+                          aria-label={`Edit ${h.symbol}`}
+                        >
+                          <Pencil className="h-3.5 w-3.5" />
+                        </button>
+                        <button
+                          onClick={(e) => { e.preventDefault(); handleDelete(h.id); }}
+                          className="p-1.5 text-muted-foreground hover:text-destructive rounded-md hover:bg-destructive/10"
+                          aria-label={`Delete ${h.symbol}`}
+                        >
+                          <Trash2 className="h-3.5 w-3.5" />
+                        </button>
+                      </div>
+                    </div>
+                  </Link>
+                ))}
+              </div>
+              {/* Desktop: Table layout */}
+              <div className="overflow-x-auto hidden md:block">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Symbol</TableHead>
+                      <TableHead>Name</TableHead>
+                      <TableHead className="text-right">Qty</TableHead>
+                      <TableHead className="text-right">Avg Price</TableHead>
+                      <TableHead className="text-right">Current</TableHead>
+                      <TableHead className="text-right">P&L</TableHead>
+                      <TableHead className="text-right">P&L %</TableHead>
+                      <TableHead className="text-right">Alloc %</TableHead>
+                      <TableHead>Shariah</TableHead>
+                      <TableHead className="text-right">Actions</TableHead>
                     </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </div>
+                  </TableHeader>
+                  <TableBody>
+                    {holdings.map((h) => (
+                      <TableRow key={h.id}>
+                        <TableCell className="font-medium">
+                          <Link
+                            href={`/stocks/${h.symbol}`}
+                            className="text-primary hover:underline"
+                          >
+                            {h.symbol}
+                          </Link>
+                        </TableCell>
+                        <TableCell className="max-w-[150px] truncate">
+                          {h.name}
+                        </TableCell>
+                        <TableCell className="text-right">{h.quantity}</TableCell>
+                        <TableCell className="text-right">
+                          {Number(h.buy_price).toFixed(2)}
+                        </TableCell>
+                        <TableCell className="text-right">
+                          {h.current_price != null
+                            ? Number(h.current_price).toFixed(2)
+                            : '—'}
+                        </TableCell>
+                        <TableCell className="text-right">
+                          <PnLValue value={h.pnl} />
+                        </TableCell>
+                        <TableCell className="text-right">
+                          <PnLValue value={h.pnl_percent} suffix="%" />
+                        </TableCell>
+                        <TableCell className="text-right">
+                          {h.allocation_percent != null
+                            ? safeNum(h.allocation_percent).toFixed(1) + '%'
+                            : '—'}
+                        </TableCell>
+                        <TableCell>
+                          <ShariahBadge status={h.shariah_status} />
+                        </TableCell>
+                        <TableCell className="text-right">
+                          <div className="flex justify-end gap-1">
+                            <button
+                              onClick={() => {
+                                setEditingId(h.id);
+                                setShowAddForm(false);
+                              }}
+                              className="p-1 text-muted-foreground hover:text-foreground"
+                              aria-label={`Edit ${h.symbol}`}
+                            >
+                              <Pencil className="h-3.5 w-3.5" />
+                            </button>
+                            <button
+                              onClick={() => handleDelete(h.id)}
+                              className="p-1 text-muted-foreground hover:text-destructive"
+                              aria-label={`Delete ${h.symbol}`}
+                            >
+                              <Trash2 className="h-3.5 w-3.5" />
+                            </button>
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </div>
+            </>
           )}
         </CardContent>
       </Card>
@@ -976,11 +1042,40 @@ function RiskManagementCard({ riskData }: { riskData: PortfolioRiskSummary }) {
                 <TableHead>Symbol</TableHead>
                 <TableHead className="text-right">Entry</TableHead>
                 <TableHead className="text-right">Current</TableHead>
-                <TableHead className="text-right">Stop-Loss</TableHead>
-                <TableHead className="text-right">Take-Profit</TableHead>
-                <TableHead className="text-right">R:R</TableHead>
+                <TableHead className="text-right">
+                  <span className="group relative cursor-help">
+                    Stop-Loss
+                    <span className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-52 rounded-lg border bg-popover p-2 text-xs text-popover-foreground shadow-lg opacity-0 pointer-events-none group-hover:opacity-100 group-hover:pointer-events-auto transition-opacity z-50 font-normal text-left">
+                      Price at which the system suggests selling to limit losses
+                    </span>
+                  </span>
+                </TableHead>
+                <TableHead className="text-right">
+                  <span className="group relative cursor-help">
+                    Take-Profit
+                    <span className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-52 rounded-lg border bg-popover p-2 text-xs text-popover-foreground shadow-lg opacity-0 pointer-events-none group-hover:opacity-100 group-hover:pointer-events-auto transition-opacity z-50 font-normal text-left">
+                      Price at which the system suggests selling to lock in gains
+                    </span>
+                  </span>
+                </TableHead>
+                <TableHead className="text-right">
+                  <span className="group relative cursor-help">
+                    R:R
+                    <span className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-56 rounded-lg border bg-popover p-2 text-xs text-popover-foreground shadow-lg opacity-0 pointer-events-none group-hover:opacity-100 group-hover:pointer-events-auto transition-opacity z-50 font-normal text-left">
+                      Risk-to-Reward ratio. Above 1.0 means potential gain exceeds potential loss.
+                    </span>
+                  </span>
+                </TableHead>
                 <TableHead className="text-right">Distance</TableHead>
-                <TableHead>Status</TableHead>
+                <TableHead>
+                  <span className="group relative cursor-help">
+                    Status
+                    <span className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-52 rounded-lg border bg-popover p-2 text-xs text-popover-foreground shadow-lg opacity-0 pointer-events-none group-hover:opacity-100 group-hover:pointer-events-auto transition-opacity z-50 font-normal text-left">
+                      Based on how close the current price is to the stop-loss level
+                    </span>
+                  </span>
+                </TableHead>
+                <TableHead className="text-right text-xs">Created</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -1037,6 +1132,9 @@ function RiskManagementCard({ riskData }: { riskData: PortfolioRiskSummary }) {
                       >
                         {pos.risk_status ?? 'SAFE'}
                       </Badge>
+                    </TableCell>
+                    <TableCell className="text-right text-xs text-muted-foreground">
+                      {pos.date ?? '—'}
                     </TableCell>
                   </TableRow>
                 );

@@ -19,6 +19,7 @@ import {
   CheckCircle,
   XCircle,
   Clock,
+  ClipboardList,
   Play,
   Ban,
   ShieldAlert,
@@ -326,14 +327,19 @@ export default function OrdersPage() {
           </div>
         )}
 
-        {/* Safety notice */}
-        <div className="flex items-start gap-3 bg-amber-500/10 border border-amber-500/30 rounded-lg p-4">
-          <ShieldAlert className="w-5 h-5 text-amber-500 shrink-0 mt-0.5" />
-          <p className="text-amber-600 dark:text-amber-300 text-sm">
-            <strong>Safety-first execution:</strong> Orders are only placed on ATrad after you explicitly click
-            &quot;Approve&quot; then &quot;Execute&quot;. The executor verifies all form values before submitting.
-            The first execution runs with a visible browser so you can watch.
-          </p>
+        {/* Suggestion notice */}
+        <div className="flex items-start gap-3 bg-blue-500/10 border border-blue-500/30 rounded-lg p-4">
+          <AlertTriangle className="w-5 h-5 text-blue-500 shrink-0 mt-0.5" />
+          <div className="text-blue-600 dark:text-blue-300 text-sm space-y-1">
+            <p>
+              <strong>These are system-suggested orders.</strong> They have NOT been placed on your broker.
+              Click &quot;Approve&quot; then &quot;Execute&quot; to queue for execution on ATrad.
+            </p>
+            <p className="text-xs text-blue-500/70">
+              The strategy engine generates these suggestions daily at 2:47-2:48 PM SLT based on
+              technical analysis. No order is placed without your explicit approval.
+            </p>
+          </div>
         </div>
 
         {/* Quick Order form */}
@@ -436,9 +442,13 @@ export default function OrdersPage() {
                 {[1, 2].map((i) => <Skeleton key={i} className="h-16" />)}
               </div>
             ) : activeOrders.length === 0 ? (
-              <p className="text-muted-foreground text-sm py-4 text-center">
-                No active orders. The risk service will suggest TP/SL orders daily at 2:44 PM SLT.
-              </p>
+              <div className="py-8 text-center space-y-2">
+                <ClipboardList className="h-10 w-10 text-muted-foreground/30 mx-auto" />
+                <p className="text-sm font-medium text-muted-foreground">No pending orders</p>
+                <p className="text-xs text-muted-foreground max-w-sm mx-auto">
+                  The risk service suggests TP/SL orders daily at 2:47 PM SLT. You can also create manual orders above.
+                </p>
+              </div>
             ) : (
               <div className="space-y-3">
                 {activeOrders.map((order) => (
@@ -478,51 +488,89 @@ export default function OrdersPage() {
             {loading ? (
               <Skeleton className="h-32" />
             ) : historyOrders.length === 0 ? (
-              <p className="text-muted-foreground text-sm py-4 text-center">No order history yet.</p>
+              <div className="py-8 text-center space-y-2">
+                <Clock className="h-10 w-10 text-muted-foreground/30 mx-auto" />
+                <p className="text-sm font-medium text-muted-foreground">No order history</p>
+                <p className="text-xs text-muted-foreground">Executed, cancelled, and failed orders will appear here.</p>
+              </div>
             ) : (
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>ID</TableHead>
-                    <TableHead>Symbol</TableHead>
-                    <TableHead>Type / Strategy</TableHead>
-                    <TableHead>Qty</TableHead>
-                    <TableHead>Price</TableHead>
-                    <TableHead>Status</TableHead>
-                    <TableHead>Date</TableHead>
-                    <TableHead>ATrad ID</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
+              <>
+                {/* Mobile: Card layout */}
+                <div className="space-y-2 md:hidden">
                   {historyOrders.map((order) => (
-                    <TableRow key={order.id}>
-                      <TableCell className="text-muted-foreground text-sm">#{order.id}</TableCell>
-                      <TableCell className="font-mono text-sm">{order.symbol}</TableCell>
-                      <TableCell>
-                        <div className="flex flex-col gap-1">
+                    <div key={order.id} className="rounded-lg border bg-card/50 px-3 py-2.5 space-y-1.5">
+                      <div className="flex items-center justify-between gap-2">
+                        <div className="flex items-center gap-2">
+                          <span className="font-mono font-semibold text-sm">{order.symbol}</span>
                           <OrderTypeBadge orderType={order.order_type} />
-                          {order.strategy_id && (
-                            <StrategyBadge strategyId={order.strategy_id} />
-                          )}
                         </div>
-                      </TableCell>
-                      <TableCell className="text-sm">{order.quantity}</TableCell>
-                      <TableCell className="text-sm font-mono">
-                        LKR {safeNum(order.trigger_price).toFixed(2)}
-                      </TableCell>
-                      <TableCell><StatusBadge status={order.status} /></TableCell>
-                      <TableCell className="text-xs text-muted-foreground">
-                        {order.executed_at
-                          ? new Date(order.executed_at).toLocaleDateString()
-                          : new Date(order.created_at).toLocaleDateString()}
-                      </TableCell>
-                      <TableCell className="text-xs font-mono text-muted-foreground">
-                        {order.atrad_order_id ?? '—'}
-                      </TableCell>
-                    </TableRow>
+                        <StatusBadge status={order.status} />
+                      </div>
+                      <div className="flex items-center justify-between text-xs">
+                        <span className="text-muted-foreground">
+                          {order.quantity} shares @ LKR {safeNum(order.trigger_price).toFixed(2)}
+                        </span>
+                        <span className="text-muted-foreground">
+                          {order.executed_at
+                            ? new Date(order.executed_at).toLocaleDateString()
+                            : new Date(order.created_at).toLocaleDateString()}
+                        </span>
+                      </div>
+                      {order.strategy_id && (
+                        <div className="pt-0.5">
+                          <StrategyBadge strategyId={order.strategy_id} />
+                        </div>
+                      )}
+                    </div>
                   ))}
-                </TableBody>
-              </Table>
+                </div>
+                {/* Desktop: Table layout */}
+                <div className="hidden md:block">
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>ID</TableHead>
+                        <TableHead>Symbol</TableHead>
+                        <TableHead>Type / Strategy</TableHead>
+                        <TableHead>Qty</TableHead>
+                        <TableHead>Price</TableHead>
+                        <TableHead>Status</TableHead>
+                        <TableHead>Date</TableHead>
+                        <TableHead>ATrad ID</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {historyOrders.map((order) => (
+                        <TableRow key={order.id}>
+                          <TableCell className="text-muted-foreground text-sm">#{order.id}</TableCell>
+                          <TableCell className="font-mono text-sm">{order.symbol}</TableCell>
+                          <TableCell>
+                            <div className="flex flex-col gap-1">
+                              <OrderTypeBadge orderType={order.order_type} />
+                              {order.strategy_id && (
+                                <StrategyBadge strategyId={order.strategy_id} />
+                              )}
+                            </div>
+                          </TableCell>
+                          <TableCell className="text-sm">{order.quantity}</TableCell>
+                          <TableCell className="text-sm font-mono">
+                            LKR {safeNum(order.trigger_price).toFixed(2)}
+                          </TableCell>
+                          <TableCell><StatusBadge status={order.status} /></TableCell>
+                          <TableCell className="text-xs text-muted-foreground">
+                            {order.executed_at
+                              ? new Date(order.executed_at).toLocaleDateString()
+                              : new Date(order.created_at).toLocaleDateString()}
+                          </TableCell>
+                          <TableCell className="text-xs font-mono text-muted-foreground">
+                            {order.atrad_order_id ?? '—'}
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </div>
+              </>
             )}
           </CardContent>
         </Card>
@@ -590,6 +638,11 @@ function ActiveOrderCard({
                 {order.source.replace(/_/g, ' ')}
               </span>
             )}
+          </div>
+          <div className="text-xs text-muted-foreground/70">
+            Created {new Date(order.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+            {' at '}
+            {new Date(order.created_at).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })}
           </div>
           {order.reason && (
             <p className="text-xs text-muted-foreground max-w-2xl leading-relaxed">{order.reason}</p>

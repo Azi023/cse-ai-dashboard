@@ -261,16 +261,21 @@ export default function SignalsPage() {
       {filtered.length === 0 ? (
         <Card>
           <CardContent className="py-10 text-center space-y-2">
-            <Clock className="h-8 w-8 text-muted-foreground/40 mx-auto" />
+            <Zap className="h-10 w-10 text-muted-foreground/30 mx-auto" />
             <p className="text-sm font-medium text-muted-foreground">
               {signals.length === 0
-                ? 'Signals generate daily at market close (2:45 PM)'
+                ? 'No active signals right now'
                 : 'No signals match the current filters'}
             </p>
+            <p className="text-xs text-muted-foreground max-w-sm mx-auto">
+              {signals.length === 0
+                ? 'Signals are generated daily at 2:43 PM SLT after market close. The AI analyses all Shariah-compliant stocks each trading session.'
+                : 'Try adjusting the direction, confidence, or Shariah filters above.'}
+            </p>
             {signals.length === 0 && (
-              <p className="text-xs text-muted-foreground">
-                The AI analyses all Shariah-compliant stocks after each trading session.
-              </p>
+              <Link href="/stocks" className="inline-flex items-center gap-1 text-xs text-primary hover:underline mt-1">
+                Browse stocks manually
+              </Link>
             )}
           </CardContent>
         </Card>

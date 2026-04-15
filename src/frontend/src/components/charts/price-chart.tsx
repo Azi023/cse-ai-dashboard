@@ -83,7 +83,30 @@ function calcBollinger(data: { time: string; close: number }[], period = 20, std
   return { upper, middle, lower };
 }
 
-export function PriceChart({ data, height = 400 }: PriceChartProps) {
+/** Read a CSS variable's computed value, falling back to a default */
+function getCSSVar(name: string, fallback: string): string {
+  if (typeof document === 'undefined') return fallback;
+  const val = getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+  return val || fallback;
+}
+
+/** Convert OKLch or any CSS color to a canvas-readable value via a temp element */
+function resolveColor(cssVar: string, fallback: string): string {
+  if (typeof document === 'undefined') return fallback;
+  const raw = getCSSVar(cssVar, '');
+  if (!raw) return fallback;
+  // If it's already hex or rgb, return as-is
+  if (raw.startsWith('#') || raw.startsWith('rgb')) return raw;
+  // Use a temporary element to resolve oklch/hsl to rgb
+  const el = document.createElement('div');
+  el.style.color = raw;
+  document.body.appendChild(el);
+  const resolved = getComputedStyle(el).color;
+  document.body.removeChild(el);
+  return resolved || fallback;
+}
+
+export function PriceChart({ data, height: propHeight }: PriceChartProps) {
   const chartContainerRef = useRef<HTMLDivElement>(null);
   const rsiContainerRef = useRef<HTMLDivElement>(null);
   const chartRef = useRef<IChartApi | null>(null);
@@ -94,8 +117,28 @@ export function PriceChart({ data, height = 400 }: PriceChartProps) {
   const [showBollinger, setShowBollinger] = useState(false);
   const [showRSI, setShowRSI] = useState(false);
 
+  // Responsive height: smaller on mobile
+  const [chartHeight, setChartHeight] = useState(propHeight ?? 400);
+  useEffect(() => {
+    function updateHeight() {
+      setChartHeight(window.innerWidth < 768 ? 300 : (propHeight ?? 400));
+    }
+    updateHeight();
+    window.addEventListener('resize', updateHeight);
+    return () => window.removeEventListener('resize', updateHeight);
+  }, [propHeight]);
+
   useEffect(() => {
     if (!chartContainerRef.current || data.length === 0) return;
+
+    // Resolve theme-aware colors
+    const profitColor = resolveColor('--profit', '#22c55e');
+    const lossColor = resolveColor('--loss', '#ef4444');
+    const mutedFg = resolveColor('--muted-foreground', '#9ca3af');
+    const borderColor = resolveColor('--border', '#1f2937');
+    const isDark = document.documentElement.classList.contains('dark');
+    const gridColor = isDark ? 'rgba(255, 255, 255, 0.04)' : 'rgba(0, 0, 0, 0.06)';
+    const crosshairColor = isDark ? 'rgba(255, 255, 255, 0.15)' : 'rgba(0, 0, 0, 0.15)';
 
     // Sort data ascending by date
     const sorted = [...data]
@@ -113,37 +156,39 @@ export function PriceChart({ data, height = 400 }: PriceChartProps) {
     const chart = createChart(chartContainerRef.current, {
       layout: {
         background: { type: ColorType.Solid, color: 'transparent' },
-        textColor: '#9ca3af',
+        textColor: mutedFg,
       },
       grid: {
-        vertLines: { color: '#1f2937' },
-        horzLines: { color: '#1f2937' },
+        vertLines: { visible: false },
+        horzLines: { color: gridColor },
       },
       width: chartContainerRef.current.clientWidth,
-      height,
+      height: chartHeight,
       timeScale: {
-        borderColor: '#374151',
+        borderColor,
         timeVisible: false,
       },
-      rightPriceScale: { borderColor: '#374151' },
+      rightPriceScale: { borderColor },
       crosshair: {
-        vertLine: { color: '#6b7280' },
-        horzLine: { color: '#6b7280' },
+        vertLine: { color: crosshairColor, style: 3 },
+        horzLine: { color: crosshairColor, style: 3 },
       },
     });
 
     // Candlestick
     const candlestickSeries = chart.addSeries(CandlestickSeries, {
-      upColor: '#22c55e',
-      downColor: '#ef4444',
-      borderUpColor: '#22c55e',
-      borderDownColor: '#ef4444',
-      wickUpColor: '#22c55e',
-      wickDownColor: '#ef4444',
+      upColor: profitColor,
+      downColor: lossColor,
+      borderUpColor: profitColor,
+      borderDownColor: lossColor,
+      wickUpColor: profitColor,
+      wickDownColor: lossColor,
     });
     candlestickSeries.setData(sorted);
 
     // Volume (color-coded)
+    const profitVolume = isDark ? 'rgba(16, 185, 129, 0.25)' : 'rgba(5, 150, 105, 0.2)';
+    const lossVolume = isDark ? 'rgba(239, 68, 68, 0.25)' : 'rgba(220, 38, 38, 0.2)';
     const volumeSeries = chart.addSeries(HistogramSeries, {
       color: '#6366f1',
       priceFormat: { type: 'volume' },
@@ -156,7 +201,7 @@ export function PriceChart({ data, height = 400 }: PriceChartProps) {
       sorted.map((d) => ({
         time: d.time,
         value: d.volume,
-        color: d.close >= d.open ? '#22c55e40' : '#ef444440',
+        color: d.close >= d.open ? profitVolume : lossVolume,
       })),
     );
 
@@ -215,16 +260,16 @@ export function PriceChart({ data, height = 400 }: PriceChartProps) {
       const rsiChart = createChart(rsiContainerRef.current, {
         layout: {
           background: { type: ColorType.Solid, color: 'transparent' },
-          textColor: '#9ca3af',
+          textColor: mutedFg,
         },
         grid: {
-          vertLines: { color: '#1f2937' },
-          horzLines: { color: '#1f2937' },
+          vertLines: { visible: false },
+          horzLines: { color: gridColor },
         },
         width: rsiContainerRef.current.clientWidth,
         height: 120,
-        timeScale: { borderColor: '#374151', visible: false },
-        rightPriceScale: { borderColor: '#374151' },
+        timeScale: { borderColor, visible: false },
+        rightPriceScale: { borderColor },
       });
 
       const rsiSeries = rsiChart.addSeries(LineSeries, {
@@ -237,8 +282,10 @@ export function PriceChart({ data, height = 400 }: PriceChartProps) {
       rsiSeries.setData(rsiData);
 
       // Overbought/oversold lines
+      const obColor = isDark ? 'rgba(239, 68, 68, 0.35)' : 'rgba(220, 38, 38, 0.3)';
+      const osColor = isDark ? 'rgba(16, 185, 129, 0.35)' : 'rgba(5, 150, 105, 0.3)';
       const ob = rsiChart.addSeries(LineSeries, {
-        color: '#ef444460',
+        color: obColor,
         lineWidth: 1,
         lineStyle: 2,
         priceLineVisible: false,
@@ -247,7 +294,7 @@ export function PriceChart({ data, height = 400 }: PriceChartProps) {
       ob.setData(rsiData.map((d) => ({ time: d.time, value: 70 })));
 
       const os = rsiChart.addSeries(LineSeries, {
-        color: '#22c55e60',
+        color: osColor,
         lineWidth: 1,
         lineStyle: 2,
         priceLineVisible: false,
@@ -284,7 +331,7 @@ export function PriceChart({ data, height = 400 }: PriceChartProps) {
         rsiChartRef.current = null;
       }
     };
-  }, [data, height, showSMA20, showSMA50, showBollinger, showRSI]);
+  }, [data, chartHeight, showSMA20, showSMA50, showBollinger, showRSI]);
 
   return (
     <div className="space-y-2">
