@@ -58,6 +58,10 @@ data/cse-historical/*.csv
 data/ai-generated/
 data/atrad-sync/
 data/tracking/
+data/cse-fundamentals/
+
+# Downloaded templates / vendor assets (massive, never deploy)
+themeforest-*/
 
 # Script output — ATrad HTML dumps and screenshots contain brokerage account data
 scripts/*.html

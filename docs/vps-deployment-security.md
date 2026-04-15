@@ -1,234 +1,284 @@
-# VPS Deployment Security Guide — CSE AI Dashboard
+# VPS Deployment Guide — CSE AI Dashboard
 
-> Last updated: 2026-03-29
-> Target: Ubuntu 22.04 LTS VPS with public IP
+> Last updated: 2026-04-06
+> Target: Hetzner CPX22 · Ubuntu 24.04 · IP 195.201.33.87
+> SSH alias: `hetzner-vps` (key configured in `~/.ssh/config`)
 
 ---
 
-## Required Environment Variables
+## Overview
 
-Create `/home/deploy/cse-ai-dashboard/.env` on the VPS. Never commit this file.
+This document is the authoritative reference for deploying and operating the CSE AI Dashboard on the Hetzner VPS. It covers provisioning, app deployment, Nginx reverse proxy, UFW firewall, PM2 process management, cron timezone alignment, database security, log rotation, backup, and the health check workflow.
+
+**All deploy artefacts live in `deploy/`:**
+
+| File | Purpose | When to run |
+|------|---------|-------------|
+| `deploy/01-vps-provision.sh` | One-time VPS setup (Node, PG, Redis, Nginx, PM2, UFW) | Once on fresh VPS |
+| `deploy/02-app-deploy.sh` | Clone repo, build, start PM2 | Every deploy / update |
+| `deploy/03-set-timezone.sh` | Set VPS clock to Asia/Colombo (SLT) | Once after provisioning |
+| `deploy/ecosystem.production.js` | PM2 production process config | Managed by `02-app-deploy.sh` |
+| `deploy/health-check.sh` | Full health check from local machine | After any deploy |
+
+---
+
+## Architecture
+
+```
+Internet
+    │
+    ▼ :80 (HTTP)
+ Nginx
+    ├── /api  ──► NestJS  :4101  (backend)
+    └── /     ──► Next.js :4100  (frontend)
+
+Internally (not exposed):
+    PostgreSQL  :5432  (native, localhost only)
+    Redis       :6379  (localhost only)
+```
+
+Ports 4100 and 4101 are **never opened** externally. UFW allows only 22/80/443.
+
+---
+
+## First-Time Provisioning
+
+### 1. Run the provision script on the VPS
+
+```bash
+# From your local machine
+scp deploy/01-vps-provision.sh hetzner-vps:/tmp/
+ssh hetzner-vps "bash /tmp/01-vps-provision.sh"
+```
+
+When prompted, enter the `DATABASE_PASSWORD` that matches the one you will put in your `.env`. The script:
+
+- Updates system packages
+- Installs Node.js 20 LTS (via NodeSource)
+- Installs PostgreSQL 16 (native, port 5432)
+- Installs Redis 7 (bound to localhost only)
+- Installs Nginx
+- Installs PM2 globally
+- Installs Playwright Chromium system dependencies (for ATrad automation)
+- Configures UFW (22/80/443 open; 4100/4101/5432/6379 blocked externally)
+- Creates PostgreSQL user `cse_user` and database `cse_dashboard`
+- Grants schema privileges for TypeORM
+- Creates `/opt/cse-ai-dashboard` and `/var/log/cse-dashboard`
+- Configures PM2 startup on reboot
+
+### 2. Set timezone to Sri Lanka Time
+
+```bash
+ssh hetzner-vps "bash -s" < deploy/03-set-timezone.sh
+```
+
+This sets the system clock to `Asia/Colombo` (UTC+5:30). **This is critical** — all 18 NestJS `@Cron` jobs use server time. Without this, market-hours polling, digests, and weekly briefs fire at wrong times.
+
+Key cron jobs affected:
+- 9:25 AM SLT → `preMarketWarmup`
+- 9:30–2:30 PM SLT → 5-min market polling
+- 2:35 PM SLT → `postCloseSnapshot`
+- 2:45 PM SLT → `generateDailyDigest`
+- 3:00 PM SLT (Fri) → `generateWeeklyBrief`
+
+---
+
+## Deploying the App
+
+```bash
+# Run from local machine — SSHs into VPS automatically
+bash deploy/02-app-deploy.sh
+```
+
+The script:
+
+1. Clones or pulls `https://github.com/Azi023/cse-ai-dashboard.git` to `/opt/cse-ai-dashboard`
+2. **Pauses** and prompts you to manually SCP your `.env`
+3. Copies `deploy/ecosystem.production.js` to the VPS
+4. Runs `npm ci` + `npm run build` for the NestJS backend (`dist/main.js`)
+5. Runs `npm ci` + `npm run build` for the Next.js frontend (`.next/`)
+6. Runs `npx playwright install chromium` for ATrad browser automation
+7. Stops any existing PM2 processes, starts fresh from `ecosystem.production.js`
+8. Runs `pm2 save`
+9. Performs a quick health check (PostgreSQL, Redis, Nginx, HTTP 200s)
+
+---
+
+## .env File Transfer
+
+**The `.env` file is NEVER automated.** The deploy script pauses at this step.
+
+```bash
+# In a new terminal while deploy script is waiting:
+scp .env hetzner-vps:/opt/cse-ai-dashboard/.env
+```
+
+### Critical: Change this value for VPS
+
+The local setup runs PostgreSQL in Docker on port 5433. The VPS runs native PostgreSQL on the default port 5432.
+
+```bash
+# In your VPS .env — change:
+DATABASE_PORT=5432    # was 5433 locally (Docker)
+DATABASE_HOST=localhost
+```
+
+Everything else in `.env` should transfer as-is.
+
+### Full .env reference
 
 ```bash
 # Application
-NODE_ENV=production
+NODE_ENV=development    # Intentional — see TypeORM note below
 PORT=4101
-FRONTEND_PORT=4100
 
-# PostgreSQL
+# PostgreSQL (VPS: port 5432, not 5433)
 DATABASE_HOST=localhost
-DATABASE_PORT=5433
+DATABASE_PORT=5432
 DATABASE_USER=cse_user
-DATABASE_PASSWORD=<strong-unique-password>
+DATABASE_PASSWORD=<matches what you entered during 01-vps-provision.sh>
 DATABASE_NAME=cse_dashboard
 
 # Redis
 REDIS_HOST=localhost
 REDIS_PORT=6379
-REDIS_PASSWORD=<strong-redis-password>
 
 # Claude AI
 ANTHROPIC_API_KEY=<your-anthropic-key>
 
-# ATrad broker credentials (READ-ONLY scraping only)
+# ATrad broker credentials (READ-ONLY — no trades ever placed)
 ATRAD_USERNAME=<your-atrad-login>
 ATRAD_PASSWORD=<your-atrad-password>
 
-# CSE Platinum (fundamentals scraping)
-CSE_USERNAME=<your-cse-platinum-login>
-CSE_PASSWORD=<your-cse-platinum-password>
-
-# API authentication — all sensitive endpoints require X-API-Key: <this value>
+# API authentication key (protects write endpoints)
 # Generate: openssl rand -hex 32
 API_SECRET_KEY=<generate-with-openssl-rand-hex-32>
+
+# Frontend API base URL (used at build time by Next.js)
+NEXT_PUBLIC_API_URL=http://195.201.33.87/api
 ```
 
 ---
 
-## Firewall Rules (UFW)
+## PM2 Production Configuration
 
-Only expose ports 80 (HTTP → HTTPS redirect) and 443 (HTTPS). Database and app ports must never be public.
+The production ecosystem (`deploy/ecosystem.production.js`) differs from the local dev `ecosystem.config.js`:
+
+| Setting | Local (dev) | VPS (prod) |
+|---------|------------|------------|
+| Backend script | `nest start --watch` | `node dist/main` |
+| Frontend script | `next dev -p 4100` | `next start -p 4100` |
+| Log path | `logs/` (repo) | `/var/log/cse-dashboard/` |
+| Max memory | unlimited | 900M (backend), 600M (frontend) |
+| App dir | `./src/backend` | `/opt/cse-ai-dashboard/src/backend` |
+
+### NODE_ENV=development is intentional
+
+TypeORM is configured in `app.module.ts` to run `synchronize: true` only when `NODE_ENV=development`. This means TypeORM auto-creates and updates all 29 entity tables on each backend startup.
+
+For this personal single-user deployment, this is acceptable and prevents the complexity of maintaining a separate migration pipeline. If TypeORM migrations are added in the future, switch to `NODE_ENV=production` in `ecosystem.production.js`.
+
+### Useful PM2 commands on VPS
 
 ```bash
-ufw default deny incoming
-ufw default allow outgoing
-ufw allow ssh
-ufw allow 80/tcp
-ufw allow 443/tcp
-# NEVER open 4100, 4101, 5432, 5433, 6379 to the internet
-ufw enable
+pm2 list                        # Process status
+pm2 logs                        # Stream all logs
+pm2 logs cse-backend --lines 50 # Backend logs only
+pm2 restart cse-backend         # Restart backend only
+pm2 restart all                 # Restart all processes
+pm2 monit                       # Live CPU/memory dashboard
+pm2 save                        # Persist process list across reboots
 ```
 
 ---
 
 ## Nginx Reverse Proxy
 
-Install: `apt install nginx`
+Config at `/etc/nginx/sites-available/cse-dashboard` (deployed by `01-vps-provision.sh`).
 
-Config at `/etc/nginx/sites-available/cse-dashboard`:
+Key routing decisions:
+- `location /api` → `http://127.0.0.1:4101` (NestJS backend)
+- `location /` → `http://127.0.0.1:4100` (Next.js frontend)
+- `proxy_read_timeout 300s` on `/api` — Claude Sonnet inference can be slow
+- `client_max_body_size 50M` — accommodates Excel financial imports
+- Security headers set at Nginx level (X-Content-Type-Options, X-Frame-Options, X-XSS-Protection, Referrer-Policy)
 
-```nginx
-# HTTP — redirect everything to HTTPS
-server {
-    listen 80;
-    server_name yourdomain.com;
-    return 301 https://$host$request_uri;
-}
+### Adding HTTPS / SSL (future)
 
-# HTTPS — serve frontend, proxy API
-server {
-    listen 443 ssl http2;
-    server_name yourdomain.com;
-
-    ssl_certificate     /etc/letsencrypt/live/yourdomain.com/fullchain.pem;
-    ssl_certificate_key /etc/letsencrypt/live/yourdomain.com/privkey.pem;
-    ssl_protocols       TLSv1.2 TLSv1.3;
-    ssl_ciphers         HIGH:!aNULL:!MD5;
-    ssl_prefer_server_ciphers on;
-
-    # Security headers
-    add_header Strict-Transport-Security "max-age=31536000; includeSubDomains" always;
-    add_header X-Frame-Options DENY always;
-    add_header X-Content-Type-Options nosniff always;
-    add_header Referrer-Policy "strict-origin-when-cross-origin" always;
-
-    # Frontend (Next.js)
-    location / {
-        proxy_pass http://127.0.0.1:4100;
-        proxy_http_version 1.1;
-        proxy_set_header Upgrade $http_upgrade;
-        proxy_set_header Connection 'upgrade';
-        proxy_set_header Host $host;
-        proxy_set_header X-Real-IP $remote_addr;
-        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-        proxy_set_header X-Forwarded-Proto $scheme;
-        proxy_cache_bypass $http_upgrade;
-    }
-
-    # Backend API
-    location /api/ {
-        proxy_pass http://127.0.0.1:4101;
-        proxy_http_version 1.1;
-        proxy_set_header Host $host;
-        proxy_set_header X-Real-IP $remote_addr;
-        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-        proxy_set_header X-Forwarded-Proto $scheme;
-
-        # Limit request body size (protect against large uploads beyond app-level limit)
-        client_max_body_size 6M;
-    }
-}
-```
-
-Enable: `ln -s /etc/nginx/sites-available/cse-dashboard /etc/nginx/sites-enabled/`
-
----
-
-## SSL/TLS (Let's Encrypt)
+When a domain is pointed to this IP:
 
 ```bash
+ssh hetzner-vps
 apt install certbot python3-certbot-nginx
 certbot --nginx -d yourdomain.com
-# Auto-renewal is configured by certbot — verify with:
+
+# Verify auto-renewal:
 systemctl status certbot.timer
 ```
 
+Update the Nginx config to redirect HTTP → HTTPS and add `Strict-Transport-Security` header.
+
 ---
 
-## Update CORS for Production
+## Firewall (UFW)
 
-In `src/backend/src/main.ts`, update the CORS origin when deploying:
+Rules applied by `01-vps-provision.sh`:
 
-```typescript
-app.enableCors({
-  origin: ['https://yourdomain.com'],  // Replace localhost:4100
-  methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
-  credentials: true,
-  allowedHeaders: ['Content-Type', 'Authorization', 'X-API-Key'],
-});
+```
+Default: deny incoming, allow outgoing
+22/tcp   — SSH
+80/tcp   — HTTP (Nginx)
+443/tcp  — HTTPS (future SSL)
+
+Not opened: 4100, 4101, 5432, 6379
 ```
 
----
-
-## Process Management (PM2)
+Verify at any time:
 
 ```bash
-npm install -g pm2
-
-# Start services
-cd /home/deploy/cse-ai-dashboard
-pm2 start ecosystem.config.js
-
-# Configure PM2 to start on boot
-pm2 startup
-pm2 save
-```
-
-`ecosystem.config.js` settings:
-```javascript
-module.exports = {
-  apps: [
-    {
-      name: 'cse-backend',
-      cwd: './src/backend',
-      script: 'npm',
-      args: 'run start:prod',
-      env: { NODE_ENV: 'production' },
-      max_memory_restart: '512M',
-      error_file: './logs/backend-error.log',
-      out_file: './logs/backend-out.log',
-    },
-    {
-      name: 'cse-frontend',
-      cwd: './src/frontend',
-      script: 'npm',
-      args: 'start',
-      env: { NODE_ENV: 'production', PORT: '4100' },
-      max_memory_restart: '256M',
-      error_file: './logs/frontend-error.log',
-      out_file: './logs/frontend-out.log',
-    },
-  ],
-};
+ssh hetzner-vps "ufw status verbose"
 ```
 
 ---
 
 ## Database Security
 
-```bash
-# In docker-compose.yml or PostgreSQL config: bind to localhost only
-# postgres should listen only on 127.0.0.1, NOT 0.0.0.0
+PostgreSQL runs natively on `localhost:5432`. It is not accessible from outside the server.
 
-# Confirm postgres is NOT exposed publicly:
-ss -tlnp | grep 5433   # Should show 127.0.0.1:5433, not 0.0.0.0:5433
+```bash
+# Confirm PG is not exposed:
+ssh hetzner-vps "ss -tlnp | grep 5432"
+# Should show: 127.0.0.1:5432, NOT 0.0.0.0:5432
 ```
 
-Set a strong password in the `DATABASE_PASSWORD` env var. Remove any default fallback in app.module.ts (already done in this commit).
+The `cse_user` has privileges only on the `cse_dashboard` database — not superuser. Schema `public` is fully granted to support TypeORM's `synchronize` behaviour.
 
 ---
 
 ## Redis Security
 
+Redis is bound to `127.0.0.1` only (`bind 127.0.0.1` in `/etc/redis/redis.conf`). It is not password-protected (acceptable for a localhost-only binding on a personal server). If you want to add a password:
+
 ```bash
-# In redis.conf:
-requirepass <REDIS_PASSWORD>
-bind 127.0.0.1
+# /etc/redis/redis.conf
+requirepass <strong-password>
 
-# Reload:
-redis-cli -a <password> PING
+# Restart Redis
+systemctl restart redis-server
+
+# Then add to .env:
+REDIS_PASSWORD=<same-password>
 ```
-
-Update `src/backend/src/modules/cse-data/redis.service.ts` to pass `REDIS_PASSWORD` from env.
 
 ---
 
 ## Log Rotation
 
+Logs go to `/var/log/cse-dashboard/`. Set up logrotate so they don't fill the disk:
+
 ```bash
-# Install logrotate config at /etc/logrotate.d/cse-dashboard
-cat > /etc/logrotate.d/cse-dashboard << 'EOF'
-/home/deploy/cse-ai-dashboard/logs/*.log {
+ssh hetzner-vps "cat > /etc/logrotate.d/cse-dashboard" <<'EOF'
+/var/log/cse-dashboard/*.log {
     daily
     rotate 14
     compress
@@ -248,68 +298,135 @@ EOF
 ## Database Backup
 
 ```bash
-# Daily backup via cron
-crontab -e
-# Add:
-0 3 * * * pg_dump -U cse_user -h localhost -p 5433 cse_dashboard | gzip > /home/deploy/backups/cse_$(date +\%Y\%m\%d).sql.gz
+ssh hetzner-vps "crontab -e"
 
-# Cleanup backups older than 30 days
-0 4 * * * find /home/deploy/backups/ -name "*.sql.gz" -mtime +30 -delete
+# Add these two lines:
+# Daily backup at 3:00 AM SLT
+0 3 * * * pg_dump -U cse_user -h localhost -p 5432 cse_dashboard | gzip > /root/backups/cse_$(date +\%Y\%m\%d).sql.gz
+# Purge backups older than 30 days
+0 4 * * * find /root/backups/ -name "*.sql.gz" -mtime +30 -delete
 ```
 
----
-
-## API Authentication Usage
-
-All sensitive endpoints now require the `X-API-Key` header:
+Create the backups directory:
 
 ```bash
-# Example: trigger ATrad sync
-curl -X POST https://yourdomain.com/api/atrad/sync \
-  -H "X-API-Key: your-api-secret-key"
-
-# Public endpoints (no key needed):
-curl https://yourdomain.com/api/stocks
-curl https://yourdomain.com/api/ai/signals
-curl https://yourdomain.com/api/portfolio
+ssh hetzner-vps "mkdir -p /root/backups"
 ```
 
-**Protected endpoints:**
-- `POST /api/trade/*` — trade queue + execution
-- `POST /api/atrad/sync` — broker sync
-- `POST /api/atrad/test` — broker credential test
-- `POST /api/ai/chat` — Claude API chat (billable)
-- `POST /api/ai/signals/generate-eod` — EOD signal generation
-- `POST /api/financials/test-login` — CSE login test
-- `POST /api/financials/probe-mycse` — CSE navigation probe
-- `POST /api/financials/backfill-history` — bulk historical data pull
-- `POST /api/financials/import-csv` — file upload
-- `POST /api/notifications/test-digest` — triggers AI call
-- `POST /api/notifications/test-brief` — triggers AI call
+Restore from backup:
+
+```bash
+ssh hetzner-vps
+gunzip < /root/backups/cse_20260406.sql.gz | psql -U cse_user -h localhost cse_dashboard
+```
 
 ---
 
-## Monitoring
+## API Key Authentication
 
-Recommended uptime checks (free tier available):
-- **UptimeRobot**: Monitor `https://yourdomain.com/api/app/health` every 5 minutes
-- **PM2 monitoring**: `pm2 monit` for local dashboard
-- **Disk space**: Add cron alert if disk > 80% (`df -h | awk '$5 > 80'`)
+All write/sensitive endpoints require the `X-API-Key` header. Read-only endpoints are public.
+
+```bash
+# Protected — requires X-API-Key
+curl -X POST http://195.201.33.87/api/atrad/sync \
+  -H "X-API-Key: your-api-secret-key"
+
+# Public — no key needed
+curl http://195.201.33.87/api/stocks
+curl http://195.201.33.87/api/portfolio
+curl http://195.201.33.87/api/ai/signals
+```
+
+Protected endpoints include: `POST /api/atrad/*`, `POST /api/trade/*`, `POST /api/ai/chat`, `POST /api/notifications/test-*`, `POST /api/financials/backfill-*`, `POST /api/financials/import-csv`.
+
+---
+
+## Health Check
+
+Run from your local machine at any time:
+
+```bash
+bash deploy/health-check.sh
+```
+
+The script checks:
+- PM2 process status for `cse-backend` and `cse-frontend`
+- PostgreSQL connectivity
+- Redis PONG response
+- Nginx active status
+- HTTP 200 from backend `:4101/api/health`
+- HTTP 200 from frontend `:4100`
+- HTTP 200 through Nginx at `http://195.201.33.87/`
+- HTTP 200 for `/api/health`, `/api/stocks`, `/api/portfolio`, `/api/ai/brief`, `/api/notifications`
+- Firewall verification — confirms ports 4100/4101 are NOT externally reachable
+- Disk usage and memory summary
+
+Exit code 0 = all checks pass. Non-zero = number of failures.
+
+---
+
+## Routine Update Workflow
+
+After pushing code changes to `master`:
+
+```bash
+bash deploy/02-app-deploy.sh
+```
+
+The script does a `git reset --hard origin/master`, rebuilds both apps, and restarts PM2. `.env` files are preserved (excluded from git reset via `--exclude`).
 
 ---
 
 ## Pre-Deployment Checklist
 
-- [ ] `NODE_ENV=production` in `.env`
-- [ ] `API_SECRET_KEY` set (generated with `openssl rand -hex 32`)
-- [ ] `DATABASE_PASSWORD` is strong and unique (not the dev default)
-- [ ] `REDIS_PASSWORD` set in both `.env` and `redis.conf`
-- [ ] UFW firewall rules active (only 22/80/443 open)
-- [ ] Nginx config tested (`nginx -t`) and reloaded
-- [ ] SSL certificate installed and auto-renewal verified
-- [ ] PM2 startup hook configured (`pm2 startup && pm2 save`)
-- [ ] Database backup cron running
-- [ ] `scripts/*.html` and `scripts/*.png` NOT in git
-- [ ] `.env` NOT in git
-- [ ] TypeScript build succeeds (`npx tsc --noEmit`)
-- [ ] Backend health check returns 200: `curl https://yourdomain.com/api/app/health`
+- [ ] `01-vps-provision.sh` has been run on a fresh VPS
+- [ ] `03-set-timezone.sh` has been run (VPS clock shows `Asia/Colombo`)
+- [ ] `.env` copied to `/opt/cse-ai-dashboard/.env` on VPS
+- [ ] `DATABASE_PORT=5432` in VPS `.env` (not 5433)
+- [ ] `API_SECRET_KEY` generated: `openssl rand -hex 32`
+- [ ] `NEXT_PUBLIC_API_URL=http://195.201.33.87/api` in VPS `.env`
+- [ ] `ANTHROPIC_API_KEY` present in VPS `.env`
+- [ ] `ATRAD_USERNAME` / `ATRAD_PASSWORD` present in VPS `.env`
+- [ ] TypeScript build succeeded locally: `npx tsc --noEmit` (both `src/backend` and `src/frontend`)
+- [ ] PM2 startup hook active: `pm2 startup` + `pm2 save`
+- [ ] UFW active and correct: `ufw status verbose`
+- [ ] Nginx config valid: `nginx -t`
+- [ ] Health check passes: `bash deploy/health-check.sh`
+- [ ] Database backup cron configured
+- [ ] Log rotation configured at `/etc/logrotate.d/cse-dashboard`
+- [ ] `.env` is NOT in git: `git status | grep .env` (should be empty)
+
+---
+
+## Monitoring
+
+```bash
+# Live process dashboard
+ssh hetzner-vps "pm2 monit"
+
+# Stream all logs
+ssh hetzner-vps "pm2 logs"
+
+# Disk usage
+ssh hetzner-vps "df -h /opt"
+
+# Check if cron jobs are running (look for scheduled task logs)
+ssh hetzner-vps "pm2 logs cse-backend --lines 100 | grep -i cron"
+```
+
+Add a free uptime monitor (e.g. UptimeRobot) pointing to:
+`http://195.201.33.87/api/health` — 5-minute checks.
+
+---
+
+## Troubleshooting
+
+| Symptom | Likely cause | Fix |
+|---------|-------------|-----|
+| Backend won't start | TypeORM can't reach DB | Check `DATABASE_PORT=5432` in `.env` |
+| Cron jobs fire at wrong time | Timezone not set | Run `03-set-timezone.sh`, then `pm2 restart all` |
+| 502 Bad Gateway | PM2 process down | `ssh hetzner-vps "pm2 restart all"` |
+| ATrad sync fails | Playwright missing Chromium | `ssh hetzner-vps "cd /opt/cse-ai-dashboard/src/backend && npx playwright install chromium"` |
+| Frontend 500 | Build failed or missing env | Rebuild: `bash deploy/02-app-deploy.sh` |
+| Disk full | Log files or PG data | Check `df -h`, rotate logs, purge old backups |
+| Tables missing | NODE_ENV=production set | Set `NODE_ENV=development` in `ecosystem.production.js`, restart PM2 |
