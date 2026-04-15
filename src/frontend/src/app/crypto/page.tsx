@@ -32,6 +32,7 @@ import {
   Tooltip,
 } from 'recharts';
 import axios from 'axios';
+import { DcaPanel } from '@/components/crypto/dca-panel';
 
 const api = axios.create({
   baseURL: process.env.NEXT_PUBLIC_API_URL || '/api',
@@ -1145,6 +1146,8 @@ export default function CryptoPage() {
           )}
         </CardContent>
       </Card>
+
+      <DcaPanel />
     </div>
   );
 }

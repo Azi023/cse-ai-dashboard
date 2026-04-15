@@ -1626,5 +1626,55 @@ export const cryptoApi = {
     api.get(`/crypto/ticker/${symbol.replace('/', '-')}`),
 };
 
+export interface DCAPlan {
+  id: number;
+  symbol: string;
+  amount_usdt: number | string;
+  frequency: 'daily' | 'weekly' | 'biweekly';
+  is_active: boolean;
+  start_date: string;
+  last_execution: string | null;
+  total_invested: number | string;
+  total_units_bought: number | string;
+  average_cost: number | string;
+  created_at: string;
+}
+
+export interface DCAPerformance {
+  plans: Array<{
+    id: number;
+    symbol: string;
+    frequency: string;
+    amount_usdt: number;
+    total_invested: number;
+    total_units_bought: number;
+    average_cost: number;
+    current_price: number;
+    current_value: number;
+    unrealized_pnl: number;
+    pnl_pct: number;
+    last_execution: string | null;
+  }>;
+  totals: {
+    totalInvested: number;
+    currentValue: number;
+    unrealizedPnl: number;
+    pnlPct: number;
+  };
+}
+
+export const cryptoDcaApi = {
+  listPlans: () => api.get<DCAPlan[]>('/crypto/dca/plans'),
+  performance: () => api.get<DCAPerformance>('/crypto/dca/performance'),
+  createPlan: (data: {
+    symbol: string;
+    amount_usdt: number;
+    frequency: 'daily' | 'weekly' | 'biweekly';
+  }) => api.post<DCAPlan>('/crypto/dca/create', data),
+  pausePlan: (id: number) => api.put(`/crypto/dca/plans/${id}/pause`),
+  resumePlan: (id: number) => api.put(`/crypto/dca/plans/${id}/resume`),
+  deletePlan: (id: number) => api.delete(`/crypto/dca/plans/${id}`),
+};
+
 export default api;
 

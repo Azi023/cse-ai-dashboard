@@ -97,7 +97,8 @@ export class PaperTradingService {
     dto: ExecuteTradeDto,
   ): Promise<{ trade: PaperTrade; portfolio: PaperPortfolio }> {
     const assetType = dto.asset_type ?? 'stock';
-    const portfolio = await this.getOrCreatePortfolio('paper_human', assetType);
+    const portfolioType = dto.portfolio_type ?? 'paper_human';
+    const portfolio = await this.getOrCreatePortfolio(portfolioType, assetType);
 
     // Shariah compliance check
     if (assetType === 'stock') {
@@ -138,7 +139,7 @@ export class PaperTradingService {
       // SELL — check holdings
       const held = await this.getHeldQuantity(
         dto.symbol,
-        'paper_human',
+        portfolioType,
         assetType,
       );
       if (held < dto.quantity) {
@@ -151,7 +152,7 @@ export class PaperTradingService {
     }
 
     const trade = this.tradeRepo.create({
-      portfolio_type: 'paper_human',
+      portfolio_type: portfolioType,
       symbol: dto.symbol,
       asset_type: assetType,
       direction: dto.direction,
@@ -377,7 +378,7 @@ export class PaperTradingService {
     return latest ? Number(latest.close) : 0;
   }
 
-  private async getHeldQuantity(
+  async getHeldQuantity(
     symbol: string,
     type: string,
     assetType: string,

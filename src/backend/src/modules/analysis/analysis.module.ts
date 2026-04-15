@@ -5,6 +5,9 @@ import { AnalysisService } from './analysis.service';
 import { TechnicalService } from './technical.service';
 import { RiskService } from './risk.service';
 import { LearningService } from './learning.service';
+import { AiDemoTradingService } from './ai-demo-trading.service';
+import { StrategySignal } from '../../entities/strategy-signal.entity';
+import { PaperTradingModule } from '../paper-trading/paper-trading.module';
 import {
   MarketSnapshot,
   PortfolioSnapshot,
@@ -41,12 +44,20 @@ import { PortfolioModule } from '../portfolio/portfolio.module';
       TechnicalSignal,
       PositionRisk,
       RecommendationOutcome,
+      StrategySignal,
     ]),
     CseDataModule,
     PortfolioModule,
+    PaperTradingModule,
   ],
   controllers: [AnalysisController],
-  providers: [AnalysisService, TechnicalService, RiskService, LearningService],
+  providers: [
+    AnalysisService,
+    TechnicalService,
+    RiskService,
+    LearningService,
+    AiDemoTradingService,
+  ],
   exports: [AnalysisService, TechnicalService, RiskService, LearningService],
 })
 export class AnalysisModule {}

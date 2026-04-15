@@ -31,4 +31,8 @@ export class ExecuteTradeDto {
   @IsOptional()
   @IsIn(['stock', 'crypto'])
   asset_type?: string;
+
+  @IsOptional()
+  @IsIn(['paper_human', 'ai_demo'])
+  portfolio_type?: string;
 }
