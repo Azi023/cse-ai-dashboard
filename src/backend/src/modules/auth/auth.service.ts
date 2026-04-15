@@ -74,7 +74,10 @@ export class AuthService implements OnModuleInit {
       throw new UnauthorizedException('Invalid credentials');
     }
 
-    return this.generateTokenPair(username);
+    // Use the canonical (env-configured) username in the token so
+    // validateAccessToken's strict !== check can never mismatch due to
+    // the login being case-insensitive while the validator is strict.
+    return this.generateTokenPair(this.expectedUsername);
   }
 
   async refreshTokens(
