@@ -21,6 +21,8 @@ import {
   AlertTriangle,
   ChevronDown,
   X,
+  Sparkles,
+  Flame,
 } from 'lucide-react';
 import {
   journeyApi,
@@ -372,7 +374,7 @@ export default function JourneyPage() {
                 {kpis.currentPortfolioValue > 0 ? (
                   <>
                     {formatLKR(kpis.currentPortfolioValue)}
-                    {kpis.totalProfitLoss > 0 && <span className="ml-1 text-yellow-400">✨</span>}
+                    {kpis.totalProfitLoss > 0 && <Sparkles className="ml-1 inline h-4 w-4 text-amber-400" aria-hidden />}
                   </>
                 ) : (
                   <span className="text-sm text-muted-foreground">Add holdings to track</span>
@@ -426,7 +428,7 @@ export default function JourneyPage() {
                   )}
                   {goal.progressPercent >= 100 && (
                     <p className="text-xs text-green-400 flex items-center gap-1">
-                      <Trophy className="h-3 w-3" /> Goal reached! 🎉
+                      <Trophy className="h-3 w-3" aria-hidden /> Goal reached
                     </p>
                   )}
                 </div>
@@ -437,8 +439,9 @@ export default function JourneyPage() {
           {/* Streak + Month Return */}
           <div className="flex flex-wrap gap-3 text-xs">
             {kpis.consecutiveDeposits > 0 && (
-              <span className="rounded-full border border-yellow-500/30 bg-yellow-500/10 px-3 py-1 text-yellow-400">
-                🔥 {kpis.consecutiveDeposits}-month deposit streak
+              <span className="inline-flex items-center gap-1.5 rounded-full border border-amber-500/30 bg-amber-500/10 px-3 py-1 text-amber-400">
+                <Flame className="h-3 w-3" aria-hidden />
+                {kpis.consecutiveDeposits}-month deposit streak
               </span>
             )}
             {kpis.thisMonthReturn !== 0 && kpis.currentPortfolioValue > 0 && (
@@ -695,7 +698,7 @@ export default function JourneyPage() {
           <p className="text-center text-sm">
             {kpis.beatingMarket ? (
               <span className="text-green-400">
-                You&apos;re beating the market by {formatPct(kpis.portfolioReturnPct - kpis.aspiReturnSamePeriod)}! 🎉
+                You&apos;re beating the market by {formatPct(kpis.portfolioReturnPct - kpis.aspiReturnSamePeriod)}.
               </span>
             ) : (
               <span className="text-muted-foreground">

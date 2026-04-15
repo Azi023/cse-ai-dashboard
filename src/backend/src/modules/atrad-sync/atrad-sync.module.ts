@@ -6,7 +6,7 @@ import { OrderService } from './order.service';
 import { ATradOrderExecutor } from './atrad-order-executor';
 import { TradeController } from './trade.controller';
 import { CseDataModule } from '../cse-data/cse-data.module';
-import { Portfolio, Stock, MonthlyDeposit, Alert } from '../../entities';
+import { Portfolio, Stock, Alert } from '../../entities';
 import { PendingOrder } from '../../entities/pending-order.entity';
 import { PositionRisk } from '../../entities/position-risk.entity';
 import { StrategySignal } from '../../entities/strategy-signal.entity';
@@ -16,7 +16,6 @@ import { StrategySignal } from '../../entities/strategy-signal.entity';
     TypeOrmModule.forFeature([
       Portfolio,
       Stock,
-      MonthlyDeposit,
       Alert,
       PendingOrder,
       PositionRisk,

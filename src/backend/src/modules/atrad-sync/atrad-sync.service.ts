@@ -2,7 +2,7 @@ import { Injectable, Logger } from '@nestjs/common';
 import { Cron } from '@nestjs/schedule';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
-import { Portfolio, Stock, MonthlyDeposit } from '../../entities';
+import { Portfolio, Stock } from '../../entities';
 import { RedisService } from '../cse-data/redis.service';
 import {
   syncATradPortfolio,
@@ -24,7 +24,6 @@ export interface SyncStatus {
 export class ATradSyncService {
   private readonly logger = new Logger(ATradSyncService.name);
   private lastSyncResult: ATradPortfolio | null = null;
-  private previousBuyingPower: number | null = null;
   private isSyncing = false;
 
   constructor(
@@ -32,8 +31,6 @@ export class ATradSyncService {
     private readonly portfolioRepository: Repository<Portfolio>,
     @InjectRepository(Stock)
     private readonly stockRepository: Repository<Stock>,
-    @InjectRepository(MonthlyDeposit)
-    private readonly monthlyDepositRepository: Repository<MonthlyDeposit>,
     private readonly redisService: RedisService,
   ) {}
 
@@ -95,9 +92,6 @@ export class ATradSyncService {
           // Genuine empty portfolio
           await this.reconcilePortfolio([]);
         }
-
-        // Detect deposits via buying power changes
-        await this.detectDeposit(result.buyingPower);
 
         // Build cache payload — reuse previous holdings when ATrad returned empty after-hours
         let holdingsToCache = result.holdings;
@@ -192,9 +186,6 @@ export class ATradSyncService {
     if (result.holdings.length > 0) {
       await this.reconcilePortfolio(result.holdings);
     }
-
-    // Detect deposits via buying power changes
-    await this.detectDeposit(result.buyingPower);
 
     // Cache in Redis (24h TTL)
     await this.redisService.setJson(
@@ -509,64 +500,8 @@ export class ATradSyncService {
     );
   }
 
-  // ── Private: Detect deposits via buying power changes ─────────────────
-
-  private async detectDeposit(currentBuyingPower: number): Promise<void> {
-    if (this.previousBuyingPower === null) {
-      this.previousBuyingPower = currentBuyingPower;
-      this.logger.log(`Initial buying power recorded: ${currentBuyingPower}`);
-      return;
-    }
-
-    const diff = currentBuyingPower - this.previousBuyingPower;
-
-    // Only detect significant increases (> LKR 1000) as potential deposits
-    // Small changes are from trade settlements, dividends, etc.
-    if (diff > 1000) {
-      this.logger.log(
-        `Potential deposit detected: Buying power increased by LKR ${diff.toFixed(2)} ` +
-          `(${this.previousBuyingPower} -> ${currentBuyingPower})`,
-      );
-
-      // Check if we already recorded a deposit this month
-      const now = new Date();
-      const monthStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
-
-      const existingDeposit = await this.monthlyDepositRepository.findOne({
-        where: { month: monthStr, source: 'atrad-auto' },
-      });
-
-      if (!existingDeposit) {
-        // Get cumulative deposited
-        const allDeposits = await this.monthlyDepositRepository.find({
-          order: { deposit_date: 'DESC' },
-        });
-        const cumulativeDeposited = allDeposits.reduce(
-          (sum, d) => sum + Number(d.deposit_amount),
-          0,
-        );
-
-        const deposit = this.monthlyDepositRepository.create({
-          month: monthStr,
-          deposit_amount: diff,
-          deposit_date: now,
-          portfolio_value_at_deposit: this.lastSyncResult?.accountValue ?? 0,
-          cumulative_deposited: cumulativeDeposited + diff,
-          source: 'atrad-auto',
-          notes: `Auto-detected from ATrad buying power change: ${this.previousBuyingPower} -> ${currentBuyingPower}`,
-        });
-
-        await this.monthlyDepositRepository.save(deposit);
-        this.logger.log(
-          `Auto-created monthly deposit record: LKR ${diff.toFixed(2)} for ${monthStr}`,
-        );
-      } else {
-        this.logger.log(
-          `Deposit already recorded for ${monthStr} (source: atrad-auto). Skipping.`,
-        );
-      }
-    }
-
-    this.previousBuyingPower = currentBuyingPower;
-  }
+  // Note: auto-deposit detection removed 2026-04-15 — it double-counted
+  // ATrad cash balance as "new deposits" whenever it rose (e.g. after a
+  // push from the laptop sync). Deposits are user-initiated only, via
+  // POST /api/journey/deposit.
 }

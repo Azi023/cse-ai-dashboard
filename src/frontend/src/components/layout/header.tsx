@@ -294,10 +294,10 @@ export function Header() {
   return (
     <>
       <header className="sticky top-0 z-50 border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
-        <div className="container flex h-14 items-center justify-between px-4 max-w-[1400px] mx-auto">
+        <div className="container flex h-14 items-center gap-3 px-4 max-w-[1400px] mx-auto">
           {/* Logo + Nav */}
-          <div className="flex items-center gap-5">
-            <Link href={isSimple ? '/journey' : '/'} className="flex items-center gap-2 group">
+          <div className="flex items-center gap-5 min-w-0 flex-1">
+            <Link href={isSimple ? '/journey' : '/'} className="flex items-center gap-2 group shrink-0">
               <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-primary/10">
                 <TrendingUp className="h-4 w-4 text-primary" />
               </div>
@@ -305,7 +305,7 @@ export function Header() {
             </Link>
 
             {/* Desktop Nav */}
-            <nav className="hidden md:flex items-center gap-px" aria-label="Main navigation">
+            <nav className="hidden md:flex items-center gap-px min-w-0 overflow-x-auto flex-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden" aria-label="Main navigation">
               {activeTopLinks.map((link) => {
                 const active = isActive(link.href);
                 return (
@@ -330,7 +330,7 @@ export function Header() {
           </div>
 
           {/* Right side */}
-          <div className="flex items-center gap-2 text-sm">
+          <div className="flex items-center gap-2 text-sm shrink-0">
             {/* ASPI ticker */}
             {aspiValue != null && (
               <div
