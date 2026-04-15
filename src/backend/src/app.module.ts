@@ -34,6 +34,10 @@ import { DemoModule } from './demo/demo.module';
 import { TradeOpportunitiesModule } from './modules/trade-opportunities/trade-opportunities.module';
 import { ZakatModule } from './modules/zakat/zakat.module';
 import { StrategyEngineModule } from './modules/strategy-engine/strategy-engine.module';
+import { AgentModule } from './modules/agent/agent.module';
+import { CryptoModule } from './modules/crypto/crypto.module';
+import { UserPreferencesModule } from './modules/user-preferences/user-preferences.module';
+import { PaperTradingModule } from './modules/paper-trading/paper-trading.module';
 
 @Module({
   imports: [
@@ -115,6 +119,10 @@ import { StrategyEngineModule } from './modules/strategy-engine/strategy-engine.
     TradeOpportunitiesModule,
     ZakatModule,
     StrategyEngineModule,
+    AgentModule,
+    CryptoModule,
+    UserPreferencesModule,
+    PaperTradingModule,
   ],
   controllers: [AppController],
   providers: [
