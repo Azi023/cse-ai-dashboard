@@ -217,87 +217,86 @@ async function scrapeATrad(): Promise<{
     );
 
     // Fetch holdings via API.
-    // ATrad's client account format varies ("128229LI0" vs "128229-LI-0"
-    // vs empty which returns the session default). Try progressively
-    // broader queries until one returns portfolios.
+    //
+    // ATrad's getStockHolding endpoint requires a SPECIFIC security symbol
+    // — wildcards ("ALL", "*", "%") all return portfolios:[]. Plus the
+    // client-account format changed from "128229LI0" to "FWS/128229-LI/0"
+    // (or the literal "ALL"). The only practical approach for a whole-
+    // portfolio fetch is to iterate the candidate symbol list and keep
+    // whatever comes back non-empty.
+    //
+    // Candidate list: Shariah-compliant symbols we realistically hold or
+    // might hold. Easy to extend when a new position is opened — a symbol
+    // with no position simply returns an empty portfolios array.
+    const CANDIDATE_SYMBOLS = [
+      'AEL.N0000',
+      'HHL.N0000',
+      'TJL.N0000',
+      'DIPD.N0000',
+      'LOLC.N0000',
+      'DIAL.N0000',
+      'JKH.N0000',
+    ];
+
     const holdings: ATradHolding[] = [];
     try {
-      const accountVariants = ['', '128229LI0', '128229-LI-0'];
-      let holdingsResp = '';
-      for (const acct of accountVariants) {
-        holdingsResp = await page.evaluate(async (acctInner) => {
-          const resp = await fetch('/atsweb/client', {
+      for (const symbol of CANDIDATE_SYMBOLS) {
+        const responseText = await page.evaluate(async (sym) => {
+          const r = await fetch('/atsweb/client', {
             method: 'POST',
             headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-            body: `action=getStockHolding&exchange=CSE&broker=FWS&stockHoldingClientAccount=${encodeURIComponent(acctInner)}&stockHoldingSecurity=&format=json`,
+            body: `action=getStockHolding&exchange=CSE&broker=FWS&stockHoldingClientAccount=ALL&stockHoldingSecurity=${encodeURIComponent(sym)}&format=json`,
           });
-          return resp.text();
-        }, acct);
-        const probe = holdingsResp.replace(/'/g, '"');
-        if (/portfolios"?\s*:\s*\[\s*\{/.test(probe)) break;
-      }
+          return r.text();
+        }, symbol);
 
-      const normalizedJson = holdingsResp.replace(/'/g, '"');
-      let parsed: unknown = {};
-      try {
-        parsed = JSON.parse(normalizedJson);
-      } catch {
-        /* non-JSON response — treat as no holdings */
-      }
+        let parsed: unknown = {};
+        try {
+          parsed = JSON.parse(responseText.replace(/'/g, '"'));
+        } catch {
+          continue;
+        }
 
-      // Try every known response shape. ATrad has used several over time:
-      //   { portfolios: [...] }            — legacy
-      //   { code, description, data: { portfolios: [...] } }  — current
-      //   { clientHoldings: [...] } / { holdings: [...] }
-      const candidates: unknown[] = [];
-      const p = parsed as Record<string, unknown>;
-      if (Array.isArray(p.portfolios)) candidates.push(...p.portfolios);
-      if (Array.isArray(p.clientHoldings)) candidates.push(...p.clientHoldings);
-      if (Array.isArray(p.holdings)) candidates.push(...p.holdings);
+        const p = parsed as { data?: { portfolios?: unknown[] } };
+        const portfolios = p.data?.portfolios ?? [];
+        if (!Array.isArray(portfolios) || portfolios.length === 0) continue;
 
-      const data = p.data as Record<string, unknown> | unknown[] | undefined;
-      if (Array.isArray(data)) {
-        candidates.push(...data);
-      } else if (data && typeof data === 'object') {
-        for (const v of Object.values(data)) {
-          if (Array.isArray(v)) candidates.push(...v);
+        for (const item of portfolios) {
+          const h = item as Record<string, unknown>;
+          const qty = parseFloat(String(h.quantity ?? 0));
+          if (qty === 0) continue;
+          const avg = parseFloat(String(h.avgPrice ?? 0));
+          const last = parseFloat(String(h.lastTraded ?? 0));
+          const mv = parseFloat(String(h.marketValue ?? 0));
+          // Field map (confirmed against live response Apr 2026):
+          //   security   → symbol
+          //   lastTraded → current price
+          //   marketValue→ live MV
+          //   netGain    → unrealised profit/loss (absolute LKR)
+          //   holdername is the HOLDER name, not company — ATrad does not
+          //   return company name, so leave it blank and let the VPS enrich
+          //   from the stocks table.
+          holdings.push({
+            symbol: (h.security as string) || symbol,
+            companyName: '',
+            quantity: qty,
+            avgPrice: avg,
+            currentPrice: last,
+            marketValue: mv,
+            unrealizedPL: parseFloat(String(h.netGain ?? 0)),
+            unrealizedPLPct: avg > 0 ? ((last - avg) / avg) * 100 : 0,
+          });
         }
       }
 
-      for (const item of candidates) {
-        const h = item as Record<string, unknown>;
-        const symbol =
-          (h.securityId as string) ||
-          (h.security as string) ||
-          (h.symbol as string) ||
-          'UNKNOWN';
-        const qty = parseFloat(String(h.quantity ?? h.qty ?? 0));
-        if (qty === 0) continue;
-        holdings.push({
-          symbol,
-          companyName:
-            (h.securityName as string) ||
-            (h.security as string) ||
-            (h.name as string) ||
-            '',
-          quantity: qty,
-          avgPrice: parseFloat(String(h.avgPrice ?? h.averagePrice ?? 0)),
-          currentPrice: parseFloat(
-            String(h.lastTradedPrice ?? h.currentPrice ?? h.price ?? 0),
-          ),
-          marketValue: parseFloat(String(h.marketValue ?? 0)),
-          unrealizedPL: parseFloat(String(h.unrealizedPL ?? 0)),
-          unrealizedPLPct: parseFloat(
-            String(h.unrealizedPLPercentage ?? h.unrealizedPLPct ?? 0),
-          ),
-        });
+      if (holdings.length > 0) {
+        accountValue =
+          holdings.reduce((sum, h) => sum + h.marketValue, 0) + cashBalance;
       }
-
-      accountValue =
-        holdings.reduce((sum, h) => sum + h.marketValue, 0) + cashBalance;
     } catch (err) {
       console.log(
-        'Could not fetch holdings via API, continuing with balance only',
+        'Could not fetch holdings via API:',
+        err instanceof Error ? err.message : err,
       );
     }
 
