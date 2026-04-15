@@ -5,6 +5,7 @@ import { Cron } from '@nestjs/schedule';
 import { MarketRegimeRecord } from '../../entities/market-regime.entity';
 import { MarketSnapshot, MacroData, DailyPrice, Stock } from '../../entities';
 import { RedisService } from '../cse-data/redis.service';
+import { TradingCalendarService } from '../cse-data/trading-calendar.service';
 import { MarketRegimeType } from './strategy-registry';
 
 // ---------------------------------------------------------------------------
@@ -47,15 +48,19 @@ export class MarketRegimeService {
     @InjectRepository(Stock)
     private readonly stockRepo: Repository<Stock>,
     private readonly redisService: RedisService,
+    private readonly calendar: TradingCalendarService,
   ) {}
 
   // ---------------------------------------------------------------------------
-  // Cron: daily at 2:41 PM SLT (9:11 AM UTC), after technical analysis (9:09)
-  // and after daily snapshots (9:10), before stock scoring (9:12)
+  // Cron: daily at 2:41 PM SLT, after technical analysis (14:39)
+  // and after daily snapshots (14:40), before stock scoring (14:42)
+  // VPS timezone is Asia/Colombo — cron times are SLT directly.
   // ---------------------------------------------------------------------------
 
-  @Cron('11 9 * * 1-5', { name: 'detect-market-regime' })
+  @Cron('41 14 * * 1-5', { name: 'detect-market-regime' })
   async detectMarketRegimeCron(): Promise<void> {
+    if (this.calendar.skipIfNonTrading(this.logger, 'detectMarketRegime'))
+      return;
     this.logger.log('Detecting market regime (scheduled)');
     try {
       const result = await this.detectMarketRegime();

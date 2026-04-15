@@ -13,6 +13,7 @@ import {
   DailyPrice,
 } from '../../entities';
 import { RedisService } from '../cse-data/redis.service';
+import { TradingCalendarService } from '../cse-data/trading-calendar.service';
 import { MarketRegimeService } from './market-regime.service';
 import { StrategySelectorService } from './strategy-selector.service';
 import { StrategyConfig, PortfolioTier } from './strategy-registry';
@@ -118,14 +119,18 @@ export class SignalGeneratorService {
     private readonly redisService: RedisService,
     private readonly regimeService: MarketRegimeService,
     private readonly selectorService: StrategySelectorService,
+    private readonly calendar: TradingCalendarService,
   ) {}
 
   // ---------------------------------------------------------------------------
-  // Cron: 2:43 PM SLT (9:13 AM UTC), after regime detection (9:12)
+  // Cron: 2:43 PM SLT, after regime detection (14:41) and scoring (14:42)
+  // VPS timezone is Asia/Colombo — cron times are SLT directly.
   // ---------------------------------------------------------------------------
 
-  @Cron('13 9 * * 1-5', { name: 'generate-strategy-signals' })
+  @Cron('43 14 * * 1-5', { name: 'generate-strategy-signals' })
   async generateSignalsCron(): Promise<void> {
+    if (this.calendar.skipIfNonTrading(this.logger, 'generateStrategySignals'))
+      return;
     this.logger.log('Generating strategy signals (scheduled)');
     try {
       const signals = await this.generateSignals();

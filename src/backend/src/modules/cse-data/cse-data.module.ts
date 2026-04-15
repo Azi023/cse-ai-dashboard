@@ -4,12 +4,14 @@ import { TypeOrmModule } from '@nestjs/typeorm';
 import { CseApiService } from './cse-api.service';
 import { CseDataService } from './cse-data.service';
 import { RedisService } from './redis.service';
+import { TradingCalendarService } from './trading-calendar.service';
 import {
   Stock,
   DailyPrice,
   Announcement,
   MarketSummary,
   MacroData,
+  Alert,
 } from '../../entities';
 
 @Module({
@@ -24,9 +26,20 @@ import {
       Announcement,
       MarketSummary,
       MacroData,
+      Alert,
     ]),
   ],
-  providers: [CseApiService, CseDataService, RedisService],
-  exports: [CseApiService, CseDataService, RedisService],
+  providers: [
+    CseApiService,
+    CseDataService,
+    RedisService,
+    TradingCalendarService,
+  ],
+  exports: [
+    CseApiService,
+    CseDataService,
+    RedisService,
+    TradingCalendarService,
+  ],
 })
 export class CseDataModule {}

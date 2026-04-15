@@ -6,6 +6,7 @@ import { PositionRisk } from '../../entities/position-risk.entity';
 import { TechnicalSignal } from '../../entities/technical-signal.entity';
 import { Portfolio, Alert, Stock } from '../../entities';
 import { RedisService } from '../cse-data/redis.service';
+import { TradingCalendarService } from '../cse-data/trading-calendar.service';
 import { PortfolioService } from '../portfolio/portfolio.service';
 
 interface TradeItem {
@@ -32,15 +33,16 @@ export class RiskService {
     private readonly stockRepo: Repository<Stock>,
     private readonly redisService: RedisService,
     private readonly portfolioService: PortfolioService,
+    private readonly calendar: TradingCalendarService,
   ) {}
 
   // ---------------------------------------------------------------------------
-  // Cron — daily at 2:44 PM SLT (9:14 AM UTC)
-  // Moved from 2:43 to avoid collision with generate-strategy-signals (9:13)
+  // Cron — daily at 2:44 PM SLT (VPS timezone is Asia/Colombo)
   // ---------------------------------------------------------------------------
 
-  @Cron('14 9 * * 1-5', { name: 'run-risk-analysis' })
+  @Cron('44 14 * * 1-5', { name: 'run-risk-analysis' })
   async runRiskAnalysis(): Promise<void> {
+    if (this.calendar.skipIfNonTrading(this.logger, 'runRiskAnalysis')) return;
     const today = this.todayStr();
     this.logger.log(`Running risk analysis for ${today}`);
 
@@ -94,11 +96,14 @@ export class RiskService {
   }
 
   // ---------------------------------------------------------------------------
-  // Real-time stop monitor — every 5 min during market hours (9:30-2:25 PM SLT = 4:00-8:55 AM UTC)
+  // Real-time stop monitor — every 5 min during market hours (9:30-2:25 PM SLT)
+  // VPS timezone is Asia/Colombo — cron times are SLT directly.
   // ---------------------------------------------------------------------------
 
-  @Cron('*/5 4-8 * * 1-5', { name: 'monitor-stops' })
+  @Cron('*/5 9-14 * * 1-5', { name: 'monitor-stops' })
   async monitorStopLosses(): Promise<void> {
+    if (this.calendar.skipIfNonTrading(this.logger, 'monitorStopLosses'))
+      return;
     const holdings = await this.portfolioRepo.find({
       where: { is_open: true },
     });
@@ -148,13 +153,14 @@ export class RiskService {
   }
 
   // ---------------------------------------------------------------------------
-  // Exit signal checker — runs post-close daily at 2:46 PM SLT (9:16 AM UTC)
-  // Moved from 2:44 to avoid collision with run-risk-analysis (moved to 9:14)
-  // and generate-strategy-signals (9:13)
+  // Exit signal checker — runs post-close daily at 2:46 PM SLT
+  // VPS timezone is Asia/Colombo — cron times are SLT directly.
   // ---------------------------------------------------------------------------
 
-  @Cron('16 9 * * 1-5', { name: 'check-exit-signals' })
+  @Cron('46 14 * * 1-5', { name: 'check-exit-signals' })
   async checkExitSignals(): Promise<{ alerts: number }> {
+    if (this.calendar.skipIfNonTrading(this.logger, 'checkExitSignals'))
+      return { alerts: 0 };
     const holdings = await this.portfolioRepo.find({
       where: { is_open: true },
     });
@@ -273,11 +279,20 @@ export class RiskService {
       order: { symbol: 'ASC' },
     });
     if (rows.length > 0) return rows;
-    // Fall back to most recent
-    return this.riskRepo.find({
-      order: { date: 'DESC', symbol: 'ASC' },
-      take: 20,
-    });
+    // Fall back to the single most recent entry per symbol
+    const latestPerSymbol: PositionRisk[] = await this.riskRepo
+      .createQueryBuilder('pr')
+      .where(
+        'pr.id IN ' +
+          this.riskRepo
+            .createQueryBuilder('sub')
+            .select('MAX(sub.id)')
+            .groupBy('sub.symbol')
+            .getQuery(),
+      )
+      .orderBy('pr.symbol', 'ASC')
+      .getMany();
+    return latestPerSymbol;
   }
 
   async getPositionRiskForSymbol(symbol: string): Promise<PositionRisk | null> {

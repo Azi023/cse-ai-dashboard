@@ -16,6 +16,7 @@ import {
   NewsItem,
 } from '../../entities';
 import { RedisService } from '../cse-data/redis.service';
+import { TradingCalendarService } from '../cse-data/trading-calendar.service';
 import {
   PortfolioService,
   HoldingWithPnL,
@@ -109,6 +110,7 @@ export class AnalysisService {
     private readonly technicalService: TechnicalService,
     private readonly riskService: RiskService,
     private readonly learningService: LearningService,
+    private readonly calendar: TradingCalendarService,
   ) {}
 
   // ---------------------------------------------------------------------------
@@ -116,10 +118,10 @@ export class AnalysisService {
   // ---------------------------------------------------------------------------
 
   /**
-   * Weekly company profile sync — Sunday 2 AM SLT (Saturday 20:30 UTC).
-   * Fetches PE, PB, dividend yield, 52-week high/low for all Shariah-compliant stocks.
+   * Weekly company profile sync — Sunday 2 AM SLT.
+   * VPS timezone is Asia/Colombo — cron times are SLT directly.
    */
-  @Cron('30 20 * * 6', { name: 'sync-company-profiles' })
+  @Cron('0 2 * * 0', { name: 'sync-company-profiles' })
   async syncCompanyProfiles(): Promise<void> {
     this.logger.log('Starting weekly company profile sync...');
     const stocks = await this.stockRepo.find({
@@ -227,10 +229,13 @@ export class AnalysisService {
   }
 
   /**
-   * Save market + portfolio snapshots at 2:40 PM SLT (9:10 AM UTC) Mon-Fri.
+   * Save market + portfolio snapshots at 2:40 PM SLT Mon-Fri.
+   * VPS timezone is Asia/Colombo — cron times are SLT directly.
    */
-  @Cron('10 9 * * 1-5', { name: 'save-daily-snapshots' })
+  @Cron('40 14 * * 1-5', { name: 'save-daily-snapshots' })
   async saveDailySnapshots(): Promise<void> {
+    if (this.calendar.skipIfNonTrading(this.logger, 'saveDailySnapshots'))
+      return;
     const today = this.todayStr();
     this.logger.log(`Saving daily snapshots for ${today}`);
     await Promise.allSettled([
@@ -240,10 +245,12 @@ export class AnalysisService {
   }
 
   /**
-   * Run stock scoring at 2:42 PM SLT (9:12 AM UTC) Mon-Fri.
+   * Run stock scoring at 2:42 PM SLT Mon-Fri.
+   * VPS timezone is Asia/Colombo — cron times are SLT directly.
    */
-  @Cron('12 9 * * 1-5', { name: 'run-stock-scoring' })
+  @Cron('42 14 * * 1-5', { name: 'run-stock-scoring' })
   async runStockScoring(): Promise<void> {
+    if (this.calendar.skipIfNonTrading(this.logger, 'runStockScoring')) return;
     const today = this.todayStr();
     this.logger.log(`Running 12-factor stock scoring for ${today}`);
     try {
@@ -255,9 +262,10 @@ export class AnalysisService {
   }
 
   /**
-   * Calculate weekly metrics at 2:50 PM SLT (9:20 AM UTC) on Fridays.
+   * Calculate weekly metrics at 2:50 PM SLT on Fridays.
+   * VPS timezone is Asia/Colombo — cron times are SLT directly.
    */
-  @Cron('20 9 * * 5', { name: 'calculate-weekly-metrics' })
+  @Cron('50 14 * * 5', { name: 'calculate-weekly-metrics' })
   async calculateWeeklyMetrics(): Promise<void> {
     const { weekStart, weekEnd } = this.currentWeekRange();
     this.logger.log(`Calculating weekly metrics for ${weekStart} – ${weekEnd}`);
@@ -350,9 +358,10 @@ export class AnalysisService {
   }
 
   /**
-   * Generate AI recommendation at 2:55 PM SLT (9:25 AM UTC) on Fridays.
+   * Generate AI recommendation at 2:55 PM SLT on Fridays.
+   * VPS timezone is Asia/Colombo — cron times are SLT directly.
    */
-  @Cron('25 9 * * 5', { name: 'generate-ai-recommendation' })
+  @Cron('55 14 * * 5', { name: 'generate-ai-recommendation' })
   async generateWeeklyRecommendation(): Promise<void> {
     const { weekStart } = this.currentWeekRange();
     this.logger.log(`Generating AI recommendation for week ${weekStart}`);

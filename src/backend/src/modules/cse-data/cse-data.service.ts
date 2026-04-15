@@ -4,12 +4,14 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { IsNull, Repository } from 'typeorm';
 import { CseApiService } from './cse-api.service';
 import { RedisService } from './redis.service';
+import { TradingCalendarService } from './trading-calendar.service';
 import {
   Stock,
   DailyPrice,
   Announcement,
   MarketSummary,
   MacroData,
+  Alert,
 } from '../../entities';
 
 // Redis cache keys
@@ -95,6 +97,7 @@ export class CseDataService implements OnModuleInit {
   constructor(
     private readonly cseApiService: CseApiService,
     private readonly redisService: RedisService,
+    private readonly calendar: TradingCalendarService,
     @InjectRepository(Stock)
     private readonly stockRepository: Repository<Stock>,
     @InjectRepository(DailyPrice)
@@ -105,6 +108,8 @@ export class CseDataService implements OnModuleInit {
     private readonly marketSummaryRepository: Repository<MarketSummary>,
     @InjectRepository(MacroData)
     private readonly macroDataRepository: Repository<MacroData>,
+    @InjectRepository(Alert)
+    private readonly alertRepository: Repository<Alert>,
   ) {}
 
   /**
@@ -172,10 +177,10 @@ export class CseDataService implements OnModuleInit {
   }
 
   /**
-   * Pre-market warmup at 9:25 AM SLT Mon-Fri (3:55 AM UTC).
-   * Refreshes cache 5 minutes before market open so the dashboard is ready.
+   * Pre-market warmup at 9:25 AM SLT Mon-Fri.
+   * VPS timezone is Asia/Colombo — cron times are SLT directly.
    */
-  @Cron('55 3 * * 1-5')
+  @Cron('25 9 * * 1-5')
   async preMarketWarmup(): Promise<void> {
     this.logger.log('Pre-market warmup at 9:25 AM SLT...');
     await Promise.all([
@@ -185,11 +190,13 @@ export class CseDataService implements OnModuleInit {
   }
 
   /**
-   * Post-close snapshot at 2:35 PM SLT Mon-Fri (9:05 AM UTC).
-   * Single final sync after market close — no more polling until next pre-market warmup.
+   * Post-close snapshot at 2:35 PM SLT Mon-Fri.
+   * VPS timezone is Asia/Colombo — cron times are SLT directly.
    */
-  @Cron('5 9 * * 1-5')
+  @Cron('35 14 * * 1-5')
   async postCloseSnapshot(): Promise<void> {
+    if (this.calendar.skipIfNonTrading(this.logger, 'postCloseSnapshot'))
+      return;
     this.logger.log('Post-close snapshot at 2:35 PM SLT...');
     await Promise.all([
       this.fetchAndCacheMarketData(),
@@ -327,13 +334,144 @@ export class CseDataService implements OnModuleInit {
   }
 
   /**
-   * After-hours announcement check at 6:00 PM SLT Mon-Fri (12:30 PM UTC).
-   * Single run to capture any late filings posted after market close.
+   * After-hours announcement check at 6:00 PM SLT Mon-Fri.
+   * VPS timezone is Asia/Colombo — cron times are SLT directly.
    */
-  @Cron('30 12 * * 1-5')
+  @Cron('0 18 * * 1-5')
   private async afterHoursAnnouncements(): Promise<void> {
     this.logger.log('After-hours announcements check at 6:00 PM SLT...');
     await this.pollAnnouncements();
+  }
+
+  /**
+   * Daily data integrity check at 3:15 PM SLT Mon-Fri.
+   * Compares our daily_prices against live CSE API data.
+   * Creates alert notifications for any stock with >5% discrepancy.
+   * Safety net added after the April 8 2026 data integrity incident.
+   */
+  @Cron('15 15 * * 1-5')
+  async runDataIntegrityCheck(): Promise<void> {
+    this.logger.log('Running daily data integrity check...');
+
+    try {
+      const liveData =
+        (await this.cseApiService.getTradeSummary()) as TradeSummaryResponse | null;
+      const liveItems = liveData?.reqTradeSummery ?? [];
+      if (liveItems.length === 0) {
+        this.logger.warn(
+          'Integrity check: CSE API returned 0 stocks — skipping',
+        );
+        return;
+      }
+
+      const today = new Date().toISOString().split('T')[0];
+      const cseMap = new Map<string, number>();
+      for (const item of liveItems) {
+        if (item.symbol && item.price) {
+          cseMap.set(item.symbol, item.price);
+        }
+      }
+
+      const dbPrices = await this.dailyPriceRepository
+        .createQueryBuilder('dp')
+        .innerJoin('dp.stock', 's')
+        .select(['s.symbol', 'dp.close'])
+        .where('dp.trade_date = :today', { today })
+        .getRawMany();
+
+      const discrepancies: {
+        symbol: string;
+        dbPrice: number;
+        csePrice: number;
+        diffPct: number;
+      }[] = [];
+
+      for (const row of dbPrices) {
+        const symbol = row.s_symbol;
+        const dbClose = Number(row.dp_close);
+        const csePrice = cseMap.get(symbol);
+        if (!csePrice || dbClose === 0 || csePrice === 0) continue;
+
+        const diffPct = (Math.abs(csePrice - dbClose) / dbClose) * 100;
+        if (diffPct > 5) {
+          discrepancies.push({ symbol, dbPrice: dbClose, csePrice, diffPct });
+        }
+      }
+
+      // --- Price discrepancy alerts ---
+      if (discrepancies.length === 0) {
+        this.logger.log(
+          `Integrity check PASSED: ${dbPrices.length} stocks, 0 discrepancies >5%`,
+        );
+      } else {
+        discrepancies.sort((a, b) => b.diffPct - a.diffPct);
+        const worst5 = discrepancies
+          .slice(0, 5)
+          .map(
+            (d) =>
+              `${d.symbol}: DB=${d.dbPrice} CSE=${d.csePrice} (${d.diffPct.toFixed(1)}%)`,
+          )
+          .join(', ');
+
+        this.logger.error(
+          `Integrity check FAILED: ${discrepancies.length} stocks with >5% discrepancy. Worst: ${worst5}`,
+        );
+
+        const priceAlert = new Alert();
+        priceAlert.symbol = null;
+        priceAlert.alert_type = 'auto_generated';
+        priceAlert.title = `Data Integrity: ${discrepancies.length} stocks with >5% price discrepancy`;
+        priceAlert.message = `Daily integrity check found ${discrepancies.length} stocks where our DB price differs from CSE API by more than 5%. Worst: ${worst5}. This may indicate stale data or a pipeline failure.`;
+        priceAlert.is_active = true;
+        priceAlert.is_triggered = true;
+        priceAlert.triggered_at = new Date();
+        await this.alertRepository.save(priceAlert);
+
+        // Check for possible corporate actions (>20% overnight change)
+        const possibleCorpActions = discrepancies.filter((d) => d.diffPct > 20);
+        if (possibleCorpActions.length > 0) {
+          const caAlert = new Alert();
+          caAlert.symbol = possibleCorpActions[0].symbol;
+          caAlert.alert_type = 'auto_generated';
+          caAlert.title = `Possible corporate action: ${possibleCorpActions.map((d) => d.symbol).join(', ')}`;
+          caAlert.message = `${possibleCorpActions.length} stock(s) show >20% price change vs our DB. This could indicate a stock split, bonus issue, or rights issue. Manual verification required: ${possibleCorpActions.map((d) => `${d.symbol} (${d.diffPct.toFixed(1)}%)`).join(', ')}`;
+          caAlert.is_active = true;
+          caAlert.is_triggered = true;
+          caAlert.triggered_at = new Date();
+          await this.alertRepository.save(caAlert);
+        }
+      }
+
+      // --- ATrad sync staleness check (always runs) ---
+      const atradLastSync = await this.redisService.getJson<{
+        lastSynced?: string;
+      }>('atrad:last_sync');
+      if (atradLastSync?.lastSynced) {
+        const hoursSinceSync =
+          (Date.now() - new Date(atradLastSync.lastSynced).getTime()) /
+          (1000 * 60 * 60);
+        if (hoursSinceSync > 24) {
+          this.logger.warn(
+            `ATrad sync stale: ${Math.round(hoursSinceSync)}h since last successful sync`,
+          );
+          const syncAlert = new Alert();
+          syncAlert.symbol = null;
+          syncAlert.alert_type = 'auto_generated';
+          syncAlert.title = `ATrad sync stale: ${Math.round(hoursSinceSync)}h since last sync`;
+          syncAlert.message = `ATrad portfolio sync has not succeeded in ${Math.round(hoursSinceSync)} hours. Position risk data may be using cost basis instead of current market prices. Run a manual sync from WSL2.`;
+          syncAlert.is_active = true;
+          syncAlert.is_triggered = true;
+          syncAlert.triggered_at = new Date();
+          await this.alertRepository.save(syncAlert);
+        }
+      } else {
+        this.logger.warn(
+          'ATrad sync: no last_sync record found in Redis — sync has never succeeded or cache expired',
+        );
+      }
+    } catch (error) {
+      this.logger.error(`Integrity check error: ${String(error)}`);
+    }
   }
 
   /**
@@ -381,11 +519,12 @@ export class CseDataService implements OnModuleInit {
   /**
    * Mid-day price snapshot at 12:00 PM SLT Mon-Fri.
    * Captures intraday prices so we have a second data point each day.
-   * Cron uses UTC: 12:00 PM SLT = 6:30 AM UTC
+   * VPS timezone is Asia/Colombo — cron times are SLT directly.
    * Safe to run: saveDailyPrices() upserts by (stock_id, trade_date).
    */
-  @Cron('30 6 * * 1-5')
+  @Cron('0 12 * * 1-5')
   async saveMidDayPrices(): Promise<void> {
+    if (this.calendar.skipIfNonTrading(this.logger, 'saveMidDayPrices')) return;
     this.logger.log('Saving mid-day price snapshot (12:00 SLT)...');
 
     try {
@@ -400,10 +539,12 @@ export class CseDataService implements OnModuleInit {
 
   /**
    * Save daily market summary at 3:00 PM SLT Mon-Fri.
-   * Cron uses UTC: 3:00 PM SLT = 9:30 AM UTC
+   * VPS timezone is Asia/Colombo — cron times are SLT directly.
    */
-  @Cron('30 9 * * 1-5')
+  @Cron('0 15 * * 1-5')
   async saveDailyMarketSummary(): Promise<void> {
+    if (this.calendar.skipIfNonTrading(this.logger, 'saveDailyMarketSummary'))
+      return;
     this.logger.log('Saving daily market summary...');
 
     try {
@@ -524,6 +665,9 @@ export class CseDataService implements OnModuleInit {
    */
   private async saveDailyPrices(): Promise<void> {
     try {
+      if (this.calendar.skipIfNonTrading(this.logger, 'saveDailyPrices'))
+        return;
+
       const cached = await this.redisService.getJson<TradeSummaryResponse>(
         CACHE_KEYS.TRADE_SUMMARY,
       );
@@ -567,10 +711,11 @@ export class CseDataService implements OnModuleInit {
           const dailyPrice = new DailyPrice();
           dailyPrice.stock_id = stock.id;
           dailyPrice.trade_date = new Date(today);
-          dailyPrice.open = item.open ?? 0;
-          dailyPrice.high = item.high ?? 0;
-          dailyPrice.low = item.low ?? 0;
-          dailyPrice.close = item.price ?? 0;
+          const closePrice = item.price ?? 0;
+          dailyPrice.open = item.open ?? closePrice;
+          dailyPrice.high = item.high ?? closePrice;
+          dailyPrice.low = item.low ?? closePrice;
+          dailyPrice.close = closePrice;
           dailyPrice.previous_close = item.previousClose ?? null;
           dailyPrice.volume = item.sharevolume ?? 0;
           dailyPrice.turnover = item.turnover ?? 0;

@@ -5,6 +5,7 @@ import { Cron } from '@nestjs/schedule';
 import { TechnicalSignal } from '../../entities/technical-signal.entity';
 import { Stock, DailyPrice } from '../../entities';
 import { RedisService } from '../cse-data/redis.service';
+import { TradingCalendarService } from '../cse-data/trading-calendar.service';
 
 interface TradeItem {
   symbol?: string;
@@ -32,15 +33,18 @@ export class TechnicalService {
     @InjectRepository(DailyPrice)
     private readonly dailyPriceRepo: Repository<DailyPrice>,
     private readonly redisService: RedisService,
+    private readonly calendar: TradingCalendarService,
   ) {}
 
   // ---------------------------------------------------------------------------
-  // Cron — daily at 2:39 PM SLT (9:09 AM UTC)
+  // Cron — daily at 2:39 PM SLT (VPS timezone is Asia/Colombo)
   // Moved from 2:41 to avoid collision with detect-market-regime at 2:41
   // ---------------------------------------------------------------------------
 
-  @Cron('9 9 * * 1-5', { name: 'run-technical-analysis' })
+  @Cron('39 14 * * 1-5', { name: 'run-technical-analysis' })
   async runTechnicalAnalysis(): Promise<void> {
+    if (this.calendar.skipIfNonTrading(this.logger, 'runTechnicalAnalysis'))
+      return;
     const today = this.todayStr();
     this.logger.log(`Running technical analysis for ${today}`);
 
@@ -131,13 +135,14 @@ export class TechnicalService {
     date: string,
     tradeMap: Map<string, { price: number; volume: number }>,
   ): Promise<TechnicalSignal | null> {
-    // Fetch last 60 days in chronological order (oldest first)
+    // Fetch most recent 60 daily prices, then reverse to chronological order
     const prices = await this.dailyPriceRepo
       .createQueryBuilder('dp')
       .where('dp.stock_id = :id', { id: stock.id })
-      .orderBy('dp.trade_date', 'ASC')
+      .orderBy('dp.trade_date', 'DESC')
       .take(60)
       .getMany();
+    prices.reverse();
 
     if (prices.length === 0) return null;
 
