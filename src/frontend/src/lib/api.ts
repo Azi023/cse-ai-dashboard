@@ -1663,6 +1663,34 @@ export interface DCAPerformance {
   };
 }
 
+export interface DebateResult {
+  symbol: string;
+  bull_thesis: string;
+  bear_thesis: string;
+  synthesis: string;
+  price_target_p10: number | null;
+  price_target_p50: number | null;
+  price_target_p90: number | null;
+  confidence_score: number | null;
+  key_risks: string[] | null;
+  catalysts: string[] | null;
+  debate_date: string;
+  price_at_debate: number;
+  provider: 'claude' | 'openai';
+  tokens_used: number;
+  cached: boolean;
+}
+
+export const debateApi = {
+  getThisWeek: () => api.get<DebateResult[]>('/debates/this-week'),
+  getForSymbol: (symbol: string) =>
+    api.get<DebateResult | { symbol: string; debate: null }>(
+      `/debates/${encodeURIComponent(symbol)}`,
+    ),
+  runNow: (symbol: string) =>
+    api.post<DebateResult>(`/debates/${encodeURIComponent(symbol)}/run`),
+};
+
 export const cryptoDcaApi = {
   listPlans: () => api.get<DCAPlan[]>('/crypto/dca/plans'),
   performance: () => api.get<DCAPerformance>('/crypto/dca/performance'),

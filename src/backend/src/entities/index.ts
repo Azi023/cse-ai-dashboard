@@ -34,3 +34,4 @@ export { CryptoDCAExecution } from './crypto-dca-execution.entity';
 export { UserPreferences } from './user-preferences.entity';
 export { PaperPortfolio } from './paper-portfolio.entity';
 export { PaperTrade } from './paper-trade.entity';
+export { AiDebate } from './ai-debate.entity';

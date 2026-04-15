@@ -10,6 +10,7 @@ import { TopStocksTable } from '@/components/market/top-stocks-table';
 import { DailyBriefCard } from '@/components/market/daily-brief';
 import { MacroIndicatorsCard } from '@/components/market/macro-indicators';
 import { GlobalIndicatorsCard } from '@/components/market/global-indicators';
+import { ThisWeekDebates } from '@/components/debate/this-week-debates';
 import { SimpleDashboard } from '@/components/market/simple-dashboard';
 import {
   marketApi,
@@ -657,6 +658,8 @@ export default function DashboardPage() {
           </div>
         </CardContent>
       </Card>
+
+      <ThisWeekDebates />
     </div>
   );
 }

@@ -35,6 +35,7 @@ import { MarkdownRenderer } from '@/components/markdown-renderer';
 import { cn } from '@/lib/utils';
 import { format } from 'date-fns';
 import { safeNum } from '@/lib/format';
+import { DebatePanel } from '@/components/debate/debate-panel';
 
 const PERIODS = [
   { label: '1W', days: 7 },
@@ -735,6 +736,8 @@ export default function StockDetailPage() {
           </CardContent>
         </Card>
       )}
+
+      <DebatePanel symbol={symbol} />
     </div>
   );
 }

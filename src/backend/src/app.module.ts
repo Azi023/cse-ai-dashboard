@@ -38,6 +38,7 @@ import { AgentModule } from './modules/agent/agent.module';
 import { CryptoModule } from './modules/crypto/crypto.module';
 import { UserPreferencesModule } from './modules/user-preferences/user-preferences.module';
 import { PaperTradingModule } from './modules/paper-trading/paper-trading.module';
+import { DebateModule } from './modules/debate/debate.module';
 
 @Module({
   imports: [
@@ -123,6 +124,7 @@ import { PaperTradingModule } from './modules/paper-trading/paper-trading.module
     CryptoModule,
     UserPreferencesModule,
     PaperTradingModule,
+    DebateModule,
   ],
   controllers: [AppController],
   providers: [
