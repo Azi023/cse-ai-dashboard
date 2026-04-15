@@ -1,0 +1,112 @@
+name: Deploy to VPS
+
+# Auto-deploy on every push to master.
+# Steps:
+#   1. Typecheck both backend + frontend (fail-fast).
+#   2. rsync both src trees to the VPS.
+#   3. SSH into VPS: npm install → npm run build → pm2 restart.
+#
+# Secrets required on the repo (Settings → Secrets → Actions):
+#   VPS_HOST     e.g. 195.201.33.87
+#   VPS_USER     e.g. root
+#   VPS_SSH_KEY  private ed25519 key (matching /root/.ssh/authorized_keys on VPS)
+#   VPS_APP_DIR  e.g. /opt/cse-ai-dashboard
+
+on:
+  push:
+    branches: [master]
+  workflow_dispatch: # manual trigger via the Actions tab
+
+concurrency:
+  group: deploy-master
+  cancel-in-progress: false
+
+jobs:
+  typecheck:
+    name: Typecheck
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Use Node.js 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Backend — install & typecheck
+        working-directory: src/backend
+        run: |
+          npm ci
+          npx tsc --noEmit
+
+      - name: Frontend — install & typecheck
+        working-directory: src/frontend
+        run: |
+          npm ci
+          npx tsc --noEmit
+
+  deploy:
+    name: Deploy
+    needs: typecheck
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up SSH agent
+        uses: webfactory/ssh-agent@v0.9.0
+        with:
+          ssh-private-key: ${{ secrets.VPS_SSH_KEY }}
+
+      - name: Trust VPS host key
+        run: |
+          mkdir -p ~/.ssh
+          ssh-keyscan -H "${{ secrets.VPS_HOST }}" >> ~/.ssh/known_hosts 2>/dev/null
+          chmod 600 ~/.ssh/known_hosts
+
+      - name: rsync backend src
+        run: |
+          rsync -az --delete \
+            --exclude node_modules --exclude dist --exclude .env --exclude '*.log' \
+            src/backend/src/ \
+            ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }}:${{ secrets.VPS_APP_DIR }}/src/backend/src/
+          rsync -az \
+            src/backend/package.json src/backend/package-lock.json \
+            ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }}:${{ secrets.VPS_APP_DIR }}/src/backend/
+
+      - name: rsync frontend src
+        run: |
+          rsync -az --delete \
+            --exclude node_modules --exclude .next --exclude .env --exclude '*.log' \
+            src/frontend/src/ \
+            ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }}:${{ secrets.VPS_APP_DIR }}/src/frontend/src/
+          rsync -az \
+            src/frontend/package.json src/frontend/package-lock.json \
+            ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }}:${{ secrets.VPS_APP_DIR }}/src/frontend/
+
+      - name: Remote build + restart
+        run: |
+          ssh ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }} '
+            set -e
+            cd ${{ secrets.VPS_APP_DIR }}/src/backend
+            npm ci --omit=dev=false
+            npm run build
+            pm2 restart cse-backend --update-env
+
+            cd ${{ secrets.VPS_APP_DIR }}/src/frontend
+            npm ci
+            npm run build
+            pm2 restart cse-frontend --update-env
+
+            sleep 4
+            pm2 list
+          '
+
+      - name: Smoke test
+        run: |
+          sleep 3
+          code=$(curl -sS -o /dev/null -w "%{http_code}" https://csedash.xyz/api/atrad/status)
+          if [ "$code" != "200" ]; then
+            echo "Smoke test FAILED — /api/atrad/status returned $code"
+            exit 1
+          fi
+          echo "Smoke test OK — /api/atrad/status returned 200"
