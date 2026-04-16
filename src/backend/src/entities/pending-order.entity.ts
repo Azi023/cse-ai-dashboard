@@ -6,7 +6,13 @@ import {
   UpdateDateColumn,
 } from 'typeorm';
 
-export const ORDER_TYPES = ['STOP_LOSS', 'TAKE_PROFIT', 'LIMIT_BUY'] as const;
+export const ORDER_TYPES = [
+  'STOP_LOSS',
+  'TAKE_PROFIT',
+  'LIMIT_BUY',
+  'STOP_LIMIT_BUY',
+  'STOP_LIMIT_SELL',
+] as const;
 export const ORDER_ACTIONS = ['BUY', 'SELL'] as const;
 export const ORDER_STATUSES = [
   'PENDING',
@@ -15,6 +21,7 @@ export const ORDER_STATUSES = [
   'EXECUTED',
   'FAILED',
   'CANCELLED',
+  'CANCELLING',
   'REJECTED',
 ] as const;
 export const ORDER_SOURCES = [
@@ -24,10 +31,15 @@ export const ORDER_SOURCES = [
   'MANUAL',
 ] as const;
 
+export const TIF_VALUES = ['DAY', 'GTC', 'GTD', 'IOC', 'FOK'] as const;
+export const BOARD_VALUES = ['REGULAR', 'CROSSING', 'AON', 'AUCTION'] as const;
+
 export type OrderType = (typeof ORDER_TYPES)[number];
 export type OrderAction = (typeof ORDER_ACTIONS)[number];
 export type OrderStatus = (typeof ORDER_STATUSES)[number];
 export type OrderSource = (typeof ORDER_SOURCES)[number];
+export type TifValue = (typeof TIF_VALUES)[number];
+export type BoardValue = (typeof BOARD_VALUES)[number];
 
 // !! LESSON: All nullable string columns MUST have type: 'varchar' explicitly.
 // When emitDecoratorMetadata is on, TypeScript emits 'Object' for 'string | null'
@@ -87,6 +99,27 @@ export class PendingOrder {
    */
   @Column({ type: 'jsonb', nullable: true })
   safety_check_result: Record<string, unknown> | null;
+
+  /** Time in force: DAY, GTC, GTD, IOC, FOK. Defaults to DAY. */
+  @Column({ type: 'varchar', length: 10, default: 'DAY' })
+  tif: string;
+
+  /** Trading board: REGULAR, CROSSING, AON, AUCTION. Defaults to REGULAR. */
+  @Column({ type: 'varchar', length: 10, default: 'REGULAR' })
+  board: string;
+
+  /** Stop/trigger price for STOP_LIMIT orders. Null for plain LIMIT orders. */
+  @Column({ type: 'decimal', precision: 12, scale: 2, nullable: true })
+  stop_price: number | null;
+
+  /** ATrad blotter status: NEW, FILLED, P.FILLED, CANCELED, etc. Updated by agent polling. */
+  // MUST have type: 'varchar' — 'string | null' emits 'Object' via emitDecoratorMetadata
+  @Column({ type: 'varchar', length: 50, nullable: true })
+  atrad_blotter_status: string | null;
+
+  /** For OCO pairs: points to the counterpart order (e.g., stop-loss ↔ take-profit). */
+  @Column({ type: 'int', nullable: true })
+  linked_order_id: number | null;
 
   @Column({ type: 'timestamp', nullable: true })
   approved_at: Date | null;

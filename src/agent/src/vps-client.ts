@@ -14,11 +14,15 @@ interface PendingTrade {
   quantity: number;
   triggerPrice: number;
   limitPrice: number | null;
+  stopPrice: number | null;
   orderType: string;
+  tif: string;
+  board: string;
   reason: string | null;
   strategyId: string | null;
   source: string | null;
   approvedAt: string | null;
+  linkedOrderId: number | null;
 }
 
 interface ExecutionReport {
@@ -27,6 +31,7 @@ interface ExecutionReport {
   fillPrice?: number;
   filledQuantity?: number;
   atradOrderRef?: string;
+  atradBlotterStatus?: string;
   screenshotPath?: string;
   notes?: string;
 }

@@ -36,7 +36,13 @@ export class CreateOrderDto {
   symbol!: string;
 
   @IsString()
-  @IsIn(['STOP_LOSS', 'TAKE_PROFIT', 'LIMIT_BUY'])
+  @IsIn([
+    'STOP_LOSS',
+    'TAKE_PROFIT',
+    'LIMIT_BUY',
+    'STOP_LIMIT_BUY',
+    'STOP_LIMIT_SELL',
+  ])
   order_type!: string;
 
   @IsString()
@@ -54,6 +60,24 @@ export class CreateOrderDto {
   @IsOptional()
   @IsNumber()
   limit_price?: number;
+
+  @IsOptional()
+  @IsNumber()
+  stop_price?: number;
+
+  @IsOptional()
+  @IsString()
+  @IsIn(['DAY', 'GTC', 'GTD', 'IOC', 'FOK'])
+  tif?: string;
+
+  @IsOptional()
+  @IsString()
+  @IsIn(['REGULAR', 'CROSSING', 'AON', 'AUCTION'])
+  board?: string;
+
+  @IsOptional()
+  @IsNumber()
+  linked_order_id?: number;
 
   @IsOptional()
   @IsString()
@@ -170,15 +194,26 @@ export class OrderService {
         'STOP_LOSS',
       );
       if (!existingStop) {
+        // ATrad stop-loss = STOP LIMIT SELL order:
+        // stop_price = trigger price (where the stop activates)
+        // trigger_price = limit sell price (set 0.5% below stop for fill assurance)
+        const limitSellPrice =
+          Math.round(
+            stopPrice * (1 - SAFETY_RAILS.LIMIT_OFFSET_PCT / 100) * 100,
+          ) / 100;
         await this.createPendingOrder({
           symbol,
           order_type: 'STOP_LOSS',
           action: 'SELL',
           quantity: sharesHeld,
-          trigger_price: stopPrice,
+          trigger_price: limitSellPrice,
+          stop_price: stopPrice,
+          tif: 'GTC',
+          board: 'REGULAR',
           reason:
             `Auto-suggested stop-loss at LKR ${stopPrice.toFixed(2)} ` +
             `(${Number(risk.distance_to_stop_pct).toFixed(1)}% below current price). ` +
+            `Limit sell at LKR ${limitSellPrice.toFixed(2)}. ` +
             `Max loss if triggered: LKR ${Number(risk.max_loss_lkr).toFixed(0)}.`,
           source: 'RISK_SERVICE',
           risk_data: {
@@ -203,12 +238,15 @@ export class OrderService {
         'TAKE_PROFIT',
       );
       if (!existingTp) {
+        // ATrad take-profit = LIMIT SELL with GTC TIF
         await this.createPendingOrder({
           symbol,
           order_type: 'TAKE_PROFIT',
           action: 'SELL',
           quantity: sharesHeld,
           trigger_price: tpPrice,
+          tif: 'GTC',
+          board: 'REGULAR',
           reason:
             `Auto-suggested take-profit at LKR ${tpPrice.toFixed(2)} ` +
             `(target from risk:reward = ${Number(risk.risk_reward_ratio).toFixed(1)}:1). ` +
@@ -568,12 +606,17 @@ export class OrderService {
       quantity: dto.quantity,
       trigger_price: dto.trigger_price,
       limit_price: dto.limit_price ?? null,
+      stop_price: dto.stop_price ?? null,
+      tif: dto.tif ?? 'DAY',
+      board: dto.board ?? 'REGULAR',
+      linked_order_id: dto.linked_order_id ?? null,
       status: 'PENDING',
       source: dto.source ?? 'MANUAL',
       reason: dto.reason ?? null,
       risk_data: dto.risk_data ?? null,
       strategy_id: dto.strategy_id ?? null,
       safety_check_result: dto.safety_check_result ?? null,
+      atrad_blotter_status: null,
       approved_at: null,
       executed_at: null,
       atrad_order_id: null,
@@ -632,9 +675,22 @@ export class OrderService {
       quantity: Number(order.quantity),
       triggerPrice: Number(order.trigger_price),
       limitPrice: order.limit_price ? Number(order.limit_price) : null,
+      stopPrice: order.stop_price ? Number(order.stop_price) : null,
       orderType: order.order_type,
+      tif: order.tif,
+      board: order.board,
     });
 
+    if (result.delegatedToAgent) {
+      // Order stays EXECUTING — the WSL2 agent will pick it up via polling
+      // and report back via POST /api/internal/agent/report-execution
+      this.logger.log(
+        `Order #${orderId} delegated to WSL2 agent — awaiting execution report`,
+      );
+      return await this.findOrFail(orderId);
+    }
+
+    // Direct execution result (validation failure before delegation)
     const finalStatus = result.success ? 'EXECUTED' : 'FAILED';
     const updated = {
       ...order,
@@ -696,6 +752,120 @@ export class OrderService {
 
   async getOrderById(orderId: number): Promise<PendingOrder> {
     return this.findOrFail(orderId);
+  }
+
+  // ── Linked Orders (OCO pairs) ───────────────────────────────────────────────
+
+  /**
+   * Create a linked stop-loss + take-profit pair for a position.
+   * Each order's linked_order_id points to the other, enabling pseudo-OCO:
+   * when one fills, the agent cancels the counterpart.
+   */
+  async createLinkedOrders(params: {
+    symbol: string;
+    quantity: number;
+    stopLossPrice: number;
+    takeProfitPrice: number;
+    source: string;
+    reason: string;
+    riskData?: Record<string, unknown>;
+  }): Promise<{ stopLoss: PendingOrder; takeProfit: PendingOrder }> {
+    // Compute limit sell price for stop-loss (0.5% below stop for fill assurance)
+    const stopLimitPrice =
+      Math.round(
+        params.stopLossPrice * (1 - SAFETY_RAILS.LIMIT_OFFSET_PCT / 100) * 100,
+      ) / 100;
+
+    // Create stop-loss first
+    const stopLoss = await this.createPendingOrder({
+      symbol: params.symbol,
+      order_type: 'STOP_LOSS',
+      action: 'SELL',
+      quantity: params.quantity,
+      trigger_price: stopLimitPrice,
+      stop_price: params.stopLossPrice,
+      tif: 'GTC',
+      board: 'REGULAR',
+      source: params.source,
+      reason: `${params.reason} [Stop-loss leg of OCO pair]`,
+      risk_data: params.riskData,
+    });
+
+    // Create take-profit
+    const takeProfit = await this.createPendingOrder({
+      symbol: params.symbol,
+      order_type: 'TAKE_PROFIT',
+      action: 'SELL',
+      quantity: params.quantity,
+      trigger_price: params.takeProfitPrice,
+      tif: 'GTC',
+      board: 'REGULAR',
+      source: params.source,
+      reason: `${params.reason} [Take-profit leg of OCO pair]`,
+      risk_data: params.riskData,
+    });
+
+    // Link them to each other
+    await this.orderRepo.save({
+      ...stopLoss,
+      linked_order_id: takeProfit.id,
+    });
+    await this.orderRepo.save({
+      ...takeProfit,
+      linked_order_id: stopLoss.id,
+    });
+
+    this.logger.log(
+      `Created linked OCO pair for ${params.symbol}: ` +
+        `SL #${stopLoss.id} @ ${params.stopLossPrice} <-> TP #${takeProfit.id} @ ${params.takeProfitPrice}`,
+    );
+
+    return { stopLoss, takeProfit };
+  }
+
+  /**
+   * Handle OCO cancellation: when one side of a linked pair is filled,
+   * mark the counterpart as CANCELLING so the agent cancels it on ATrad.
+   */
+  async handleOcoCancellation(filledOrderId: number): Promise<void> {
+    const filledOrder = await this.findOrFail(filledOrderId);
+    if (!filledOrder.linked_order_id) return;
+
+    const counterpart = await this.orderRepo.findOne({
+      where: { id: filledOrder.linked_order_id },
+    });
+    if (!counterpart) {
+      this.logger.warn(
+        `OCO counterpart #${filledOrder.linked_order_id} not found for filled order #${filledOrderId}`,
+      );
+      return;
+    }
+
+    // Only cancel if the counterpart is still active
+    if (['PENDING', 'APPROVED', 'EXECUTING'].includes(counterpart.status)) {
+      await this.orderRepo.save({
+        ...counterpart,
+        status: 'CANCELLING',
+      });
+      this.logger.log(
+        `OCO: Order #${filledOrderId} filled → marking counterpart #${counterpart.id} as CANCELLING`,
+      );
+
+      await this.alertRepo.save(
+        this.alertRepo.create({
+          symbol: counterpart.symbol,
+          alert_type: 'auto_generated',
+          title: `OCO: Cancelling ${counterpart.order_type} for ${counterpart.symbol}`,
+          message:
+            `Linked order #${filledOrderId} (${filledOrder.order_type}) was filled. ` +
+            `Counterpart #${counterpart.id} (${counterpart.order_type}) is being cancelled.`,
+          is_triggered: true,
+          triggered_at: new Date(),
+          is_active: false,
+          is_read: false,
+        }),
+      );
+    }
   }
 
   // ── Helpers ─────────────────────────────────────────────────────────────────

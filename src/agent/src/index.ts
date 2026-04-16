@@ -1,10 +1,17 @@
 import { config, validateConfig } from './config';
 import { logger } from './utils/logger';
 import { vpsClient } from './vps-client';
+import type { PendingTrade } from './vps-client';
 import { launchBrowser, closeBrowser } from './atrad/browser';
 import { loginToATrad } from './atrad/login';
 import { syncPortfolio } from './atrad/portfolio-sync';
-import { placeOrder } from './atrad/order-entry';
+import {
+  openOrderForm,
+  fillOrder,
+  submitOrder,
+  closeOrderForm,
+} from './atrad/order-entry';
+import type { OrderParams } from './atrad/order-entry';
 
 // ── State ──────────────────────────────────────────────────────────────────
 
@@ -63,6 +70,37 @@ async function sendHeartbeat(): Promise<boolean> {
 
 // ── Trade Execution ────────────────────────────────────────────────────────
 
+/**
+ * Map a PendingTrade to ATrad OrderParams.
+ */
+function mapTradeToParams(trade: PendingTrade): OrderParams {
+  const action = trade.action.toUpperCase() as 'BUY' | 'SELL';
+  const orderType = trade.orderType;
+
+  let atradOrderType: 'LIMIT' | 'STOP_LIMIT' = 'LIMIT';
+  if (
+    orderType === 'STOP_LOSS' ||
+    orderType === 'STOP_LIMIT_BUY' ||
+    orderType === 'STOP_LIMIT_SELL'
+  ) {
+    atradOrderType = 'STOP_LIMIT';
+  }
+
+  const stopPrice =
+    trade.stopPrice ?? (atradOrderType === 'STOP_LIMIT' ? trade.limitPrice : null);
+
+  return {
+    action,
+    symbol: trade.symbol,
+    quantity: trade.quantity,
+    price: trade.triggerPrice,
+    orderType: atradOrderType,
+    stopPrice: stopPrice ?? undefined,
+    tif: (trade.tif ?? 'DAY') as OrderParams['tif'],
+    board: (trade.board ?? 'REGULAR') as NonNullable<OrderParams['board']>,
+  };
+}
+
 async function processPendingTrades(): Promise<void> {
   try {
     const trades = await vpsClient.getPendingTrades();
@@ -89,24 +127,12 @@ async function processPendingTrades(): Promise<void> {
 
     for (const trade of trades) {
       logger.info(
-        `Processing trade #${trade.id}: ${trade.action} ${trade.quantity}x ${trade.symbol}`,
+        `Processing trade #${trade.id}: ${trade.orderType} ${trade.action} ` +
+          `${trade.quantity}x ${trade.symbol} @ ${trade.triggerPrice} ` +
+          `[TIF=${trade.tif}, Board=${trade.board}]`,
       );
 
-      const result = await placeOrder(page, trade);
-
-      await vpsClient.reportExecution({
-        tradeQueueId: trade.id,
-        status: result.success ? 'FILLED' : 'ERROR',
-        fillPrice: undefined,
-        filledQuantity: result.success ? trade.quantity : 0,
-        atradOrderRef: result.atradOrderRef,
-        screenshotPath: result.screenshotPath,
-        notes: result.notes,
-      });
-
-      logger.info(
-        `Trade #${trade.id} reported: ${result.success ? 'FILLED' : 'ERROR'} — ${result.notes}`,
-      );
+      await executeSingleTrade(page, trade);
     }
 
     await closeBrowser();
@@ -114,6 +140,61 @@ async function processPendingTrades(): Promise<void> {
     logger.error('Error processing pending trades', err);
     await closeBrowser();
   }
+}
+
+/**
+ * Execute a single trade: open form → fill → verify → submit → report.
+ */
+async function executeSingleTrade(
+  page: Awaited<ReturnType<typeof launchBrowser>>,
+  trade: PendingTrade,
+): Promise<void> {
+  const params = mapTradeToParams(trade);
+
+  // Step 1: Open the order form
+  const prefix = await openOrderForm(page, params.action);
+  if (!prefix) {
+    await vpsClient.reportExecution({
+      tradeQueueId: trade.id,
+      status: 'ERROR',
+      notes: `Failed to open ${params.action} order form`,
+    });
+    return;
+  }
+
+  // Step 2: Fill the form with verified values
+  const fillResult = await fillOrder(page, prefix, params);
+  if (!fillResult.success) {
+    await closeOrderForm(page, prefix);
+    await vpsClient.reportExecution({
+      tradeQueueId: trade.id,
+      status: 'ERROR',
+      screenshotPath: fillResult.screenshotPath,
+      notes: fillResult.notes,
+    });
+    return;
+  }
+
+  // Step 3: Submit the order
+  logger.warn(
+    `Submitting trade #${trade.id}: ${params.action} ${params.quantity}x ${params.symbol}`,
+  );
+  const submitResult = await submitOrder(page, prefix);
+
+  // Step 4: Report result to VPS
+  await vpsClient.reportExecution({
+    tradeQueueId: trade.id,
+    status: submitResult.success ? 'FILLED' : 'ERROR',
+    filledQuantity: submitResult.success ? trade.quantity : 0,
+    atradOrderRef: submitResult.atradOrderRef,
+    atradBlotterStatus: submitResult.status,
+    screenshotPath: submitResult.screenshotPath,
+    notes: submitResult.notes,
+  });
+
+  logger.info(
+    `Trade #${trade.id} result: ${submitResult.success ? 'FILLED' : 'ERROR'} — ${submitResult.notes}`,
+  );
 }
 
 // ── Portfolio Sync ─────────────────────────────────────────────────────────

@@ -23,11 +23,15 @@ export interface PendingTradeResponse {
   quantity: number;
   triggerPrice: number;
   limitPrice: number | null;
+  stopPrice: number | null;
   orderType: string;
+  tif: string;
+  board: string;
   reason: string | null;
   strategyId: string | null;
   source: string | null;
   approvedAt: string | null;
+  linkedOrderId: number | null;
 }
 
 export interface ExecutionReportDto {
@@ -36,6 +40,7 @@ export interface ExecutionReportDto {
   fillPrice?: number;
   filledQuantity?: number;
   atradOrderRef?: string;
+  atradBlotterStatus?: string;
   screenshotPath?: string;
   notes?: string;
 }
@@ -104,11 +109,15 @@ export class AgentService {
       quantity: o.quantity,
       triggerPrice: Number(o.trigger_price),
       limitPrice: o.limit_price ? Number(o.limit_price) : null,
+      stopPrice: o.stop_price ? Number(o.stop_price) : null,
       orderType: o.order_type,
+      tif: o.tif ?? 'DAY',
+      board: o.board ?? 'REGULAR',
       reason: o.reason,
       strategyId: o.strategy_id,
       source: o.source,
       approvedAt: o.approved_at?.toISOString() ?? null,
+      linkedOrderId: o.linked_order_id ?? null,
     }));
   }
 
@@ -133,6 +142,7 @@ export class AgentService {
       status: isSuccess ? 'EXECUTED' : 'FAILED',
       executed_at: new Date(),
       atrad_order_id: dto.atradOrderRef ?? null,
+      atrad_blotter_status: dto.atradBlotterStatus ?? null,
       execution_screenshot: dto.screenshotPath ?? null,
       error_message:
         dto.status === 'ERROR' || dto.status === 'REJECTED'
