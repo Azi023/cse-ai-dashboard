@@ -1,6 +1,6 @@
 'use client';
 
-import { createContext, useContext, useState, useEffect, useCallback } from 'react';
+import { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react';
 import { useRouter, usePathname } from 'next/navigation';
 
 interface AuthContextValue {
@@ -22,7 +22,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const router = useRouter();
   const pathname = usePathname();
 
-  // Check auth status on mount
+  // Check auth status on mount — single attempt, no retries
   const checkAuth = useCallback(async () => {
     try {
       const res = await fetch(`${API_URL}/auth/me`, {
@@ -44,14 +44,17 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   }, []);
 
+  const checkedRef = useRef(false);
   useEffect(() => {
+    if (checkedRef.current) return;
+    checkedRef.current = true;
     checkAuth();
   }, [checkAuth]);
 
   // Redirect unauthenticated users away from protected pages
   useEffect(() => {
     if (!isLoading && !isAuthenticated && pathname !== '/login') {
-      router.replace('/login');
+      router.replace(`/login?redirect=${encodeURIComponent(pathname)}`);
     }
   }, [isLoading, isAuthenticated, pathname, router]);
 

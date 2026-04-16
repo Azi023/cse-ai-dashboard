@@ -2,28 +2,53 @@
 
 import { useState, FormEvent } from 'react';
 import { useAuth } from '@/contexts/auth-context';
-import { useSearchParams } from 'next/navigation';
+import { useSearchParams, useRouter } from 'next/navigation';
 import { Suspense } from 'react';
+
+function LoginSkeleton() {
+  return (
+    <div className="min-h-screen flex items-center justify-center bg-background px-4">
+      <div className="w-full max-w-sm">
+        <div className="text-center mb-8">
+          <div className="inline-flex items-center justify-center w-12 h-12 rounded-xl bg-primary/10 mb-4">
+            <div className="w-6 h-6 rounded bg-primary/20 animate-pulse" />
+          </div>
+          <div className="h-6 w-36 mx-auto rounded bg-muted animate-pulse mb-2" />
+          <div className="h-4 w-48 mx-auto rounded bg-muted/60 animate-pulse" />
+        </div>
+        <div className="space-y-4">
+          <div>
+            <div className="h-4 w-16 rounded bg-muted animate-pulse mb-1.5" />
+            <div className="h-10 w-full rounded-lg bg-muted animate-pulse" />
+          </div>
+          <div>
+            <div className="h-4 w-16 rounded bg-muted animate-pulse mb-1.5" />
+            <div className="h-10 w-full rounded-lg bg-muted animate-pulse" />
+          </div>
+          <div className="h-10 w-full rounded-lg bg-primary/30 animate-pulse" />
+        </div>
+      </div>
+    </div>
+  );
+}
 
 function LoginForm() {
   const { login, isAuthenticated, isLoading } = useAuth();
   const searchParams = useSearchParams();
+  const router = useRouter();
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [submitting, setSubmitting] = useState(false);
 
-  // If already authenticated, redirect handled by auth context
   if (isLoading) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-background">
-        <div className="text-muted-foreground">Loading...</div>
-      </div>
-    );
+    return <LoginSkeleton />;
   }
 
   if (isAuthenticated) {
-    return null; // Auth context will redirect to dashboard
+    const dest = searchParams.get('redirect') || '/';
+    router.replace(dest);
+    return <LoginSkeleton />;
   }
 
   const handleSubmit = async (e: FormEvent) => {
@@ -79,7 +104,7 @@ function LoginForm() {
             </div>
           )}
 
-          {searchParams.get('redirect') && (
+          {searchParams.get('redirect') && !error && (
             <div className="rounded-lg border border-border bg-muted/50 px-4 py-3 text-sm text-muted-foreground">
               Please sign in to continue
             </div>
@@ -145,13 +170,7 @@ function LoginForm() {
 
 export default function LoginPage() {
   return (
-    <Suspense
-      fallback={
-        <div className="min-h-screen flex items-center justify-center bg-background">
-          <div className="text-muted-foreground">Loading...</div>
-        </div>
-      }
-    >
+    <Suspense fallback={<LoginSkeleton />}>
       <LoginForm />
     </Suspense>
   );
