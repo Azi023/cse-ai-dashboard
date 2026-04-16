@@ -62,8 +62,8 @@ export default function AlertsPage() {
     if (!formSymbol || !formThreshold) return;
     const title =
       formType === 'price_above'
-        ? `${formSymbol.toUpperCase()} above Rs. ${formThreshold}`
-        : `${formSymbol.toUpperCase()} below Rs. ${formThreshold}`;
+        ? `${formSymbol.toUpperCase()} above LKR ${formThreshold}`
+        : `${formSymbol.toUpperCase()} below LKR ${formThreshold}`;
 
     try {
       const res = await alertsApi.create({
@@ -150,6 +150,7 @@ export default function AlertsPage() {
                 value={formType}
                 onChange={(e) => setFormType(e.target.value)}
                 className="rounded-md border bg-background px-3 py-2 text-sm"
+                aria-label="Alert type"
               >
                 <option value="price_above">Price Above</option>
                 <option value="price_below">Price Below</option>
@@ -282,7 +283,7 @@ export default function AlertsPage() {
                           <p className="text-sm font-medium">{alert.title}</p>
                           <p className="text-xs text-muted-foreground">
                             {alert.alert_type === 'price_above' ? 'Notify when above' : 'Notify when below'}{' '}
-                            Rs. {Number(alert.threshold).toFixed(2)}
+                            LKR {Number(alert.threshold).toFixed(2)}
                           </p>
                         </div>
                       </div>

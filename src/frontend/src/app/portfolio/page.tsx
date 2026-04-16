@@ -85,7 +85,6 @@ export default function PortfolioPage() {
       setLastUpdated(new Date());
     } catch (err) {
       setError('Failed to load portfolio data');
-      console.error(err);
     } finally {
       setLoading(false);
     }
@@ -117,7 +116,6 @@ export default function PortfolioPage() {
       await portfolioApi.delete(id);
       await fetchData();
     } catch (err) {
-      console.error('Failed to delete holding', err);
     }
   };
 
@@ -179,7 +177,7 @@ export default function PortfolioPage() {
           <CardContent className="pt-4">
             <p className="text-sm text-destructive">{error}</p>
             <p className="text-xs text-muted-foreground mt-1">
-              Make sure the backend server is running on port 4101
+              Unable to load data. Please try again later.
             </p>
           </CardContent>
         </Card>
@@ -268,7 +266,7 @@ export default function PortfolioPage() {
               </p>
               {atradStatus?.syncSuccess && (atradStatus.holdingsCount ?? 0) === 0 && (
                 <p className="text-xs text-blue-400/80">
-                  Your AEL.N0000 purchase (200 shares) will appear here after T+2 settlement — approx. Tuesday 18 March.
+                  New purchases typically appear after T+2 settlement (2 business days).
                 </p>
               )}
             </div>
@@ -697,7 +695,6 @@ function AddHoldingForm({
         axiosErr?.response?.data?.message ??
         'Failed to add holding. Use full CSE symbol format (e.g. JKH.N0000).';
       setFormError(msg);
-      console.error(err);
     } finally {
       setSubmitting(false);
     }
@@ -827,7 +824,6 @@ function PurificationSection({
       setEditingSymbol(null);
       onUpdate();
     } catch (err) {
-      console.error('Failed to update purification data', err);
     } finally {
       setSaving(false);
     }
@@ -1185,7 +1181,6 @@ function EditHoldingForm({
       onSuccess();
     } catch (err) {
       setFormError('Failed to update holding');
-      console.error(err);
     } finally {
       setSubmitting(false);
     }

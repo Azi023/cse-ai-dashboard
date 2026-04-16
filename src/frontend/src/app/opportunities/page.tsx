@@ -27,6 +27,7 @@ import {
   X,
 } from 'lucide-react';
 import { format } from 'date-fns';
+import { fmtLKR, fmt2 } from '@/lib/format';
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -38,14 +39,6 @@ const STRENGTH_CONFIG = {
   MODERATE: { color: 'text-yellow-400', bg: 'bg-yellow-500/10 border-yellow-500/30', bar: 'bg-yellow-500' },
   WEAK: { color: 'text-muted-foreground', bg: 'bg-muted/20 border-muted-foreground/20', bar: 'bg-muted-foreground' },
 };
-
-function fmtLkr(n: number): string {
-  return `LKR ${n.toLocaleString('en-LK', { maximumFractionDigits: 0 })}`;
-}
-
-function fmtPrice(n: number): string {
-  return n.toFixed(2);
-}
 
 // ---------------------------------------------------------------------------
 // Components
@@ -69,11 +62,11 @@ function RiskBudgetBar({ summary }: { summary: RiskSummary }) {
           <div className="flex items-center gap-3 text-sm">
             <span className="text-muted-foreground">
               Used: <span className={`font-medium num ${isExceeded ? 'text-red-400' : 'text-foreground'}`}>
-                {fmtLkr(summary.used_lkr)}
+                {fmtLKR(summary.used_lkr)}
               </span>
             </span>
             <span className="text-muted-foreground">
-              Remaining: <span className="font-medium text-emerald-400 num">{fmtLkr(summary.remaining_lkr)}</span>
+              Remaining: <span className="font-medium text-emerald-400 num">{fmtLKR(summary.remaining_lkr)}</span>
             </span>
           </div>
         </div>
@@ -173,7 +166,7 @@ function OpportunityCard({
 
           {/* Price col */}
           <div className="text-right flex-shrink-0">
-            <div className="text-lg font-bold num">LKR {fmtPrice(opp.current_price)}</div>
+            <div className="text-lg font-bold num">LKR {fmt2(opp.current_price)}</div>
             <div className="text-xs text-muted-foreground">Current</div>
           </div>
         </div>
@@ -182,31 +175,31 @@ function OpportunityCard({
         <div className="mt-3 grid grid-cols-3 gap-2 text-xs">
           <div className="rounded-md bg-muted/20 p-2">
             <div className="text-muted-foreground mb-0.5">Entry</div>
-            <div className="font-medium num">{fmtPrice(opp.suggested_entry)}</div>
+            <div className="font-medium num">{fmt2(opp.suggested_entry)}</div>
           </div>
           <div className="rounded-md bg-red-500/5 border border-red-500/10 p-2">
             <div className="flex items-center gap-1 text-muted-foreground mb-0.5">
               <ArrowDownRight className="h-3 w-3 text-red-400" />
               Stop
             </div>
-            <div className="font-medium text-red-400 num">{fmtPrice(opp.stop_loss)}</div>
+            <div className="font-medium text-red-400 num">{fmt2(opp.stop_loss)}</div>
           </div>
           <div className="rounded-md bg-emerald-500/5 border border-emerald-500/10 p-2">
             <div className="flex items-center gap-1 text-muted-foreground mb-0.5">
               <ArrowUpRight className="h-3 w-3 text-emerald-400" />
               Target
             </div>
-            <div className="font-medium text-emerald-400 num">{fmtPrice(opp.take_profit)}</div>
+            <div className="font-medium text-emerald-400 num">{fmt2(opp.take_profit)}</div>
           </div>
         </div>
 
         {/* Position sizing row */}
         <div className="mt-2 flex items-center justify-between text-xs text-muted-foreground">
           <span className="num">
-            {opp.position_size_shares} shares @ {fmtLkr(opp.position_value_lkr)}
+            {opp.position_size_shares} shares @ {fmtLKR(opp.position_value_lkr)}
           </span>
           <span>
-            Risk: <span className="text-red-400 font-medium num">{fmtLkr(opp.risk_per_trade_lkr)}</span>
+            Risk: <span className="text-red-400 font-medium num">{fmtLKR(opp.risk_per_trade_lkr)}</span>
             {' | '}
             R:R <span className="text-emerald-400 font-medium">{opp.risk_reward_ratio}</span>
           </span>
@@ -276,8 +269,8 @@ function ConfirmationModal({
               <div key={t.symbol} className="flex items-center justify-between text-sm">
                 <span className="font-mono font-medium">{t.symbol.replace('.N0000', '')}</span>
                 <span className="text-muted-foreground num">{t.quantity} shares</span>
-                <span className="num">{fmtLkr(t.entry_price * t.quantity)}</span>
-                <span className="text-red-400 text-xs num">Risk {fmtLkr(t.risk_lkr)}</span>
+                <span className="num">{fmtLKR(t.entry_price * t.quantity)}</span>
+                <span className="text-red-400 text-xs num">Risk {fmtLKR(t.risk_lkr)}</span>
               </div>
             ))}
           </div>
@@ -286,13 +279,13 @@ function ConfirmationModal({
             <div className="flex justify-between">
               <span className="text-muted-foreground">Total risk</span>
               <span className="font-medium num text-red-400">
-                {fmtLkr(preview.total_risk_lkr)} ({preview.total_risk_pct.toFixed(2)}%)
+                {fmtLKR(preview.total_risk_lkr)} ({preview.total_risk_pct.toFixed(2)}%)
               </span>
             </div>
             <div className="flex justify-between">
               <span className="text-muted-foreground">Budget remaining after</span>
               <span className="font-medium num text-emerald-400">
-                {fmtLkr(preview.budget_remaining_after_lkr)}
+                {fmtLKR(preview.budget_remaining_after_lkr)}
               </span>
             </div>
           </div>
@@ -542,7 +535,7 @@ export default function OpportunitiesPage() {
                 {selected.size} trade{selected.size !== 1 ? 's' : ''} selected
               </span>
               <span className="text-sm text-muted-foreground ml-2 num">
-                Risk: {fmtLkr(totalSelectedRisk)}
+                Risk: {fmtLKR(totalSelectedRisk)}
                 {riskSummary && (
                   <span className={exceedsBudget ? ' text-red-400' : ' text-muted-foreground'}>
                     {' '}({budgetPct.toFixed(1)}% of {riskSummary.daily_budget_pct}% budget)

@@ -189,7 +189,6 @@ export default function AdminFinancialsPage() {
       if (coverageRes.status === 'fulfilled') setCoverage(coverageRes.value.data);
     } catch (err) {
       setError('Failed to load initial data');
-      console.error(err);
     } finally {
       setLoading(false);
     }
@@ -423,7 +422,7 @@ export default function AdminFinancialsPage() {
           <CardContent className="pt-4">
             <p className="text-sm text-destructive">{error}</p>
             <p className="text-xs text-muted-foreground mt-1">
-              Make sure the backend server is running on port 4101
+              Unable to load data. Please try again later.
             </p>
           </CardContent>
         </Card>

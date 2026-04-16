@@ -711,6 +711,7 @@ function AIPortfolioTab({ shariahMode }: { shariahMode: boolean }) {
                 value={tradeSymbol}
                 onChange={(e) => setTradeSymbol(e.target.value)}
                 className="w-full h-9 rounded-md border border-input bg-background text-foreground px-3 text-sm"
+                aria-label="Select stock"
               >
                 {compliantStocks.map((s) => (
                   <option key={s.symbol} value={s.symbol}>
@@ -1165,6 +1166,7 @@ function PaperTradingTab({ shariahMode }: { shariahMode: boolean }) {
                 value={tradeSymbol}
                 onChange={(e) => setTradeSymbol(e.target.value)}
                 className="w-full h-9 rounded-md border border-input bg-background text-foreground px-3 text-sm"
+                aria-label="Select stock"
               >
                 {allStocks.map((s) => (
                   <option key={s.symbol} value={s.symbol}>

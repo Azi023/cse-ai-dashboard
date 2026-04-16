@@ -50,7 +50,7 @@ import {
 import Link from 'next/link';
 import { useDisplayMode } from '@/contexts/display-mode-context';
 import { getSimpleLabel } from '@/lib/simple-mode-constants';
-import { safeNum } from '@/lib/format';
+import { safeNum, timeAgo } from '@/lib/format';
 
 function useWatchlist() {
   const [watchlist, setWatchlist] = useState<string[]>([]);
@@ -78,16 +78,6 @@ function useWatchlist() {
   );
 
   return { watchlist, toggle, has };
-}
-
-function timeAgo(dateStr: string): string {
-  const diff = Date.now() - new Date(dateStr).getTime();
-  const mins = Math.floor(diff / 60000);
-  if (mins < 60) return `${mins}m ago`;
-  const hours = Math.floor(mins / 60);
-  if (hours < 24) return `${hours}h ago`;
-  const days = Math.floor(hours / 24);
-  return `${days}d ago`;
 }
 
 export default function DashboardPage() {

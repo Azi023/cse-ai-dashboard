@@ -120,7 +120,7 @@ function formatValue(config: IndicatorDisplayConfig, value: number): string {
   });
 
   if (config.unit === '%') return `${formatted}%`;
-  if (config.unit === 'LKR') return `Rs. ${formatted}`;
+  if (config.unit === 'LKR') return `LKR ${formatted}`;
   return formatted;
 }
 

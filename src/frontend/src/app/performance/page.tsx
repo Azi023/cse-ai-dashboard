@@ -172,9 +172,6 @@ export default function PerformancePage() {
               <Zap className="h-4 w-4 text-primary" />
               <CardTitle className="text-sm">Strategy Engine — Backtest Validation</CardTitle>
             </div>
-            <Badge variant="outline" className="text-xs">
-              Activated March 28, 2026
-            </Badge>
           </div>
         </CardHeader>
         <CardContent>
@@ -555,7 +552,7 @@ export default function PerformancePage() {
                         </div>
                       </td>
                       <td className="px-3 py-2 text-right">
-                        Rs. {Number(signal.price_at_signal).toFixed(2)}
+                        LKR {Number(signal.price_at_signal).toFixed(2)}
                       </td>
                       {(['return_7d', 'return_14d', 'return_30d'] as const).map((field) => {
                         const val = signal[field];

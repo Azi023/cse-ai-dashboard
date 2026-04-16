@@ -35,3 +35,14 @@ export const fmtCompact = (v: unknown, prefix = ''): string => {
   if (n >= 1_000) return `${prefix}${(n / 1_000).toFixed(2)}K`;
   return `${prefix}${n.toLocaleString()}`;
 };
+
+/** Format a date string as relative time (e.g. "5m ago", "3h ago", "2d ago"). */
+export function timeAgo(dateStr: string): string {
+  const diff = Date.now() - new Date(dateStr).getTime();
+  const mins = Math.floor(diff / 60000);
+  if (mins < 60) return `${mins}m ago`;
+  const hours = Math.floor(mins / 60);
+  if (hours < 24) return `${hours}h ago`;
+  const days = Math.floor(hours / 24);
+  return `${days}d ago`;
+}

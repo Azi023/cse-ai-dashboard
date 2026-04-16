@@ -7,15 +7,7 @@ import { stocksApi, marketApi, type SectorBreakdown, type SectorIndex } from '@/
 import { BarChart3, TrendingUp, TrendingDown, ChevronDown, ChevronUp } from 'lucide-react';
 import Link from 'next/link';
 import { useDisplayMode } from '@/contexts/display-mode-context';
-import { safeNum } from '@/lib/format';
-
-function formatMarketCap(mcap: number): string {
-  const n = safeNum(mcap);
-  if (n >= 1_000_000_000_000) return `Rs. ${(n / 1_000_000_000_000).toFixed(1)}T`;
-  if (n >= 1_000_000_000) return `Rs. ${(n / 1_000_000_000).toFixed(1)}B`;
-  if (n >= 1_000_000) return `Rs. ${(n / 1_000_000).toFixed(1)}M`;
-  return `Rs. ${n.toLocaleString()}`;
-}
+import { safeNum, fmtCompact } from '@/lib/format';
 
 export default function SectorsPage() {
   const { isSimple } = useDisplayMode();
@@ -131,7 +123,7 @@ export default function SectorsPage() {
                         </Badge>
                       </div>
                       <div className="text-xs text-muted-foreground mt-0.5">
-                        Market Cap: {formatMarketCap(sector.totalMarketCap)}
+                        Market Cap: {fmtCompact(sector.totalMarketCap, 'LKR ')}
                       </div>
                     </div>
 
@@ -193,7 +185,7 @@ export default function SectorsPage() {
                             </div>
                             <div className="flex items-center gap-4">
                               <span className="text-sm font-medium">
-                                Rs. {safeNum(stock.last_price).toFixed(2)}
+                                LKR {safeNum(stock.last_price).toFixed(2)}
                               </span>
                               <span
                                 className={`text-xs font-medium ${

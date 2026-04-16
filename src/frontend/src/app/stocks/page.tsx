@@ -36,7 +36,6 @@ export default function StocksPage() {
       .then((res) => setStocks(res.data))
       .catch((err) => {
         setError('Failed to load stocks');
-        console.error(err);
       })
       .finally(() => setLoading(false));
 
@@ -103,7 +102,7 @@ export default function StocksPage() {
           <CardContent className="pt-4">
             <p className="text-sm text-destructive">{error}</p>
             <p className="text-xs text-muted-foreground mt-1">
-              Make sure the backend server is running on port 4101
+              Unable to load data. Please try again later.
             </p>
           </CardContent>
         </Card>
@@ -123,6 +122,7 @@ export default function StocksPage() {
         <select
           value={sectorFilter}
           onChange={(e) => setSectorFilter(e.target.value)}
+          aria-label="Filter by sector"
           className="rounded-md border bg-background px-3 py-2 text-sm"
         >
           <option value="">All Sectors</option>

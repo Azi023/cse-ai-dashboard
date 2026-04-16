@@ -299,6 +299,7 @@ export default function DemoPerformancePage() {
                   value={dirFilter}
                   onChange={(e) => setDirFilter(e.target.value as typeof dirFilter)}
                   className="h-8 rounded-md border border-input bg-background text-foreground px-2 text-xs"
+                  aria-label="Filter by trade direction"
                 >
                   <option value="ALL">All Directions</option>
                   <option value="BUY">Buy</option>
@@ -308,6 +309,7 @@ export default function DemoPerformancePage() {
                   value={srcFilter}
                   onChange={(e) => setSrcFilter(e.target.value as typeof srcFilter)}
                   className="h-8 rounded-md border border-input bg-background text-foreground px-2 text-xs"
+                  aria-label="Filter by trade source"
                 >
                   <option value="ALL">All Sources</option>
                   <option value="AI_AUTO">AI Auto</option>

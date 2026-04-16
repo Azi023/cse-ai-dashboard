@@ -31,14 +31,8 @@ import {
   YAxis,
   Tooltip,
 } from 'recharts';
-import axios from 'axios';
+import api from '@/lib/api';
 import { DcaPanel } from '@/components/crypto/dca-panel';
-
-const api = axios.create({
-  baseURL: process.env.NEXT_PUBLIC_API_URL || '/api',
-  timeout: 60000,
-  withCredentials: true,
-});
 
 // ── Types ──────────────────────────────────────────────────────────────────
 
@@ -715,6 +709,7 @@ export default function CryptoPage() {
                 value={tradeSymbol}
                 onChange={(e) => setTradeSymbol(e.target.value)}
                 className="w-full bg-muted border border-border rounded-md px-3 py-2 text-sm text-foreground"
+                aria-label="Select trading pair"
               >
                 <option value="BTC/USDT">BTC/USDT</option>
                 <option value="ETH/USDT">ETH/USDT</option>
@@ -997,6 +992,7 @@ export default function CryptoPage() {
                     value={newDcaSymbol}
                     onChange={(e) => setNewDcaSymbol(e.target.value)}
                     className="w-full bg-muted border border-border rounded-md px-3 py-2 text-sm text-foreground"
+                    aria-label="Select DCA trading pair"
                   >
                     <option value="BTC/USDT">BTC/USDT</option>
                     <option value="ETH/USDT">ETH/USDT</option>
@@ -1020,6 +1016,7 @@ export default function CryptoPage() {
                     value={newDcaFrequency}
                     onChange={(e) => setNewDcaFrequency(e.target.value)}
                     className="w-full bg-muted border border-border rounded-md px-3 py-2 text-sm text-foreground"
+                    aria-label="DCA frequency"
                   >
                     <option value="daily">Daily</option>
                     <option value="weekly">Weekly</option>

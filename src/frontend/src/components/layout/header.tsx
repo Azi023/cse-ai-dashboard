@@ -157,7 +157,7 @@ function DropdownMenu({ group, pathname }: { group: NavGroup; pathname: string }
     <div className="relative" ref={ref}>
       <button
         onClick={() => setOpen(!open)}
-        className={`flex items-center gap-1 rounded-md px-2 py-1.5 text-[13px] font-medium transition-colors ${
+        className={`flex items-center gap-1 shrink-0 whitespace-nowrap rounded-md px-2 py-1.5 text-[13px] font-medium transition-colors ${
           groupIsActive
             ? 'bg-primary/10 text-primary'
             : 'text-muted-foreground hover:text-foreground hover:bg-muted/50'
@@ -266,6 +266,15 @@ export function Header() {
     setMobileMenuOpen(false);
   }, [pathname]);
 
+  useEffect(() => {
+    if (!mobileMenuOpen) return;
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setMobileMenuOpen(false);
+    };
+    document.addEventListener('keydown', handleKeyDown);
+    return () => document.removeEventListener('keydown', handleKeyDown);
+  }, [mobileMenuOpen]);
+
   const isActive = (href: string) => {
     if (href === '/') return pathname === '/';
     return pathname.startsWith(href);
@@ -305,14 +314,14 @@ export function Header() {
             </Link>
 
             {/* Desktop Nav */}
-            <nav className="hidden md:flex items-center gap-px min-w-0 overflow-x-auto flex-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden" aria-label="Main navigation">
+            <nav className="hidden md:flex items-center gap-px min-w-0 flex-1 overflow-visible" aria-label="Main navigation">
               {activeTopLinks.map((link) => {
                 const active = isActive(link.href);
                 return (
                   <Link
                     key={link.href}
                     href={link.href}
-                    className={`rounded-md px-2 py-1.5 text-[13px] font-medium transition-all duration-150 ${
+                    className={`shrink-0 whitespace-nowrap rounded-md px-2 py-1.5 text-[13px] font-medium transition-all duration-150 ${
                       active
                         ? 'bg-primary/10 text-primary'
                         : 'text-muted-foreground hover:text-foreground hover:bg-accent'
@@ -373,7 +382,7 @@ export function Header() {
                 </span>
                 {!marketOpen && currentTime && (
                   <span className="text-[10px] text-muted-foreground/60 border-l pl-1.5 ml-0.5">
-                    Data: 14:30 SLT
+                    Last close
                   </span>
                 )}
               </div>

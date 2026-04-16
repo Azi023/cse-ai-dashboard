@@ -74,14 +74,14 @@ const INDICATOR_CONFIGS: IndicatorConfig[] = [
     key: 'global_tea_avg',
     icon: 'commodity',
     favorability: 'export_up_good',
-    prefix: 'Rs.',
+    prefix: 'LKR ',
     decimals: 0,
   },
   {
     key: 'global_rubber',
     icon: 'commodity',
     favorability: 'export_up_good',
-    prefix: 'Rs.',
+    prefix: 'LKR ',
     decimals: 0,
   },
 ];

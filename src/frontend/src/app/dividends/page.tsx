@@ -174,6 +174,7 @@ export default function DividendsPage() {
                 value={formType}
                 onChange={(e) => setFormType(e.target.value)}
                 className="rounded-md border bg-background px-3 py-2 text-sm"
+                aria-label="Dividend type"
               >
                 <option value="cash">Cash</option>
                 <option value="stock">Stock</option>
@@ -245,7 +246,7 @@ export default function DividendsPage() {
                         <div>
                           <span className="font-medium text-sm">{d.symbol}</span>
                           <div className="text-xs text-muted-foreground">
-                            Rs. {Number(d.amount_per_share).toFixed(2)} per share
+                            LKR {Number(d.amount_per_share).toFixed(2)} per share
                           </div>
                         </div>
                       </div>
@@ -270,7 +271,7 @@ export default function DividendsPage() {
                 <CardTitle className="text-sm">Portfolio Dividend Income</CardTitle>
                 {portfolioIncome && (
                   <Badge variant="outline" className="text-sm">
-                    Total: Rs. {safeNum(portfolioIncome.total_portfolio_income).toLocaleString()}
+                    Total: LKR {safeNum(portfolioIncome.total_portfolio_income).toLocaleString()}
                   </Badge>
                 )}
               </div>
@@ -289,7 +290,7 @@ export default function DividendsPage() {
                       <div className="flex items-center justify-between mb-2">
                         <span className="font-medium text-sm">{h.symbol}</span>
                         <span className="text-sm font-medium text-green-500">
-                          Rs. {safeNum(h.total_income).toLocaleString()}
+                          LKR {safeNum(h.total_income).toLocaleString()}
                         </span>
                       </div>
                       <div className="text-xs text-muted-foreground">
@@ -344,7 +345,7 @@ export default function DividendsPage() {
                       {symbolDividends.map((d) => (
                         <tr key={d.id} className="border-t hover:bg-muted/20">
                           <td className="px-3 py-2">{formatDate(d.ex_date)}</td>
-                          <td className="px-3 py-2">Rs. {Number(d.amount_per_share).toFixed(2)}</td>
+                          <td className="px-3 py-2">LKR {Number(d.amount_per_share).toFixed(2)}</td>
                           <td className="px-3 py-2">
                             <Badge variant="secondary" className="text-xs">{d.type}</Badge>
                           </td>

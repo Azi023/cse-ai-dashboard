@@ -15,6 +15,7 @@ import {
   type NewsItemData,
   type EconomicEvent,
 } from '@/lib/api';
+import { timeAgo } from '@/lib/format';
 import Link from 'next/link';
 import {
   TrendingUp,
@@ -37,15 +38,6 @@ function getGreeting(): string {
 
 function fmtLkr(val: number): string {
   return val.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-}
-
-function timeAgo(dateStr: string): string {
-  const diff = Date.now() - new Date(dateStr).getTime();
-  const mins = Math.floor(diff / 60000);
-  if (mins < 60) return `${mins}m ago`;
-  const hours = Math.floor(mins / 60);
-  if (hours < 24) return `${hours}h ago`;
-  return `${Math.floor(hours / 24)}d ago`;
 }
 
 function simplifyAIBrief(brief: { summary: string; marketSentiment: string; topOpportunities: string[] }): {

@@ -391,6 +391,7 @@ export default function BacktestPage() {
                 onChange={(e) => setSelectedSymbol(e.target.value)}
                 className="w-full rounded-md border bg-background px-3 py-2 text-sm"
                 size={filteredSymbols.length > 5 ? 5 : undefined}
+                aria-label="Select symbol"
               >
                 {initialLoading ? (
                   <option>Loading...</option>
@@ -418,6 +419,7 @@ export default function BacktestPage() {
                 value={days}
                 onChange={(e) => setDays(parseInt(e.target.value))}
                 className="w-full rounded-md border bg-background px-3 py-2 text-sm"
+                aria-label="Backtest period in days"
               >
                 <option value={90}>90 days</option>
                 <option value={180}>180 days</option>

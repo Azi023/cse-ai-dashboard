@@ -57,7 +57,7 @@ function NisabInput({
 }) {
   return (
     <div className="flex flex-col gap-1">
-      <label className="text-xs text-[var(--color-text-secondary)] font-medium uppercase tracking-wide">
+      <label className="text-xs text-muted-foreground font-medium uppercase tracking-wide">
         Nisab Threshold (LKR)
       </label>
       <div className="flex items-center gap-2">
@@ -65,13 +65,13 @@ function NisabInput({
           type="number"
           value={value}
           onChange={(e) => onChange(e.target.value)}
-          className="w-48 px-3 py-2 rounded-lg bg-[var(--color-bg-tertiary)] border border-[var(--color-border)] text-[var(--color-text-primary)] text-sm focus:outline-none focus:border-[var(--color-accent-primary)] transition-colors"
+          className="w-48 px-3 py-2 rounded-lg bg-muted border border-border text-foreground text-sm focus:outline-none focus:border-primary transition-colors"
           min={0}
           step={1000}
         />
-        <span className="text-xs text-[var(--color-text-muted)]">≈ 85g gold</span>
+        <span className="text-xs text-muted-foreground/70">≈ 85g gold</span>
       </div>
-      <p className="text-xs text-[var(--color-text-muted)]">
+      <p className="text-xs text-muted-foreground/70">
         Update daily to match current gold price. LKR 1,638,000 = gold at USD 2,000/oz × LKR 300.
       </p>
     </div>
@@ -85,23 +85,23 @@ function SummaryCard({ result }: { result: ZakatResult }) {
       className={`rounded-xl border p-5 ${
         aboveNisab
           ? 'border-emerald-500/40 bg-emerald-500/5'
-          : 'border-[var(--color-border)] bg-[var(--color-bg-secondary)]'
+          : 'border-border bg-card'
       }`}
     >
       <div className="flex items-start justify-between gap-4 flex-wrap">
         <div>
-          <p className="text-xs text-[var(--color-text-secondary)] uppercase tracking-wide mb-1">
+          <p className="text-xs text-muted-foreground uppercase tracking-wide mb-1">
             Total Zakat Due
           </p>
           <p
             className={`text-3xl font-bold font-mono ${
-              aboveNisab ? 'text-emerald-400' : 'text-[var(--color-text-primary)]'
+              aboveNisab ? 'text-emerald-400' : 'text-foreground'
             }`}
           >
             LKR {fmt(result.total_zakat_due)}
           </p>
           {!aboveNisab && result.total_zakatable_value > 0 && (
-            <p className="text-xs text-[var(--color-text-muted)] mt-1">
+            <p className="text-xs text-muted-foreground/70 mt-1">
               Portfolio zakatable value ({fmt(result.total_zakatable_value)} LKR) is
               below Nisab threshold ({fmt(result.nisab_threshold)} LKR). Zakat not
               yet obligatory on these holdings.
@@ -111,26 +111,26 @@ function SummaryCard({ result }: { result: ZakatResult }) {
 
         <div className="grid grid-cols-2 gap-x-8 gap-y-2 text-right">
           <div>
-            <p className="text-xs text-[var(--color-text-muted)]">Portfolio Value</p>
-            <p className="text-sm font-mono font-semibold text-[var(--color-text-primary)]">
+            <p className="text-xs text-muted-foreground/70">Portfolio Value</p>
+            <p className="text-sm font-mono font-semibold text-foreground">
               LKR {fmt(result.total_portfolio_value)}
             </p>
           </div>
           <div>
-            <p className="text-xs text-[var(--color-text-muted)]">Zakatable Value</p>
-            <p className="text-sm font-mono font-semibold text-[var(--color-text-primary)]">
+            <p className="text-xs text-muted-foreground/70">Zakatable Value</p>
+            <p className="text-sm font-mono font-semibold text-foreground">
               LKR {fmt(result.total_zakatable_value)}
             </p>
           </div>
           <div>
-            <p className="text-xs text-[var(--color-text-muted)]">Nisab Threshold</p>
-            <p className="text-sm font-mono font-semibold text-[var(--color-text-primary)]">
+            <p className="text-xs text-muted-foreground/70">Nisab Threshold</p>
+            <p className="text-sm font-mono font-semibold text-foreground">
               LKR {fmt(result.nisab_threshold)}
             </p>
           </div>
           <div>
-            <p className="text-xs text-[var(--color-text-muted)]">Zakat Rate</p>
-            <p className="text-sm font-mono font-semibold text-[var(--color-text-primary)]">
+            <p className="text-xs text-muted-foreground/70">Zakat Rate</p>
+            <p className="text-sm font-mono font-semibold text-foreground">
               2.5%
             </p>
           </div>
@@ -171,12 +171,12 @@ function HoldingRow({ h }: { h: HoldingZakat }) {
   return (
     <>
       <tr
-        className="border-b border-[var(--color-border)] hover:bg-[var(--color-bg-tertiary)]/50 cursor-pointer transition-colors"
+        className="border-b border-border hover:bg-muted/50 cursor-pointer transition-colors"
         onClick={() => setExpanded((v) => !v)}
       >
         <td className="px-4 py-3">
           <div className="flex items-center gap-2">
-            <span className="font-mono text-sm font-semibold text-[var(--color-text-primary)]">
+            <span className="font-mono text-sm font-semibold text-foreground">
               {h.symbol}
             </span>
             {h.has_financial_data ? (
@@ -189,15 +189,15 @@ function HoldingRow({ h }: { h: HoldingZakat }) {
               </span>
             )}
           </div>
-          <p className="text-xs text-[var(--color-text-muted)] mt-0.5">{h.name}</p>
+          <p className="text-xs text-muted-foreground/70 mt-0.5">{h.name}</p>
         </td>
-        <td className="px-4 py-3 text-right font-mono text-sm text-[var(--color-text-primary)]">
+        <td className="px-4 py-3 text-right font-mono text-sm text-foreground">
           {h.quantity.toLocaleString()}
         </td>
-        <td className="px-4 py-3 text-right font-mono text-sm text-[var(--color-text-primary)]">
+        <td className="px-4 py-3 text-right font-mono text-sm text-foreground">
           {h.current_value != null ? `LKR ${fmt(h.current_value)}` : '—'}
         </td>
-        <td className="px-4 py-3 text-right font-mono text-sm text-[var(--color-text-secondary)]">
+        <td className="px-4 py-3 text-right font-mono text-sm text-muted-foreground">
           {h.zakatable_value != null ? `LKR ${fmt(h.zakatable_value)}` : '—'}
         </td>
         <td className="px-4 py-3 text-right">
@@ -205,46 +205,46 @@ function HoldingRow({ h }: { h: HoldingZakat }) {
             className={`font-mono text-sm font-semibold ${
               h.zakat_due != null
                 ? 'text-emerald-400'
-                : 'text-[var(--color-text-muted)]'
+                : 'text-muted-foreground/70'
             }`}
           >
             {h.zakat_due != null ? `LKR ${fmt(h.zakat_due)}` : '—'}
           </span>
         </td>
-        <td className="px-4 py-3 text-center text-[var(--color-text-muted)]">
+        <td className="px-4 py-3 text-center text-muted-foreground/70">
           {expanded ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
         </td>
       </tr>
 
       {expanded && (
-        <tr className="bg-[var(--color-bg-tertiary)]/30">
+        <tr className="bg-muted/30">
           <td colSpan={6} className="px-6 py-3">
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-xs">
               <div>
-                <p className="text-[var(--color-text-muted)] mb-0.5">Zakatable / Share</p>
-                <p className="font-mono text-[var(--color-text-primary)]">
+                <p className="text-muted-foreground/70 mb-0.5">Zakatable / Share</p>
+                <p className="font-mono text-foreground">
                   {h.zakatable_per_share != null
                     ? `LKR ${fmt(h.zakatable_per_share, 4)}`
                     : '—'}
                 </p>
               </div>
               <div>
-                <p className="text-[var(--color-text-muted)] mb-0.5">Shares Outstanding</p>
-                <p className="font-mono text-[var(--color-text-primary)]">
+                <p className="text-muted-foreground/70 mb-0.5">Shares Outstanding</p>
+                <p className="font-mono text-foreground">
                   {h.shares_outstanding != null
                     ? Number(h.shares_outstanding).toLocaleString()
                     : '—'}
                 </p>
               </div>
               <div>
-                <p className="text-[var(--color-text-muted)] mb-0.5">Financial Period</p>
-                <p className="font-mono text-[var(--color-text-primary)]">
+                <p className="text-muted-foreground/70 mb-0.5">Financial Period</p>
+                <p className="font-mono text-foreground">
                   {h.financial_period ?? '—'}
                 </p>
               </div>
               <div>
-                <p className="text-[var(--color-text-muted)] mb-0.5">Method</p>
-                <p className="font-mono text-[var(--color-text-primary)]">
+                <p className="text-muted-foreground/70 mb-0.5">Method</p>
+                <p className="font-mono text-foreground">
                   {h.method === 'AAOIFI_BALANCE_SHEET'
                     ? 'AAOIFI (cash + receivables + prepayments) / shares'
                     : 'No financial data — import via Admin'}
@@ -261,10 +261,10 @@ function HoldingRow({ h }: { h: HoldingZakat }) {
 function MethodExplainer() {
   const [open, setOpen] = useState(false);
   return (
-    <div className="rounded-xl border border-[var(--color-border)] bg-[var(--color-bg-secondary)] overflow-hidden">
+    <div className="rounded-xl border border-border bg-card overflow-hidden">
       <button
         onClick={() => setOpen((v) => !v)}
-        className="w-full flex items-center justify-between px-5 py-3 text-sm text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)] transition-colors"
+        className="w-full flex items-center justify-between px-5 py-3 text-sm text-muted-foreground hover:text-foreground transition-colors"
       >
         <div className="flex items-center gap-2">
           <Info size={14} />
@@ -274,10 +274,10 @@ function MethodExplainer() {
       </button>
 
       {open && (
-        <div className="px-5 pb-5 text-xs text-[var(--color-text-secondary)] space-y-3 border-t border-[var(--color-border)] pt-4">
+        <div className="px-5 pb-5 text-xs text-muted-foreground space-y-3 border-t border-border pt-4">
           <p>
             This calculator uses the{' '}
-            <strong className="text-[var(--color-text-primary)]">
+            <strong className="text-foreground">
               AAOIFI (Accounting and Auditing Organisation for Islamic Financial
               Institutions)
             </strong>{' '}
@@ -285,8 +285,8 @@ function MethodExplainer() {
           </p>
 
           <div>
-            <p className="font-semibold text-[var(--color-text-primary)] mb-1">Formula</p>
-            <div className="font-mono bg-[var(--color-bg-tertiary)] rounded p-3 space-y-1">
+            <p className="font-semibold text-foreground mb-1">Formula</p>
+            <div className="font-mono bg-muted rounded p-3 space-y-1">
               <p>Zakatable assets per share =</p>
               <p className="pl-4">
                 (Cash + Receivables + Prepayments) ÷ Shares Outstanding
@@ -297,7 +297,7 @@ function MethodExplainer() {
           </div>
 
           <div>
-            <p className="font-semibold text-[var(--color-text-primary)] mb-1">
+            <p className="font-semibold text-foreground mb-1">
               Why these fields?
             </p>
             <ul className="space-y-1 list-disc list-inside">
@@ -321,7 +321,7 @@ function MethodExplainer() {
           </div>
 
           <div>
-            <p className="font-semibold text-[var(--color-text-primary)] mb-1">Nisab</p>
+            <p className="font-semibold text-foreground mb-1">Nisab</p>
             <p>
               Nisab is the minimum threshold for Zakat obligation — equal to the
               value of 85 grams of gold. If your total zakatable value is below
@@ -331,13 +331,13 @@ function MethodExplainer() {
           </div>
 
           <div>
-            <p className="font-semibold text-[var(--color-text-primary)] mb-1">
+            <p className="font-semibold text-foreground mb-1">
               Data requirement
             </p>
             <p>
               This calculator requires quarterly financial data (balance sheet) for
               each stock. Import data via{' '}
-              <a href="/admin/financials" className="underline hover:text-[var(--color-accent-primary)]">
+              <a href="/admin/financials" className="underline hover:text-primary">
                 Admin → Financials
               </a>
               . Without data, the holding is listed but excluded from the
@@ -382,12 +382,12 @@ export default function ZakatPage() {
       <div className="flex items-start justify-between gap-4 flex-wrap">
         <div>
           <div className="flex items-center gap-2 mb-1">
-            <Scale size={20} className="text-[var(--color-accent-primary)]" />
-            <h1 className="text-xl font-bold text-[var(--color-text-primary)]">
+            <Scale size={20} className="text-primary" />
+            <h1 className="text-xl font-bold text-foreground">
               Zakat Calculator
             </h1>
           </div>
-          <p className="text-sm text-[var(--color-text-secondary)]">
+          <p className="text-sm text-muted-foreground">
             AAOIFI-standard Zakat calculation on your Shariah-compliant stock
             holdings.
           </p>
@@ -398,7 +398,7 @@ export default function ZakatPage() {
           <button
             onClick={fetchZakat}
             disabled={loading}
-            className="flex items-center gap-2 px-4 py-2 rounded-lg bg-[var(--color-accent-primary)] text-white text-sm font-medium hover:opacity-90 disabled:opacity-50 transition-opacity"
+            className="flex items-center gap-2 px-4 py-2 rounded-lg bg-primary text-white text-sm font-medium hover:opacity-90 disabled:opacity-50 transition-opacity"
           >
             <RefreshCw size={14} className={loading ? 'animate-spin' : ''} />
             {loading ? 'Calculating...' : 'Recalculate'}
@@ -419,12 +419,12 @@ export default function ZakatPage() {
 
       {/* Holdings Table */}
       {result && !loading && result.holdings.length > 0 && (
-        <div className="rounded-xl border border-[var(--color-border)] bg-[var(--color-bg-secondary)] overflow-hidden">
-          <div className="px-5 py-3 border-b border-[var(--color-border)]">
-            <h2 className="text-sm font-semibold text-[var(--color-text-primary)]">
+        <div className="rounded-xl border border-border bg-card overflow-hidden">
+          <div className="px-5 py-3 border-b border-border">
+            <h2 className="text-sm font-semibold text-foreground">
               Holdings Breakdown
             </h2>
-            <p className="text-xs text-[var(--color-text-muted)] mt-0.5">
+            <p className="text-xs text-muted-foreground/70 mt-0.5">
               Click any row to expand calculation details.
             </p>
           </div>
@@ -432,20 +432,20 @@ export default function ZakatPage() {
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead>
-                <tr className="border-b border-[var(--color-border)]">
-                  <th className="px-4 py-2 text-left text-xs font-medium text-[var(--color-text-muted)] uppercase tracking-wide">
+                <tr className="border-b border-border">
+                  <th className="px-4 py-2 text-left text-xs font-medium text-muted-foreground/70 uppercase tracking-wide">
                     Stock
                   </th>
-                  <th className="px-4 py-2 text-right text-xs font-medium text-[var(--color-text-muted)] uppercase tracking-wide">
+                  <th className="px-4 py-2 text-right text-xs font-medium text-muted-foreground/70 uppercase tracking-wide">
                     Qty
                   </th>
-                  <th className="px-4 py-2 text-right text-xs font-medium text-[var(--color-text-muted)] uppercase tracking-wide">
+                  <th className="px-4 py-2 text-right text-xs font-medium text-muted-foreground/70 uppercase tracking-wide">
                     Current Value
                   </th>
-                  <th className="px-4 py-2 text-right text-xs font-medium text-[var(--color-text-muted)] uppercase tracking-wide">
+                  <th className="px-4 py-2 text-right text-xs font-medium text-muted-foreground/70 uppercase tracking-wide">
                     Zakatable Value
                   </th>
-                  <th className="px-4 py-2 text-right text-xs font-medium text-[var(--color-text-muted)] uppercase tracking-wide">
+                  <th className="px-4 py-2 text-right text-xs font-medium text-muted-foreground/70 uppercase tracking-wide">
                     Zakat Due
                   </th>
                   <th className="px-4 py-2 w-8"></th>
@@ -457,14 +457,14 @@ export default function ZakatPage() {
                 ))}
               </tbody>
               <tfoot>
-                <tr className="border-t-2 border-[var(--color-border)] bg-[var(--color-bg-tertiary)]/30">
+                <tr className="border-t-2 border-border bg-muted/30">
                   <td
                     colSpan={3}
-                    className="px-4 py-3 text-xs font-semibold text-[var(--color-text-secondary)] uppercase tracking-wide"
+                    className="px-4 py-3 text-xs font-semibold text-muted-foreground uppercase tracking-wide"
                   >
                     Total
                   </td>
-                  <td className="px-4 py-3 text-right font-mono text-sm font-semibold text-[var(--color-text-primary)]">
+                  <td className="px-4 py-3 text-right font-mono text-sm font-semibold text-foreground">
                     LKR {fmt(result.total_zakatable_value)}
                   </td>
                   <td className="px-4 py-3 text-right font-mono text-sm font-bold text-emerald-400">
@@ -480,12 +480,12 @@ export default function ZakatPage() {
 
       {/* Empty state */}
       {result && !loading && result.holdings.length === 0 && (
-        <div className="text-center py-16 text-[var(--color-text-muted)]">
+        <div className="text-center py-16 text-muted-foreground/70">
           <Scale size={40} className="mx-auto mb-3 opacity-30" />
           <p className="text-sm">No open holdings found.</p>
           <p className="text-xs mt-1">
             Add holdings in the{' '}
-            <a href="/portfolio" className="underline hover:text-[var(--color-accent-primary)]">
+            <a href="/portfolio" className="underline hover:text-primary">
               Portfolio
             </a>{' '}
             page.

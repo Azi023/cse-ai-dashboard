@@ -1,6 +1,5 @@
 'use client';
 
-import { useEffect } from 'react';
 import { AlertTriangle, RefreshCw } from 'lucide-react';
 
 export default function Error({
@@ -10,10 +9,6 @@ export default function Error({
   error: Error & { digest?: string };
   reset: () => void;
 }) {
-  useEffect(() => {
-    console.error('App error boundary caught:', error);
-  }, [error]);
-
   return (
     <div className="flex flex-col items-center justify-center min-h-[60vh] px-4">
       <div className="bg-card border border-border rounded-xl p-8 max-w-md w-full text-center space-y-4">

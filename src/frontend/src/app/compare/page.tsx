@@ -304,7 +304,7 @@ export default function ComparePage() {
                         <td className="px-3 py-2 text-muted-foreground">Price</td>
                         {metrics.map((m) => (
                           <td key={m.symbol} className="px-3 py-2 text-right font-medium">
-                            {m.price ? `Rs. ${safeNum(m.price).toFixed(2)}` : '--'}
+                            {m.price ? `LKR ${safeNum(m.price).toFixed(2)}` : '--'}
                           </td>
                         ))}
                       </tr>
@@ -325,7 +325,7 @@ export default function ComparePage() {
                         <td className="px-3 py-2 text-muted-foreground">Market Cap</td>
                         {metrics.map((m) => (
                           <td key={m.symbol} className="px-3 py-2 text-right">
-                            {m.marketCap ? `Rs. ${(safeNum(m.marketCap) / 1e9).toFixed(2)}B` : '--'}
+                            {m.marketCap ? `LKR ${(safeNum(m.marketCap) / 1e9).toFixed(2)}B` : '--'}
                           </td>
                         ))}
                       </tr>
@@ -349,7 +349,7 @@ export default function ComparePage() {
                         <td className="px-3 py-2 text-muted-foreground">Period High</td>
                         {metrics.map((m) => (
                           <td key={m.symbol} className="px-3 py-2 text-right">
-                            {m.periodHigh ? `Rs. ${safeNum(m.periodHigh).toFixed(2)}` : '--'}
+                            {m.periodHigh ? `LKR ${safeNum(m.periodHigh).toFixed(2)}` : '--'}
                           </td>
                         ))}
                       </tr>
@@ -357,7 +357,7 @@ export default function ComparePage() {
                         <td className="px-3 py-2 text-muted-foreground">Period Low</td>
                         {metrics.map((m) => (
                           <td key={m.symbol} className="px-3 py-2 text-right">
-                            {m.periodLow ? `Rs. ${safeNum(m.periodLow).toFixed(2)}` : '--'}
+                            {m.periodLow ? `LKR ${safeNum(m.periodLow).toFixed(2)}` : '--'}
                           </td>
                         ))}
                       </tr>
@@ -403,8 +403,11 @@ export default function ComparePage() {
 
           {loading && (
             <Card>
-              <CardContent className="py-12 text-center">
-                <p className="text-muted-foreground">Loading comparison data...</p>
+              <CardContent className="py-6">
+                <div className="space-y-3">
+                  <div className="h-24 rounded-lg bg-muted/30 animate-pulse" />
+                  <div className="h-24 rounded-lg bg-muted/30 animate-pulse" />
+                </div>
               </CardContent>
             </Card>
           )}

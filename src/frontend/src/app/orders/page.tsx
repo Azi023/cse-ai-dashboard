@@ -188,7 +188,6 @@ export default function OrdersPage() {
       setError(null);
     } catch (err) {
       setError('Failed to load orders');
-      console.error(err);
     } finally {
       setLoading(false);
     }
@@ -263,7 +262,7 @@ export default function OrdersPage() {
   // ── Render ─────────────────────────────────────────────────────────────────
 
   return (
-    <main className="min-h-screen bg-background text-foreground p-6">
+    <div className="min-h-screen bg-background text-foreground p-6">
       <div className="max-w-6xl mx-auto space-y-6">
 
         {/* Header */}
@@ -308,7 +307,7 @@ export default function OrdersPage() {
           </div>
           {safetyStatus && (
             <div className="flex items-center gap-1.5 ml-auto text-xs text-muted-foreground">
-              <span>Max/day: LKR {(20000).toLocaleString()}</span>
+              <span>Max/day: LKR 20,000</span>
               <span>·</span>
               <span>Human approval: required</span>
             </div>
@@ -363,6 +362,7 @@ export default function OrdersPage() {
                   <select
                     value={form.order_type}
                     onChange={(e) => setForm({ ...form, order_type: e.target.value })}
+                    aria-label="Order type"
                     className="w-full h-9 rounded-md border border-input bg-background text-foreground px-3 text-sm"
                   >
                     <option value="STOP_LOSS">Stop-Loss</option>
@@ -375,6 +375,7 @@ export default function OrdersPage() {
                   <select
                     value={form.action}
                     onChange={(e) => setForm({ ...form, action: e.target.value })}
+                    aria-label="Order action"
                     className="w-full h-9 rounded-md border border-input bg-background text-foreground px-3 text-sm"
                   >
                     <option value="SELL">SELL</option>
@@ -474,6 +475,7 @@ export default function OrdersPage() {
               <select
                 value={statusFilter}
                 onChange={(e) => setStatusFilter(e.target.value)}
+                aria-label="Filter by status"
                 className="h-8 rounded-md border border-input bg-background text-foreground px-2 text-xs"
               >
                 <option value="ALL">All</option>
@@ -580,7 +582,7 @@ export default function OrdersPage() {
       {confirm && (
         <ConfirmModal confirm={confirm} onConfirm={performAction} onDismiss={() => setConfirm(null)} />
       )}
-    </main>
+    </div>
   );
 }
 

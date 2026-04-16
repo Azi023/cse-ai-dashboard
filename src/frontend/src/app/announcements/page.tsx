@@ -157,6 +157,7 @@ export default function AnnouncementsPage() {
               value={selectedCategory}
               onChange={(e) => setSelectedCategory(e.target.value)}
               className="rounded-md border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+              aria-label="Filter by category"
             >
               {CATEGORIES.map((cat) => (
                 <option key={cat.value} value={cat.value}>
@@ -170,6 +171,7 @@ export default function AnnouncementsPage() {
               value={selectedType}
               onChange={(e) => setSelectedType(e.target.value)}
               className="rounded-md border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+              aria-label="Filter by type"
             >
               {TYPES.map((t) => (
                 <option key={t.value} value={t.value}>

@@ -90,20 +90,21 @@ function getCSSVar(name: string, fallback: string): string {
   return val || fallback;
 }
 
-/** Convert OKLch or any CSS color to a canvas-readable value via a temp element */
+/** Convert a CSS custom property to a hex/rgb string safe for TradingView charts.
+ *  Modern Chrome returns lab() for oklch inputs — we detect and fall back to hex. */
 function resolveColor(cssVar: string, fallback: string): string {
   if (typeof document === 'undefined') return fallback;
   const raw = getCSSVar(cssVar, '');
   if (!raw) return fallback;
-  // If it's already hex or rgb, return as-is
   if (raw.startsWith('#') || raw.startsWith('rgb')) return raw;
-  // Use a temporary element to resolve oklch/hsl to rgb
   const el = document.createElement('div');
   el.style.color = raw;
   document.body.appendChild(el);
   const resolved = getComputedStyle(el).color;
   document.body.removeChild(el);
-  return resolved || fallback;
+  if (!resolved) return fallback;
+  if (resolved.startsWith('rgb') || resolved.startsWith('#')) return resolved;
+  return fallback;
 }
 
 export function PriceChart({ data, height: propHeight }: PriceChartProps) {

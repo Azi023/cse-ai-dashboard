@@ -1,12 +1,13 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { isSafeUrl } from '@/lib/safe-url';
 import { newsApi, type NewsItemData } from '@/lib/api';
 import { Newspaper, ExternalLink, RefreshCw, Search, AlertTriangle } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { timeAgo } from '@/lib/format';
 import { useDisplayMode } from '@/contexts/display-mode-context';
 
 const impactColors: Record<string, string> = {
@@ -41,16 +42,6 @@ const sourceLabels: Record<string, string> = {
   cnbc_asia: 'CNBC Asia',
 };
 
-function timeAgo(dateStr: string): string {
-  const diff = Date.now() - new Date(dateStr).getTime();
-  const mins = Math.floor(diff / 60000);
-  if (mins < 60) return `${mins}m ago`;
-  const hours = Math.floor(mins / 60);
-  if (hours < 24) return `${hours}h ago`;
-  const days = Math.floor(hours / 24);
-  return `${days}d ago`;
-}
-
 export default function NewsPage() {
   const { isSimple } = useDisplayMode();
   const [news, setNews] = useState<NewsItemData[]>([]);
@@ -61,7 +52,7 @@ export default function NewsPage() {
   const [categoryFilter, setCategoryFilter] = useState('');
   const [impactFilter, setImpactFilter] = useState('');
 
-  const fetchNews = () => {
+  const fetchNews = useCallback(() => {
     setLoading(true);
     newsApi
       .getNews({
@@ -74,11 +65,11 @@ export default function NewsPage() {
       .then((res) => setNews(res.data))
       .catch(() => {})
       .finally(() => setLoading(false));
-  };
+  }, [sourceFilter, categoryFilter, impactFilter, search]);
 
   useEffect(() => {
     fetchNews();
-  }, [sourceFilter, categoryFilter, impactFilter]);
+  }, [fetchNews]);
 
   const handleSearch = () => fetchNews();
 
@@ -133,6 +124,7 @@ export default function NewsPage() {
             <select
               value={sourceFilter}
               onChange={(e) => setSourceFilter(e.target.value)}
+              aria-label="Filter by source"
               className="rounded-md border bg-background px-3 py-2 text-sm"
             >
               <option value="">All Sources</option>
@@ -143,6 +135,7 @@ export default function NewsPage() {
             <select
               value={categoryFilter}
               onChange={(e) => setCategoryFilter(e.target.value)}
+              aria-label="Filter by category"
               className="rounded-md border bg-background px-3 py-2 text-sm"
             >
               <option value="">All Categories</option>
@@ -155,6 +148,7 @@ export default function NewsPage() {
         <select
           value={impactFilter}
           onChange={(e) => setImpactFilter(e.target.value)}
+          aria-label="Filter by impact"
           className="rounded-md border bg-background px-3 py-2 text-sm"
         >
           <option value="">All Impact</option>
