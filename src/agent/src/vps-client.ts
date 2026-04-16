@@ -109,6 +109,18 @@ export const vpsClient = {
   async getSyncTrigger(): Promise<SyncTriggerResponse> {
     return agentFetch<SyncTriggerResponse>('/sync-trigger');
   },
+
+  async reportOrderStatusUpdate(data: {
+    atradOrderRef: string;
+    atradStatus: string;
+    filledQty?: number;
+    filledPrice?: number;
+  }): Promise<{ success: boolean }> {
+    return agentFetch<{ success: boolean }>('/order-status-update', {
+      method: 'POST',
+      body: data,
+    });
+  },
 };
 
 export type { PendingTrade, ExecutionReport, PortfolioHolding, SyncTriggerResponse };

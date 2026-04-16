@@ -5,6 +5,7 @@ import { AgentKeyGuard } from '../../common/guards/agent-key.guard';
 import { AgentService } from './agent.service';
 import { ExecutionReportDto } from './dto/execution-report.dto';
 import { PortfolioSyncDto } from './dto/portfolio-sync.dto';
+import { OrderStatusUpdateDto } from './dto/order-status-update.dto';
 
 /**
  * Internal Agent API — communication bridge between VPS (brain) and WSL2 agent (hands).
@@ -65,5 +66,15 @@ export class AgentController {
   @Get('sync-trigger')
   async getSyncTrigger() {
     return this.agentService.getSyncTrigger();
+  }
+
+  /**
+   * POST /api/internal/agent/order-status-update
+   * Agent reports ATrad blotter status changes detected by polling.
+   * Triggers OCO cancellation if a linked order is FILLED.
+   */
+  @Post('order-status-update')
+  async updateOrderStatus(@Body() dto: OrderStatusUpdateDto) {
+    return this.agentService.updateOrderStatus(dto);
   }
 }

@@ -12,12 +12,25 @@ import {
   closeOrderForm,
 } from './atrad/order-entry';
 import type { OrderParams } from './atrad/order-entry';
+import { validatePreOrder } from './atrad/market-status';
+import { pollBlotter, trackOrder, getTrackedOrders } from './atrad/order-monitor';
+import {
+  loadState,
+  saveState,
+  markExecuting,
+  markSubmitted,
+  markComplete,
+  markLoggedIn,
+  getInterruptedOrders,
+} from './atrad/state';
+import type {} from './atrad/state';
 
 // ── State ──────────────────────────────────────────────────────────────────
 
 let isRunning = true;
 let lastHeartbeat: Date | null = null;
 let consecutiveHeartbeatFailures = 0;
+let agentState = loadState();
 
 // ── Helpers ────────────────────────────────────────────────────────────────
 
@@ -143,7 +156,7 @@ async function processPendingTrades(): Promise<void> {
 }
 
 /**
- * Execute a single trade: open form → fill → verify → submit → report.
+ * Execute a single trade: validate → open form → fill → verify → submit → report.
  */
 async function executeSingleTrade(
   page: Awaited<ReturnType<typeof launchBrowser>>,
@@ -151,9 +164,32 @@ async function executeSingleTrade(
 ): Promise<void> {
   const params = mapTradeToParams(trade);
 
+  // Step 0: Pre-order market & security validation
+  const preOrderError = await validatePreOrder(
+    page,
+    trade.symbol,
+    params.action,
+    params.quantity,
+  );
+  if (preOrderError) {
+    logger.error(`Pre-order check failed for trade #${trade.id}: ${preOrderError}`);
+    await vpsClient.reportExecution({
+      tradeQueueId: trade.id,
+      status: 'REJECTED',
+      notes: `Pre-order validation failed: ${preOrderError}`,
+    });
+    return;
+  }
+
+  // Track in state (crash recovery)
+  agentState = markExecuting(agentState, trade.id, trade.symbol, trade.action);
+  saveState(agentState);
+
   // Step 1: Open the order form
   const prefix = await openOrderForm(page, params.action);
   if (!prefix) {
+    agentState = markComplete(agentState, trade.id);
+    saveState(agentState);
     await vpsClient.reportExecution({
       tradeQueueId: trade.id,
       status: 'ERROR',
@@ -166,6 +202,8 @@ async function executeSingleTrade(
   const fillResult = await fillOrder(page, prefix, params);
   if (!fillResult.success) {
     await closeOrderForm(page, prefix);
+    agentState = markComplete(agentState, trade.id);
+    saveState(agentState);
     await vpsClient.reportExecution({
       tradeQueueId: trade.id,
       status: 'ERROR',
@@ -181,7 +219,15 @@ async function executeSingleTrade(
   );
   const submitResult = await submitOrder(page, prefix);
 
-  // Step 4: Report result to VPS
+  // Step 4: Track submitted order for blotter monitoring
+  if (submitResult.success && submitResult.atradOrderRef) {
+    agentState = markSubmitted(agentState, trade.id, submitResult.atradOrderRef);
+    trackOrder(submitResult.atradOrderRef, trade.id, trade.linkedOrderId);
+  }
+  agentState = markComplete(agentState, trade.id);
+  saveState(agentState);
+
+  // Step 5: Report result to VPS
   await vpsClient.reportExecution({
     tradeQueueId: trade.id,
     status: submitResult.success ? 'FILLED' : 'ERROR',
@@ -234,12 +280,70 @@ async function handleSyncTrigger(): Promise<void> {
   }
 }
 
+// ── Blotter Monitoring ────────────────────────────────────────────────────
+
+async function monitorBlotter(): Promise<void> {
+  if (getTrackedOrders().length === 0) return;
+
+  try {
+    const page = await launchBrowser();
+    const changes = await pollBlotter(page);
+    if (changes > 0) {
+      logger.info(`Blotter poll: ${changes} status change(s) detected`);
+    }
+  } catch (err) {
+    logger.error('Blotter monitoring error', err);
+  }
+}
+
+// ── Startup Recovery ──────────────────────────────────────────────────────
+
+async function recoverFromCrash(): Promise<void> {
+  const interrupted = getInterruptedOrders(agentState);
+  if (interrupted.length === 0) return;
+
+  logger.warn(
+    `Recovery: found ${interrupted.length} interrupted execution(s) from previous session`,
+  );
+
+  for (const order of interrupted) {
+    logger.warn(
+      `Interrupted: trade #${order.tradeQueueId} (${order.symbol} ${order.action}) ` +
+        `started at ${order.startedAt}, ATrad ref=${order.atradOrderRef ?? 'none'}`,
+    );
+
+    if (order.atradOrderRef) {
+      // Order was submitted — register for blotter monitoring
+      trackOrder(order.atradOrderRef, order.tradeQueueId, null);
+      logger.info(`Re-registering ATrad ref ${order.atradOrderRef} for monitoring`);
+    } else {
+      // Order was being filled but not submitted — report as failed
+      logger.warn(`Trade #${order.tradeQueueId} was not submitted — reporting as ERROR`);
+      try {
+        await vpsClient.reportExecution({
+          tradeQueueId: order.tradeQueueId,
+          status: 'ERROR',
+          notes: 'Agent crashed during form fill — order was NOT submitted to ATrad',
+        });
+      } catch (err) {
+        logger.error(`Failed to report interrupted trade #${order.tradeQueueId}`, err);
+      }
+    }
+
+    agentState = markComplete(agentState, order.tradeQueueId);
+  }
+  saveState(agentState);
+}
+
 // ── Main Loop ──────────────────────────────────────────────────────────────
 
 async function mainLoop(): Promise<void> {
   logger.info('=== CSE Agent starting ===');
   logger.info(`VPS URL: ${config.vpsUrl}`);
   logger.info(`ATrad URL: ${config.atradUrl}`);
+
+  // Recover from any previous crash
+  await recoverFromCrash();
 
   // Initial heartbeat to verify connectivity
   const connected = await sendHeartbeat();
@@ -248,6 +352,8 @@ async function mainLoop(): Promise<void> {
   }
 
   let lastHeartbeatTime = Date.now();
+  let lastBlotterPoll = 0;
+  const BLOTTER_POLL_INTERVAL = 30_000; // 30 seconds
 
   while (isRunning) {
     const now = Date.now();
@@ -270,6 +376,12 @@ async function mainLoop(): Promise<void> {
         await processPendingTrades();
       }
 
+      // Poll blotter for order status changes (during market hours)
+      if (marketOpen && now - lastBlotterPoll >= BLOTTER_POLL_INTERVAL) {
+        await monitorBlotter();
+        lastBlotterPoll = now;
+      }
+
       // Check for sync triggers (during extended hours — catches 2:38 PM sync)
       await handleSyncTrigger();
 
@@ -281,6 +393,8 @@ async function mainLoop(): Promise<void> {
     }
   }
 
+  // Save state on clean shutdown
+  saveState(agentState);
   logger.info('=== CSE Agent stopped ===');
 }
 

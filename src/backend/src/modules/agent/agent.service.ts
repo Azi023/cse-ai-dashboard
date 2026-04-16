@@ -283,6 +283,73 @@ export class AgentService {
     );
   }
 
+  // ── Order Status Update (from blotter polling) ─────────────────────────
+
+  async updateOrderStatus(dto: {
+    atradOrderRef: string;
+    atradStatus: string;
+    filledQty?: number;
+    filledPrice?: number;
+  }): Promise<{ success: boolean }> {
+    // Find order by ATrad ref
+    const order = await this.pendingOrderRepo.findOne({
+      where: { atrad_order_id: dto.atradOrderRef },
+    });
+
+    if (!order) {
+      this.logger.warn(
+        `Order status update: no order found for ATrad ref ${dto.atradOrderRef}`,
+      );
+      return { success: false };
+    }
+
+    // Update blotter status
+    await this.pendingOrderRepo.save({
+      ...order,
+      atrad_blotter_status: dto.atradStatus,
+    });
+
+    this.logger.log(
+      `Order #${order.id} (${order.symbol}) ATrad status: ${dto.atradStatus}`,
+    );
+
+    // If FILLED, check for linked OCO counterpart
+    if (dto.atradStatus === 'FILLED' && order.linked_order_id) {
+      const counterpart = await this.pendingOrderRepo.findOne({
+        where: { id: order.linked_order_id },
+      });
+
+      if (
+        counterpart &&
+        ['PENDING', 'APPROVED', 'EXECUTING'].includes(counterpart.status)
+      ) {
+        await this.pendingOrderRepo.save({
+          ...counterpart,
+          status: 'CANCELLING',
+        });
+
+        this.logger.log(
+          `OCO: Order #${order.id} FILLED → marking counterpart #${counterpart.id} as CANCELLING`,
+        );
+
+        await this.alertRepo.save(
+          this.alertRepo.create({
+            symbol: counterpart.symbol,
+            alert_type: 'auto_generated',
+            title: `OCO: Cancelling ${counterpart.order_type} for ${counterpart.symbol}`,
+            message:
+              `Linked order #${order.id} (${order.order_type}) was filled on ATrad. ` +
+              `Counterpart #${counterpart.id} (${counterpart.order_type}) is being cancelled.`,
+            is_triggered: true,
+            triggered_at: new Date(),
+          }),
+        );
+      }
+    }
+
+    return { success: true };
+  }
+
   // ── Helpers ────────────────────────────────────────────────────────────
 
   private getSLTHour(date: Date): number {
