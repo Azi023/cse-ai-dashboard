@@ -128,9 +128,8 @@ export class ATradSyncController {
 
   /**
    * POST /api/atrad/orders/:id/approve — Approve a pending order.
-   * Protected: JWT + API key. Approval enables live execution path.
+   * Protected: JWT only. Approval enables live execution path.
    */
-  @UseGuards(ApiKeyGuard)
   @Throttle({ default: { ttl: 60_000, limit: 5 } })
   @Post('orders/:id/approve')
   async approveOrder(@Param('id', ParseIntPipe) id: number) {
@@ -150,9 +149,8 @@ export class ATradSyncController {
 
   /**
    * POST /api/atrad/orders/:id/cancel — Cancel a pending or approved order.
-   * Protected: JWT + API key.
+   * Protected: JWT only.
    */
-  @UseGuards(ApiKeyGuard)
   @Throttle({ default: { ttl: 60_000, limit: 5 } })
   @Post('orders/:id/cancel')
   async cancelOrder(@Param('id', ParseIntPipe) id: number) {
